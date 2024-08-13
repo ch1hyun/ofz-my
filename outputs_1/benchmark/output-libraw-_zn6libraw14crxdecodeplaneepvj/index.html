@@ -68,12 +68,12 @@ td, th {
         <td>Done</td>
         
         <td style="color: green">True</td>
-        <td style="color: red">True</td>
-        <td style="color: red">True</td>
+        <td style="color: black">False</td>
+        <td style="color: black">False</td>
         <td>NO_SEMANTIC_ERR </td>
         <td>-</td>
-        <td>0.29</td>
-        <td><a href="#">0.02</a></td>
+        <td>0.25</td>
+        <td><a href="#">0.00</a></td>
         
     </tr>
     
@@ -83,10 +83,10 @@ td, th {
         
         <td style="color: green">True</td>
         <td style="color: red">True</td>
-        <td style="color: black">False</td>
-        <td>FP_NEAR_INIT_CRASH </td>
+        <td style="color: red">True</td>
+        <td>NO_SEMANTIC_ERR </td>
         <td>PROJECT</td>
-        <td>0.00</td>
+        <td>0.03</td>
         <td><a href="#">0.00</a></td>
         
     </tr>
@@ -299,6 +299,213 @@ EXIT:
 
 If an example provided for the same library includes a unique header file, then it must be included in the solution as well.
 &lt;/instruction&gt;
+
+&lt;task&gt;
+Your goal is to write a fuzzing harness for the provided function-under-test signature using &lt;code&gt;LLVMFuzzerTestOneInput&lt;/code&gt;. It is important that the provided solution compiles and actually calls the function-under-test specified by the function signature:
+&lt;function signature&gt;
+BGD_DECLARE(void) gdImageString (gdImagePtr im, gdFontPtr f, int x, int y, unsigned char *s, int color)
+&lt;/function signature&gt;
+&lt;/task&gt;
+
+&lt;solution&gt;
+
+//
+// you may not use this file except in compliance with the License.
+//
+//
+// distributed under the License is distributed on an &#34;AS IS&#34; BASIS,
+// See the License for the specific language governing permissions and
+//
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+#include &lt;cstddef&gt;
+#include &lt;cstdint&gt;
+#include &lt;cstdlib&gt;
+#include &lt;string&gt;
+
+#include &#34;gd.h&#34;
+#include &#34;gdfontg.h&#34;
+#include &#34;gdfontl.h&#34;
+#include &#34;gdfontmb.h&#34;
+#include &#34;gdfonts.h&#34;
+#include &#34;gdfontt.h&#34;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
+  FuzzedDataProvider stream(data, size);
+  const uint8_t slate_width = stream.ConsumeIntegral&lt;uint8_t&gt;();
+  const uint8_t slate_height = stream.ConsumeIntegral&lt;uint8_t&gt;();
+  gdImagePtr slate_image = gdImageCreateTrueColor(slate_width, slate_height);
+  if (slate_image == nullptr) {
+    return 0;
+  }
+
+  const int x_position = stream.ConsumeIntegral&lt;int&gt;();
+  const int y_position = stream.ConsumeIntegral&lt;int&gt;();
+  const int text_color = stream.ConsumeIntegral&lt;int&gt;();
+  const gdFontPtr font_ptr = stream.PickValueInArray(
+      {gdFontGetGiant(), gdFontGetLarge(), gdFontGetMediumBold(),
+       gdFontGetSmall(), gdFontGetTiny()});
+  const std::string text = stream.ConsumeRemainingBytesAsString();
+
+  gdImageString(slate_image, font_ptr, x_position, y_position,
+                reinterpret_cast&lt;uint8_t*&gt;(const_cast&lt;char*&gt;(text.c_str())),
+                text_color);
+  gdImageDestroy(slate_image);
+  return 0;
+}
+&lt;/solution&gt;
+
+
+&lt;task&gt;
+Your goal is to write a fuzzing harness for the provided function-under-test signature using &lt;code&gt;LLVMFuzzerTestOneInput&lt;/code&gt;. It is important that the provided solution compiles and actually calls the function-under-test specified by the function signature:
+&lt;function signature&gt;
+MPG123_EXPORT int mpg123_decode(mpg123_handle *mh, const unsigned char *inmemory, size_t inmemsize, unsigned char *outmemory, size_t outmemsize, size_t *done )
+&lt;/function signature&gt;
+&lt;/task&gt;
+
+&lt;solution&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+#include &lt;cstddef&gt;
+#include &lt;cstdint&gt;
+#include &lt;cstdio&gt;
+#include &lt;cstdlib&gt;
+#include &lt;vector&gt;
+
+#include &#34;mpg123.h&#34;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
+  static bool initialized = false;
+  if (!initialized) {
+    mpg123_init();
+    initialized = true;
+  }
+  int ret;
+  mpg123_handle* handle = mpg123_new(nullptr, &amp;ret);
+  if (handle == nullptr) {
+    return 0;
+  }
+
+  ret = mpg123_param(handle, MPG123_ADD_FLAGS, MPG123_QUIET, 0.);
+  if(ret == MPG123_OK)
+    ret = mpg123_open_feed(handle);
+  if (ret != MPG123_OK) {
+    mpg123_delete(handle);
+    return 0;
+  }
+
+  std::vector&lt;uint8_t&gt; output_buffer(mpg123_outblock(handle));
+
+  size_t output_written = 0;
+  // Initially, start by feeding the decoder more data.
+  int decode_ret = MPG123_NEED_MORE;
+  FuzzedDataProvider provider(data, size);
+  while ((decode_ret != MPG123_ERR)) {
+    if (decode_ret == MPG123_NEED_MORE) {
+      if (provider.remaining_bytes() == 0
+          || mpg123_tellframe(handle) &gt; 10000
+          || mpg123_tell_stream(handle) &gt; 1&lt;&lt;20) {
+        break;
+      }
+      const size_t next_size = provider.ConsumeIntegralInRange&lt;size_t&gt;(
+          0,
+          provider.remaining_bytes());
+      auto next_input = provider.ConsumeBytes&lt;unsigned char&gt;(next_size);
+      decode_ret = mpg123_decode(handle, next_input.data(), next_input.size(),
+                                 output_buffer.data(), output_buffer.size(),
+                                 &amp;output_written);
+    } else if (decode_ret != MPG123_ERR &amp;&amp; decode_ret != MPG123_NEED_MORE) {
+      decode_ret = mpg123_decode(handle, nullptr, 0, output_buffer.data(),
+                                 output_buffer.size(), &amp;output_written);
+    } else {
+      // Unhandled mpg123_decode return value.
+      abort();
+    }
+  }
+
+  mpg123_delete(handle);
+
+  return 0;
+}
+&lt;/solution&gt;
+
+
+&lt;task&gt;
+Your goal is to write a fuzzing harness for the provided function-under-test signature using &lt;code&gt;LLVMFuzzerTestOneInput&lt;/code&gt;. It is important that the provided solution compiles and actually calls the function-under-test specified by the function signature:
+&lt;function signature&gt;
+void PDFDoc::displayPageSlice(OutputDev *, int, double, double, int, GBool, GBool, GBool, int, int, int, int, DW_TAG_subroutine_typeInfinite loop *, void *)
+&lt;/function signature&gt;
+&lt;/task&gt;
+
+&lt;solution&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+#include &#34;PDFDoc.h&#34;
+#include &#34;SplashOutputDev.h&#34;
+#include &#34;GString.h&#34;
+#include &#34;GlobalParams.h&#34;
+
+struct InfiniteLoop {
+    int field1;
+    int field2;
+    double field3;
+};
+
+GBool abortCheckCbk(void *data) {
+    return gFalse;
+}
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+    FuzzedDataProvider fuzzed_data_provider(data, size);
+
+    // Initialise non-integer parameters.
+    SplashColor paperColor;
+    paperColor[0] = 255;
+    paperColor[1] = 255;
+    paperColor[2] = 255;
+
+    // Initialize GlobalParams before creating SplashOutputDev
+    globalParams = new GlobalParams(&#34;dummy.cfg&#34;);
+
+    SplashOutputDev *outputDev = new SplashOutputDev(splashModeRGB8, 4, gFalse, paperColor);
+    GBool gBool1 = fuzzed_data_provider.ConsumeBool();
+    GBool gBool2 = fuzzed_data_provider.ConsumeBool();
+    GBool gBool3 = fuzzed_data_provider.ConsumeBool();
+    void *displayParam = static_cast&lt;void*&gt;(outputDev); 
+
+    // Initialise data for infinite loop object.
+    InfiniteLoop infLoop;
+    infLoop.field1 = fuzzed_data_provider.ConsumeIntegral&lt;int&gt;();
+    infLoop.field2 = fuzzed_data_provider.ConsumeIntegral&lt;int&gt;();
+    infLoop.field3 = fuzzed_data_provider.ConsumeFloatingPoint&lt;double&gt;();
+
+    if (!fuzzed_data_provider.remaining_bytes()) {
+    	delete outputDev;
+        delete globalParams;
+    	return 0;
+    }
+
+    // Consume the data to integer type parameters.
+    int intParam1 = fuzzed_data_provider.ConsumeIntegral&lt;int&gt;();
+    double doubleParam1 = fuzzed_data_provider.ConsumeFloatingPoint&lt;double&gt;();
+    double doubleParam2 = fuzzed_data_provider.ConsumeFloatingPoint&lt;double&gt;();
+    int intParam2 = fuzzed_data_provider.ConsumeIntegral&lt;int&gt;();
+    int intParam3 = fuzzed_data_provider.ConsumeIntegral&lt;int&gt;();
+    int intParam4 = fuzzed_data_provider.ConsumeIntegral&lt;int&gt;();
+    int intParam5 = fuzzed_data_provider.ConsumeIntegral&lt;int&gt;();
+    int intParam6 = fuzzed_data_provider.ConsumeIntegral&lt;int&gt;();
+
+
+    // Function Call to fuzz target.
+    GString fileNameA(&#34;dummy.pdf&#34;);
+    PDFDoc pdfDoc(&amp;fileNameA); 
+    pdfDoc.displayPageSlice(outputDev, intParam1, doubleParam1, doubleParam2, intParam2, gBool1, gBool2, gBool3, intParam3, intParam4, intParam5, intParam6, abortCheckCbk, displayParam);
+
+    delete outputDev;
+    delete globalParams;
+    return 0;
+}
+&lt;/solution&gt;
+
 
 &lt;task&gt;
 Your goal is to write a fuzzing harness for the provided function-under-test signature using &lt;code&gt;LLVMFuzzerTestOneInput&lt;/code&gt;. It is important that the provided solution compiles and actually calls the function-under-test specified by the function signature:

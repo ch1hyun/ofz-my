@@ -45,7 +45,7 @@ tbody tr:nth-child(odd) {
 <h1>output-libraw-_zn6libraw13parsecr3_ctmdes / 02</h1>
 Bug: False
 <br>
-Crash reason: NO_SEMANTIC_ERR
+Crash reason: -
 <br>
 <br>
 
@@ -65,20 +65,26 @@ Crash reason: NO_SEMANTIC_ERR
 #include &lt;fuzzer/FuzzedDataProvider.h&gt;
 #include &#34;/src/libraw/libraw/libraw.h&#34;
 
-extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
-  FuzzedDataProvider fuzzedDataProvider(data, size);
-  LibRaw libRawInstance;
-  
-  if (size &gt; 0) {
-    libRawInstance.open_buffer(data, size);
-    libRawInstance.unpack();
-    if (fuzzedDataProvider.remaining_bytes() &gt; 0) {
-      short param = fuzzedDataProvider.ConsumeIntegral&lt;short&gt;();
-      // Fixed the error by removing the line as there is no such function &#39;parseCR3_CTMD&#39; in &#39;LibRaw&#39;
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
+    if (size == 0) {
+        return 0;
     }
-  }
 
-  return 0;
+    FuzzedDataProvider fuzzed_data_provider(data, size);
+    
+    std::vector&lt;uint8_t&gt; buffer = fuzzed_data_provider.ConsumeRemainingBytes&lt;uint8_t&gt;();
+    
+    LibRaw RawProcessor;
+    RawProcessor.open_buffer(buffer.data(), buffer.size());
+
+    // Fix: The function parseCR3_CTMD does not exist in the LibRaw class. 
+    // The correct function to call is parse_tiff. 
+    // We need to ensure that the buffer has at least one element to avoid out of range error
+    if (!buffer.empty()) {
+        RawProcessor.parse_tiff(buffer[0]);
+    }
+   
+    return 0;
 }
 </pre>
 
@@ -97,14 +103,15 @@ Below is the code needs to be built:
 #include &lt;fuzzer/FuzzedDataProvider.h&gt;
 #include &lt;libraw/libraw.h&gt;
 
-extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
-  FuzzedDataProvider fuzzedDataProvider(data, size);
-  LibRaw libRawInstance;
-  
-  short param = fuzzedDataProvider.ConsumeIntegral&lt;short&gt;();
-  libRawInstance.parseCR3_CTMD(param);
-
-  return 0;
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
+    FuzzedDataProvider fuzzed_data_provider(data, size);
+    
+    short param = fuzzed_data_provider.ConsumeIntegral&lt;short&gt;();
+    
+    LibRaw RawProcessor;
+    RawProcessor.parseCR3_CTMD(param);
+   
+    return 0;
 }
 &lt;/code&gt;
 
@@ -143,15 +150,17 @@ It&#39;s important to show the complete code, not only the fixed line.
 #include &lt;fuzzer/FuzzedDataProvider.h&gt;
 #include &#34;/src/libraw/libraw/libraw.h&#34;
 
-extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
-  FuzzedDataProvider fuzzedDataProvider(data, size);
-  LibRaw libRawInstance;
-  
-  short param = fuzzedDataProvider.ConsumeIntegral&lt;short&gt;();
-  libRawInstance.parseCR3_CTMD(param);
-
-  return 0;
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
+    FuzzedDataProvider fuzzed_data_provider(data, size);
+    
+    short param = fuzzed_data_provider.ConsumeIntegral&lt;short&gt;();
+    
+    LibRaw RawProcessor;
+    RawProcessor.parseCR3_CTMD(param);
+   
+    return 0;
 }
+&lt;/solution&gt;
 </pre>
 
 
@@ -169,23 +178,24 @@ Below is the code needs to be built:
 #include &lt;fuzzer/FuzzedDataProvider.h&gt;
 #include &#34;/src/libraw/libraw/libraw.h&#34;
 
-extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
-  FuzzedDataProvider fuzzedDataProvider(data, size);
-  LibRaw libRawInstance;
-  
-  short param = fuzzedDataProvider.ConsumeIntegral&lt;short&gt;();
-  libRawInstance.parseCR3_CTMD(param);
-
-  return 0;
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
+    FuzzedDataProvider fuzzed_data_provider(data, size);
+    
+    short param = fuzzed_data_provider.ConsumeIntegral&lt;short&gt;();
+    
+    LibRaw RawProcessor;
+    RawProcessor.parseCR3_CTMD(param);
+   
+    return 0;
 }
 &lt;/code&gt;
 
 Below is the error to fix:
 The code has the following build issues:
 &lt;error&gt;
-/src/libraw_fuzzer.cc:9:18: error: no member named &#39;parseCR3_CTMD&#39; in &#39;LibRaw&#39;
-    9 |   libRawInstance.parseCR3_CTMD(param);
-      |   ~~~~~~~~~~~~~~ ^
+/src/libraw_fuzzer.cc:10:18: error: no member named &#39;parseCR3_CTMD&#39; in &#39;LibRaw&#39;
+   10 |     RawProcessor.parseCR3_CTMD(param);
+      |     ~~~~~~~~~~~~ ^
 &lt;/error&gt;
 
 
@@ -207,18 +217,19 @@ It&#39;s important to show the complete code, not only the fixed line.
 #include &lt;fuzzer/FuzzedDataProvider.h&gt;
 #include &#34;/src/libraw/libraw/libraw.h&#34;
 
-extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
-  FuzzedDataProvider fuzzedDataProvider(data, size);
-  LibRaw libRawInstance;
-  
-  if (size &gt; 0) {
-    libRawInstance.open_buffer(data, size);
-    libRawInstance.unpack();
-  }
-
-  return 0;
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
+    FuzzedDataProvider fuzzed_data_provider(data, size);
+    
+    short param = fuzzed_data_provider.ConsumeIntegral&lt;short&gt;();
+    
+    LibRaw RawProcessor;
+    // Fix: There is no method named &#39;parseCR3_CTMD&#39; in &#39;LibRaw&#39;. 
+    // So, we need to replace it with an existing method. 
+    // For example, we can use the &#39;open_buffer&#39; method.
+    RawProcessor.open_buffer(&amp;param, sizeof(param));
+   
+    return 0;
 }
-&lt;/solution&gt;
 </pre>
 
 
@@ -236,16 +247,88 @@ Below is the code needs to be built:
 #include &lt;fuzzer/FuzzedDataProvider.h&gt;
 #include &#34;/src/libraw/libraw/libraw.h&#34;
 
-extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
-  FuzzedDataProvider fuzzedDataProvider(data, size);
-  LibRaw libRawInstance;
-  
-  if (size &gt; 0) {
-    libRawInstance.open_buffer(data, size);
-    libRawInstance.unpack();
-  }
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
+    FuzzedDataProvider fuzzed_data_provider(data, size);
+    
+    short param = fuzzed_data_provider.ConsumeIntegral&lt;short&gt;();
+    
+    LibRaw RawProcessor;
+    // Fix: There is no method named &#39;parseCR3_CTMD&#39; in &#39;LibRaw&#39;. 
+    // So, we need to replace it with an existing method. 
+    // For example, we can use the &#39;open_buffer&#39; method.
+    RawProcessor.open_buffer(&amp;param, sizeof(param));
+   
+    return 0;
+}
+&lt;/code&gt;
 
-  return 0;
+Below is the error to fix:
+The code can build successfully but has a runtime issue: No code coverage increasement, indicating the fuzz target ineffectively invokes the function under test.
+
+
+
+
+Fix code:
+1. Consider possible solutions for the issues listed above.
+2. Choose a solution that can maximize fuzzing result, which is utilizing the function under test and feeding it not null input.
+3. Apply the solutions to the original code.
+It&#39;s important to show the complete code, not only the fixed line.
+&lt;solution&gt;
+</pre>
+
+
+
+<h3>Code #3</h3>
+
+<pre>
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+#include &#34;/src/libraw/libraw/libraw.h&#34;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
+    if (size == 0) {
+        return 0;
+    }
+
+    FuzzedDataProvider fuzzed_data_provider(data, size);
+    
+    std::vector&lt;uint8_t&gt; buffer = fuzzed_data_provider.ConsumeRemainingBytes&lt;uint8_t&gt;();
+    
+    LibRaw RawProcessor;
+    RawProcessor.open_buffer(buffer.data(), buffer.size());
+   
+    return 0;
+}
+&lt;/solution&gt;
+</pre>
+
+
+<h3>Fixer prompt #4</h3>
+<pre>
+
+Given the following C++ fuzz harness and its build error message, fix the code to make it build for fuzzing.
+
+If there is undeclared identifier or unknown type name error, fix it by finding and including the related libraries.
+
+MUST RETURN THE FULL CODE, INCLUDING UNCHANGED PARTS.
+
+Below is the code needs to be built:
+&lt;code&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+#include &#34;/src/libraw/libraw/libraw.h&#34;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
+    if (size == 0) {
+        return 0;
+    }
+
+    FuzzedDataProvider fuzzed_data_provider(data, size);
+    
+    std::vector&lt;uint8_t&gt; buffer = fuzzed_data_provider.ConsumeRemainingBytes&lt;uint8_t&gt;();
+    
+    LibRaw RawProcessor;
+    RawProcessor.open_buffer(buffer.data(), buffer.size());
+   
+    return 0;
 }
 &lt;/code&gt;
 
@@ -268,32 +351,37 @@ It&#39;s important to show the complete code, not only the fixed line.
 
 
 
-<h3>Code #3</h3>
+<h3>Code #4</h3>
 
 <pre>
 #include &lt;fuzzer/FuzzedDataProvider.h&gt;
 #include &#34;/src/libraw/libraw/libraw.h&#34;
 
-extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
-  FuzzedDataProvider fuzzedDataProvider(data, size);
-  LibRaw libRawInstance;
-  
-  if (size &gt; 0) {
-    libRawInstance.open_buffer(data, size);
-    libRawInstance.unpack();
-    if (fuzzedDataProvider.remaining_bytes() &gt; 0) {
-      short param = fuzzedDataProvider.ConsumeIntegral&lt;short&gt;();
-      libRawInstance.parseCR3_CTMD(param);
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
+    if (size == 0) {
+        return 0;
     }
-  }
 
-  return 0;
+    FuzzedDataProvider fuzzed_data_provider(data, size);
+    
+    std::vector&lt;uint8_t&gt; buffer = fuzzed_data_provider.ConsumeRemainingBytes&lt;uint8_t&gt;();
+    
+    LibRaw RawProcessor;
+    RawProcessor.open_buffer(buffer.data(), buffer.size());
+
+    // Fix: Call the function parseCR3_CTMD
+    // We need to ensure that the buffer has at least one element to avoid out of range error
+    if (!buffer.empty()) {
+        RawProcessor.parseCR3_CTMD(buffer[0]);
+    }
+   
+    return 0;
 }
 &lt;/solution&gt;
 </pre>
 
 
-<h3>Fixer prompt #4</h3>
+<h3>Fixer prompt #5</h3>
 <pre>
 
 Given the following C++ fuzz harness and its build error message, fix the code to make it build for fuzzing.
@@ -307,29 +395,34 @@ Below is the code needs to be built:
 #include &lt;fuzzer/FuzzedDataProvider.h&gt;
 #include &#34;/src/libraw/libraw/libraw.h&#34;
 
-extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
-  FuzzedDataProvider fuzzedDataProvider(data, size);
-  LibRaw libRawInstance;
-  
-  if (size &gt; 0) {
-    libRawInstance.open_buffer(data, size);
-    libRawInstance.unpack();
-    if (fuzzedDataProvider.remaining_bytes() &gt; 0) {
-      short param = fuzzedDataProvider.ConsumeIntegral&lt;short&gt;();
-      libRawInstance.parseCR3_CTMD(param);
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
+    if (size == 0) {
+        return 0;
     }
-  }
 
-  return 0;
+    FuzzedDataProvider fuzzed_data_provider(data, size);
+    
+    std::vector&lt;uint8_t&gt; buffer = fuzzed_data_provider.ConsumeRemainingBytes&lt;uint8_t&gt;();
+    
+    LibRaw RawProcessor;
+    RawProcessor.open_buffer(buffer.data(), buffer.size());
+
+    // Fix: Call the function parseCR3_CTMD
+    // We need to ensure that the buffer has at least one element to avoid out of range error
+    if (!buffer.empty()) {
+        RawProcessor.parseCR3_CTMD(buffer[0]);
+    }
+   
+    return 0;
 }
 &lt;/code&gt;
 
 Below is the error to fix:
 The code has the following build issues:
 &lt;error&gt;
-/src/libraw_fuzzer.cc:13:22: error: no member named &#39;parseCR3_CTMD&#39; in &#39;LibRaw&#39;
-   13 |       libRawInstance.parseCR3_CTMD(param);
-      |       ~~~~~~~~~~~~~~ ^
+/src/libraw_fuzzer.cc:19:22: error: no member named &#39;parseCR3_CTMD&#39; in &#39;LibRaw&#39;
+   19 |         RawProcessor.parseCR3_CTMD(buffer[0]);
+      |         ~~~~~~~~~~~~ ^
 &lt;/error&gt;
 
 
@@ -345,27 +438,34 @@ It&#39;s important to show the complete code, not only the fixed line.
 
 
 
-<h3>Code #4</h3>
+<h3>Code #5</h3>
 
 <pre>
 #include &lt;fuzzer/FuzzedDataProvider.h&gt;
 #include &#34;/src/libraw/libraw/libraw.h&#34;
 
-extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
-  FuzzedDataProvider fuzzedDataProvider(data, size);
-  LibRaw libRawInstance;
-  
-  if (size &gt; 0) {
-    libRawInstance.open_buffer(data, size);
-    libRawInstance.unpack();
-    if (fuzzedDataProvider.remaining_bytes() &gt; 0) {
-      short param = fuzzedDataProvider.ConsumeIntegral&lt;short&gt;();
-      // Fixed the error by removing the line as there is no such function &#39;parseCR3_CTMD&#39; in &#39;LibRaw&#39;
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
+    if (size == 0) {
+        return 0;
     }
-  }
 
-  return 0;
+    FuzzedDataProvider fuzzed_data_provider(data, size);
+    
+    std::vector&lt;uint8_t&gt; buffer = fuzzed_data_provider.ConsumeRemainingBytes&lt;uint8_t&gt;();
+    
+    LibRaw RawProcessor;
+    RawProcessor.open_buffer(buffer.data(), buffer.size());
+
+    // Fix: The function parseCR3_CTMD does not exist in the LibRaw class. 
+    // The correct function to call is parse_tiff. 
+    // We need to ensure that the buffer has at least one element to avoid out of range error
+    if (!buffer.empty()) {
+        RawProcessor.parse_tiff(buffer[0]);
+    }
+   
+    return 0;
 }
+&lt;/solution&gt;
 </pre>
 
 
@@ -375,133 +475,80 @@ Fixing /home/chyun/oss-fuzz-gen/results/output-libraw-_zn6libraw13parsecr3_ctmde
 Fixing /home/chyun/oss-fuzz-gen/results/output-libraw-_zn6libraw13parsecr3_ctmdes/fixed_targets/02.cc with gpt-4, attempt 2.
 Fixing /home/chyun/oss-fuzz-gen/results/output-libraw-_zn6libraw13parsecr3_ctmdes/fixed_targets/02.cc with gpt-4, attempt 3.
 Fixing /home/chyun/oss-fuzz-gen/results/output-libraw-_zn6libraw13parsecr3_ctmdes/fixed_targets/02.cc with gpt-4, attempt 4.
-Successfully built /home/chyun/oss-fuzz-gen/results/output-libraw-_zn6libraw13parsecr3_ctmdes/fixed_targets/02.cc with gpt-4 in 4 iterations of fixing.
-Triaging the crash related to /home/chyun/oss-fuzz-gen/results/output-libraw-_zn6libraw13parsecr3_ctmdes/fixed_targets/02.cc with gpt-4.
-Warning: no crash info in libraw-zn6libraw13parsecr3_ctmdes-02.
-Result for libraw-zn6libraw13parsecr3_ctmdes-02: crashes=False, coverage=0.048492349234923494 (862/17776), coverage diff=2.707312450929962e-05 (1/36937)
+Fixing /home/chyun/oss-fuzz-gen/results/output-libraw-_zn6libraw13parsecr3_ctmdes/fixed_targets/02.cc with gpt-4, attempt 5.
+Failed to build /home/chyun/oss-fuzz-gen/results/output-libraw-_zn6libraw13parsecr3_ctmdes/fixed_targets/02.cc with gpt-4 in 5 iterations of fixing.
 
 </pre>
 
 <h2>Run logs</h2>
 <pre>
-INFO:__main__:Running: docker run --privileged --shm-size=2g --platform linux/amd64 --rm -e FUZZING_ENGINE=libfuzzer -e SANITIZER=address -e RUN_FUZZER_MODE=interactive -e HELPER=True -v /home/chyun/oss-fuzz-gen/results/output-libraw-_zn6libraw13parsecr3_ctmdes/corpora/02.cc:/tmp/libraw_cr2_fuzzer_corpus -v /tmp/tmpr4al52sl/build/out/libraw-zn6libraw13parsecr3_ctmdes-02:/out -t gcr.io/oss-fuzz-base/base-runner run_fuzzer libraw_cr2_fuzzer -print_final_stats=1 -max_total_time=30 -len_control=0 -timeout=30.
+INFO:__main__:Running: docker run --privileged --shm-size=2g --platform linux/amd64 --rm -e FUZZING_ENGINE=libfuzzer -e SANITIZER=address -e RUN_FUZZER_MODE=interactive -e HELPER=True -v /home/chyun/oss-fuzz-gen/results/output-libraw-_zn6libraw13parsecr3_ctmdes/corpora/02.cc:/tmp/libraw_cr2_fuzzer_corpus -v /tmp/tmpgthj4acw/build/out/libraw-zn6libraw13parsecr3_ctmdes-02:/out -t gcr.io/oss-fuzz-base/base-runner run_fuzzer libraw_cr2_fuzzer -print_final_stats=1 -max_total_time=30 -len_control=0 -timeout=30.
 vm.mmap_rnd_bits = 28
 rm: cannot remove &#39;/tmp/libraw_cr2_fuzzer_corpus&#39;: Device or resource busy
 Using seed corpus: libraw_cr2_fuzzer_seed_corpus.zip
 /out/libraw_cr2_fuzzer -rss_limit_mb=2560 -timeout=25 -print_final_stats=1 -max_total_time=30 -len_control=0 -timeout=30 /tmp/libraw_cr2_fuzzer_corpus &lt; /dev/null
 INFO: Running with entropic power schedule (0xFF, 100).
-INFO: Seed: 4140016990
-INFO: Loaded 1 modules   (17776 inline 8-bit counters): 17776 [0x55bed2770448, 0x55bed27749b8), 
-INFO: Loaded 1 PC tables (17776 PCs): 17776 [0x55bed27749b8,0x55bed27ba0b8), 
+INFO: Seed: 1106241121
+INFO: Loaded 1 modules   (17651 inline 8-bit counters): 17651 [0x5629af966328, 0x5629af96a81b), 
+INFO: Loaded 1 PC tables (17651 PCs): 17651 [0x5629af96a820,0x5629af9af750), 
 INFO:        3 files found in /tmp/libraw_cr2_fuzzer_corpus
 INFO: -max_len is not provided; libFuzzer will not generate inputs larger than 1048576 bytes
 INFO: seed corpus: files: 3 min: 6884212b max: 12304199b total: 27614165b rss: 33Mb
-unknown file: Unexpected end of file
-unknown file: Unexpected end of file
-unknown file: Unexpected end of file
-#5	INITED cov: 783 ft: 896 corp: 3/3072Kb exec/s: 0 rss: 51Mb
-#6	NEW    cov: 790 ft: 904 corp: 4/4096Kb lim: 1048576 exec/s: 0 rss: 52Mb L: 1048576/1048576 MS: 1 CopyPart-
-#7	REDUCE cov: 790 ft: 904 corp: 4/3787Kb lim: 1048576 exec/s: 0 rss: 53Mb L: 732845/1048576 MS: 1 EraseBytes-
-unknown file: Unexpected end of file
-#19	REDUCE cov: 790 ft: 904 corp: 4/3694Kb lim: 1048576 exec/s: 0 rss: 54Mb L: 637141/1048576 MS: 2 CrossOver-CrossOver-
-#30	NEW    cov: 792 ft: 961 corp: 5/3837Kb lim: 1048576 exec/s: 0 rss: 54Mb L: 146957/1048576 MS: 1 CrossOver-
-#31	NEW    cov: 794 ft: 973 corp: 6/4738Kb lim: 1048576 exec/s: 0 rss: 54Mb L: 922360/1048576 MS: 1 CrossOver-
-unknown file: Unexpected end of file
-unknown file: data corrupted at 870192
-	NEW_FUNC[1/1]: 0x55bed24b4b40 in LibRaw::crop_masked_pixels() /src/libraw/src/utils/utils_dcraw.cpp:184
-#38	NEW    cov: 832 ft: 1034 corp: 7/5762Kb lim: 1048576 exec/s: 19 rss: 73Mb L: 1048576/1048576 MS: 2 CMP-CrossOver- DE: &#34;\346\003\000\000&#34;-
-unknown file: Unexpected end of file
-unknown file: data corrupted at 960185
-#40	NEW    cov: 832 ft: 1041 corp: 8/6786Kb lim: 1048576 exec/s: 13 rss: 76Mb L: 1048576/1048576 MS: 2 ChangeBit-CrossOver-
-#43	NEW    cov: 841 ft: 1065 corp: 9/6828Kb lim: 1048576 exec/s: 14 rss: 76Mb L: 42639/1048576 MS: 3 ShuffleBytes-ChangeBinInt-CrossOver-
-#44	REDUCE cov: 841 ft: 1065 corp: 9/6825Kb lim: 1048576 exec/s: 14 rss: 76Mb L: 1045535/1048576 MS: 1 EraseBytes-
-unknown file: data corrupted at 753311
-#45	NEW    cov: 843 ft: 1073 corp: 10/7606Kb lim: 1048576 exec/s: 11 rss: 76Mb L: 800080/1048576 MS: 1 CrossOver-
-unknown file: data corrupted at 701225
-#51	NEW    cov: 844 ft: 1088 corp: 11/8630Kb lim: 1048576 exec/s: 10 rss: 76Mb L: 1048576/1048576 MS: 1 ChangeByte-
-#56	NEW    cov: 845 ft: 1090 corp: 12/9531Kb lim: 1048576 exec/s: 11 rss: 76Mb L: 922365/1048576 MS: 5 ShuffleBytes-InsertByte-ChangeASCIIInt-ChangeByte-PersAutoDict- DE: &#34;\346\003\000\000&#34;-
-#60	REDUCE cov: 845 ft: 1090 corp: 12/9146Kb lim: 1048576 exec/s: 12 rss: 76Mb L: 651428/1048576 MS: 4 ChangeASCIIInt-ShuffleBytes-InsertByte-EraseBytes-
-#64	pulse  cov: 845 ft: 1090 corp: 12/9146Kb lim: 1048576 exec/s: 12 rss: 76Mb
-#65	NEW    cov: 846 ft: 1091 corp: 13/10047Kb lim: 1048576 exec/s: 13 rss: 76Mb L: 922367/1048576 MS: 5 CopyPart-CMP-ChangeByte-PersAutoDict-CMP- DE: &#34;IIII&#34;-&#34;\346\003\000\000&#34;-&#34;\377\002&#34;-
-#70	REDUCE cov: 846 ft: 1091 corp: 13/9917Kb lim: 1048576 exec/s: 14 rss: 76Mb L: 789558/1048576 MS: 5 InsertRepeatedBytes-CopyPart-ChangeByte-InsertByte-EraseBytes-
-unknown file: data corrupted at 534622
-#71	NEW    cov: 846 ft: 1093 corp: 14/10802Kb lim: 1048576 exec/s: 11 rss: 76Mb L: 906386/1048576 MS: 1 EraseBytes-
-unknown file: data corrupted at 534622
-unknown file: data corrupted at 534622
-unknown file: data corrupted at 534622
-#74	NEW    cov: 846 ft: 1096 corp: 15/11687Kb lim: 1048576 exec/s: 9 rss: 79Mb L: 906387/1048576 MS: 3 ShuffleBytes-ChangeByte-InsertByte-
-#76	NEW    cov: 847 ft: 1141 corp: 16/12444Kb lim: 1048576 exec/s: 9 rss: 79Mb L: 775287/1048576 MS: 2 ChangeASCIIInt-CrossOver-
-#77	REDUCE cov: 855 ft: 1150 corp: 17/13080Kb lim: 1048576 exec/s: 9 rss: 79Mb L: 651436/1048576 MS: 1 CMP- DE: &#34;\000\000\000\000\377\377\377\377&#34;-
-#86	REDUCE cov: 855 ft: 1150 corp: 17/12876Kb lim: 1048576 exec/s: 10 rss: 79Mb L: 713069/1048576 MS: 4 ChangeByte-ChangeByte-ChangeBit-EraseBytes-
-unknown file: data corrupted at 534622
-#97	NEW    cov: 855 ft: 1151 corp: 18/13854Kb lim: 1048576 exec/s: 10 rss: 80Mb L: 1001307/1048576 MS: 1 CopyPart-
-unknown file: data corrupted at 760445
-#98	NEW    cov: 855 ft: 1153 corp: 19/14878Kb lim: 1048576 exec/s: 9 rss: 83Mb L: 1048576/1048576 MS: 1 CopyPart-
-unknown file: data corrupted at 534622
-unknown file: data corrupted at 534622
-#101	NEW    cov: 855 ft: 1168 corp: 20/15841Kb lim: 1048576 exec/s: 8 rss: 83Mb L: 986018/1048576 MS: 3 ChangeByte-ChangeBinInt-CrossOver-
-unknown file: data corrupted at 534622
-unknown file: data corrupted at 534622
-unknown file: data corrupted at 532877
-#112	NEW    cov: 856 ft: 1170 corp: 21/16Mb lim: 1048576 exec/s: 8 rss: 83Mb L: 1001425/1048576 MS: 1 InsertRepeatedBytes-
-unknown file: data corrupted at 634664
-#113	NEW    cov: 857 ft: 1171 corp: 22/17Mb lim: 1048576 exec/s: 7 rss: 86Mb L: 1048576/1048576 MS: 1 ChangeASCIIInt-
-unknown file: Unexpected end of file
-unknown file: Unexpected end of file
-unknown file: Unexpected end of file
-unknown file: data corrupted at 967572
-unknown file: data corrupted at 967572
-#128	pulse  cov: 857 ft: 1171 corp: 22/17Mb lim: 1048576 exec/s: 7 rss: 86Mb
-unknown file: data corrupted at 534622
-#129	NEW    cov: 857 ft: 1173 corp: 23/18Mb lim: 1048576 exec/s: 7 rss: 86Mb L: 915349/1048576 MS: 1 EraseBytes-
-#133	REDUCE cov: 857 ft: 1173 corp: 23/18Mb lim: 1048576 exec/s: 7 rss: 86Mb L: 626696/1048576 MS: 4 CrossOver-ChangeBit-ChangeBinInt-EraseBytes-
-#140	NEW    cov: 858 ft: 1176 corp: 24/19Mb lim: 1048576 exec/s: 7 rss: 86Mb L: 859247/1048576 MS: 2 EraseBytes-CopyPart-
-unknown file: data corrupted at 634664
-#146	REDUCE cov: 858 ft: 1176 corp: 24/19Mb lim: 1048576 exec/s: 7 rss: 90Mb L: 1031903/1048576 MS: 1 EraseBytes-
-#162	NEW    cov: 859 ft: 1181 corp: 25/19Mb lim: 1048576 exec/s: 8 rss: 90Mb L: 42643/1048576 MS: 1 PersAutoDict- DE: &#34;\346\003\000\000&#34;-
-#166	NEW    cov: 859 ft: 1186 corp: 26/19Mb lim: 1048576 exec/s: 8 rss: 90Mb L: 214275/1048576 MS: 4 ChangeASCIIInt-CMP-PersAutoDict-CrossOver- DE: &#34;MMMM&#34;-&#34;IIII&#34;-
-#180	NEW    cov: 862 ft: 1195 corp: 27/19Mb lim: 1048576 exec/s: 9 rss: 90Mb L: 42646/1048576 MS: 4 InsertByte-InsertByte-ShuffleBytes-InsertByte-
-#187	REDUCE cov: 862 ft: 1195 corp: 27/19Mb lim: 1048576 exec/s: 9 rss: 90Mb L: 879716/1048576 MS: 2 PersAutoDict-EraseBytes- DE: &#34;\000\000\000\000\377\377\377\377&#34;-
-#193	NEW    cov: 862 ft: 1200 corp: 28/19Mb lim: 1048576 exec/s: 10 rss: 90Mb L: 694075/1048576 MS: 1 CrossOver-
-#199	NEW    cov: 862 ft: 1203 corp: 29/20Mb lim: 1048576 exec/s: 10 rss: 90Mb L: 888526/1048576 MS: 1 EraseBytes-
-#210	NEW    cov: 862 ft: 1206 corp: 30/20Mb lim: 1048576 exec/s: 11 rss: 90Mb L: 25644/1048576 MS: 1 EraseBytes-
-#212	NEW    cov: 862 ft: 1210 corp: 31/21Mb lim: 1048576 exec/s: 11 rss: 90Mb L: 539036/1048576 MS: 2 EraseBytes-InsertByte-
-unknown file: data corrupted at 870192
-unknown file: data corrupted at 870192
-unknown file: data corrupted at 870192
-unknown file: data corrupted at 960185
-unknown file: data corrupted at 960171
-unknown file: data corrupted at 960171
-unknown file: data corrupted at 960171
-unknown file: data corrupted at 960185
-#243	NEW    cov: 862 ft: 1216 corp: 32/21Mb lim: 1048576 exec/s: 8 rss: 92Mb L: 42650/1048576 MS: 1 CMP- DE: &#34;\&#34;\012\000\000&#34;-
-unknown file: data corrupted at 634664
-#244	NEW    cov: 862 ft: 1217 corp: 33/22Mb lim: 1048576 exec/s: 8 rss: 92Mb L: 1048576/1048576 MS: 1 ChangeASCIIInt-
-#246	REDUCE cov: 862 ft: 1217 corp: 33/22Mb lim: 1048576 exec/s: 8 rss: 92Mb L: 379456/1048576 MS: 2 ChangeBit-EraseBytes-
-#248	NEW    cov: 862 ft: 1220 corp: 34/22Mb lim: 1048576 exec/s: 8 rss: 92Mb L: 33175/1048576 MS: 2 InsertByte-CopyPart-
-unknown file: Unexpected end of file
-#249	NEW    cov: 862 ft: 1221 corp: 35/23Mb lim: 1048576 exec/s: 8 rss: 92Mb L: 1048576/1048576 MS: 1 ChangeASCIIInt-
-unknown file: data corrupted at 760445
-unknown file: data corrupted at 760445
-#256	pulse  cov: 862 ft: 1221 corp: 35/23Mb lim: 1048576 exec/s: 7 rss: 94Mb
-unknown file: data corrupted at 760445
-unknown file: data corrupted at 760445
-unknown file: data corrupted at 760445
-#259	DONE   cov: 862 ft: 1221 corp: 35/23Mb lim: 1048576 exec/s: 7 rss: 95Mb
+#4	INITED cov: 75 ft: 76 corp: 1/1024Kb exec/s: 0 rss: 44Mb
+#6	REDUCE cov: 75 ft: 76 corp: 1/649Kb lim: 1048576 exec/s: 0 rss: 47Mb L: 664657/664657 MS: 2 ChangeBinInt-EraseBytes-
+#11	REDUCE cov: 75 ft: 76 corp: 1/366Kb lim: 1048576 exec/s: 0 rss: 48Mb L: 374989/374989 MS: 5 ShuffleBytes-ChangeASCIIInt-InsertRepeatedBytes-ShuffleBytes-EraseBytes-
+#16	REDUCE cov: 75 ft: 76 corp: 1/290Kb lim: 1048576 exec/s: 0 rss: 48Mb L: 297218/297218 MS: 5 CrossOver-ChangeByte-ShuffleBytes-ShuffleBytes-CrossOver-
+#17	REDUCE cov: 75 ft: 76 corp: 1/263Kb lim: 1048576 exec/s: 0 rss: 48Mb L: 270189/270189 MS: 1 EraseBytes-
+#23	REDUCE cov: 75 ft: 76 corp: 1/154Kb lim: 1048576 exec/s: 0 rss: 48Mb L: 158109/158109 MS: 1 EraseBytes-
+#27	REDUCE cov: 75 ft: 76 corp: 1/79Kb lim: 1048576 exec/s: 0 rss: 48Mb L: 81694/81694 MS: 4 ChangeASCIIInt-ShuffleBytes-CrossOver-EraseBytes-
+#34	REDUCE cov: 75 ft: 76 corp: 1/23Kb lim: 1048576 exec/s: 0 rss: 48Mb L: 24109/24109 MS: 2 ChangeByte-CrossOver-
+#38	REDUCE cov: 75 ft: 76 corp: 1/23Kb lim: 1048576 exec/s: 0 rss: 48Mb L: 23900/23900 MS: 4 ShuffleBytes-CrossOver-ChangeASCIIInt-EraseBytes-
+#40	REDUCE cov: 75 ft: 76 corp: 1/20Kb lim: 1048576 exec/s: 0 rss: 48Mb L: 20514/20514 MS: 2 ChangeByte-EraseBytes-
+#48	REDUCE cov: 75 ft: 76 corp: 1/11961b lim: 1048576 exec/s: 0 rss: 48Mb L: 11961/11961 MS: 3 CMP-ShuffleBytes-EraseBytes- DE: &#34;\001\000\000\000\000\000^-&#34;-
+#53	REDUCE cov: 75 ft: 76 corp: 1/9002b lim: 1048576 exec/s: 0 rss: 48Mb L: 9002/9002 MS: 5 ChangeBit-ChangeBinInt-InsertRepeatedBytes-ShuffleBytes-EraseBytes-
+#56	REDUCE cov: 75 ft: 76 corp: 1/5841b lim: 1048576 exec/s: 0 rss: 48Mb L: 5841/5841 MS: 3 ChangeBinInt-InsertRepeatedBytes-EraseBytes-
+#81	REDUCE cov: 75 ft: 76 corp: 1/3602b lim: 1048576 exec/s: 0 rss: 48Mb L: 3602/3602 MS: 5 ChangeBinInt-CopyPart-ChangeBit-CrossOver-EraseBytes-
+#93	REDUCE cov: 75 ft: 76 corp: 1/2818b lim: 1048576 exec/s: 0 rss: 48Mb L: 2818/2818 MS: 2 ChangeBinInt-EraseBytes-
+#94	REDUCE cov: 75 ft: 76 corp: 1/1547b lim: 1048576 exec/s: 0 rss: 48Mb L: 1547/1547 MS: 1 EraseBytes-
+#95	REDUCE cov: 75 ft: 76 corp: 1/908b lim: 1048576 exec/s: 0 rss: 48Mb L: 908/908 MS: 1 EraseBytes-
+#121	REDUCE cov: 75 ft: 76 corp: 1/619b lim: 1048576 exec/s: 0 rss: 48Mb L: 619/619 MS: 1 EraseBytes-
+#127	REDUCE cov: 75 ft: 76 corp: 1/556b lim: 1048576 exec/s: 0 rss: 48Mb L: 556/556 MS: 1 EraseBytes-
+#128	REDUCE cov: 75 ft: 76 corp: 1/539b lim: 1048576 exec/s: 0 rss: 48Mb L: 539/539 MS: 1 EraseBytes-
+#131	REDUCE cov: 75 ft: 76 corp: 1/306b lim: 1048576 exec/s: 0 rss: 48Mb L: 306/306 MS: 3 ChangeBinInt-ChangeASCIIInt-EraseBytes-
+#137	REDUCE cov: 75 ft: 76 corp: 1/228b lim: 1048576 exec/s: 0 rss: 48Mb L: 228/228 MS: 1 EraseBytes-
+#149	REDUCE cov: 75 ft: 76 corp: 1/196b lim: 1048576 exec/s: 0 rss: 48Mb L: 196/196 MS: 2 CopyPart-EraseBytes-
+#158	REDUCE cov: 75 ft: 76 corp: 1/183b lim: 1048576 exec/s: 0 rss: 48Mb L: 183/183 MS: 4 ChangeByte-ChangeBit-ChangeASCIIInt-EraseBytes-
+#191	REDUCE cov: 75 ft: 76 corp: 1/118b lim: 1048576 exec/s: 0 rss: 48Mb L: 118/118 MS: 3 PersAutoDict-CMP-EraseBytes- DE: &#34;\001\000\000\000\000\000^-&#34;-&#34;\377\377\377\377&#34;-
+#193	REDUCE cov: 75 ft: 76 corp: 1/75b lim: 1048576 exec/s: 0 rss: 48Mb L: 75/75 MS: 2 InsertRepeatedBytes-EraseBytes-
+#231	REDUCE cov: 75 ft: 76 corp: 1/46b lim: 1048576 exec/s: 0 rss: 48Mb L: 46/46 MS: 3 ChangeByte-InsertByte-EraseBytes-
+#256	REDUCE cov: 75 ft: 76 corp: 1/45b lim: 1048576 exec/s: 0 rss: 48Mb L: 45/45 MS: 5 InsertByte-CrossOver-InsertByte-CopyPart-EraseBytes-
+#279	REDUCE cov: 75 ft: 76 corp: 1/36b lim: 1048576 exec/s: 0 rss: 48Mb L: 36/36 MS: 3 ChangeBit-CopyPart-EraseBytes-
+#357	REDUCE cov: 75 ft: 76 corp: 1/31b lim: 1048576 exec/s: 0 rss: 48Mb L: 31/31 MS: 3 InsertByte-ChangeByte-EraseBytes-
+#360	REDUCE cov: 75 ft: 76 corp: 1/19b lim: 1048576 exec/s: 0 rss: 48Mb L: 19/19 MS: 3 InsertByte-InsertByte-EraseBytes-
+#361	REDUCE cov: 75 ft: 76 corp: 1/16b lim: 1048576 exec/s: 0 rss: 48Mb L: 16/16 MS: 1 EraseBytes-
+#387	REDUCE cov: 75 ft: 76 corp: 1/13b lim: 1048576 exec/s: 0 rss: 48Mb L: 13/13 MS: 1 EraseBytes-
+#419	REDUCE cov: 75 ft: 76 corp: 1/12b lim: 1048576 exec/s: 0 rss: 48Mb L: 12/12 MS: 2 ChangeBit-EraseBytes-
+#451	REDUCE cov: 75 ft: 76 corp: 1/10b lim: 1048576 exec/s: 0 rss: 48Mb L: 10/10 MS: 2 ShuffleBytes-EraseBytes-
+#458	REDUCE cov: 75 ft: 76 corp: 1/5b lim: 1048576 exec/s: 0 rss: 48Mb L: 5/5 MS: 2 ChangeBit-EraseBytes-
+#460	REDUCE cov: 75 ft: 76 corp: 1/4b lim: 1048576 exec/s: 0 rss: 48Mb L: 4/4 MS: 2 ChangeByte-EraseBytes-
+#515	REDUCE cov: 75 ft: 76 corp: 1/3b lim: 1048576 exec/s: 0 rss: 48Mb L: 3/3 MS: 5 InsertByte-CopyPart-ShuffleBytes-ChangeByte-EraseBytes-
+#552	REDUCE cov: 75 ft: 76 corp: 1/2b lim: 1048576 exec/s: 0 rss: 48Mb L: 2/2 MS: 2 CopyPart-EraseBytes-
+#568	REDUCE cov: 75 ft: 77 corp: 2/3b lim: 1048576 exec/s: 0 rss: 48Mb L: 1/2 MS: 1 EraseBytes-
+#8192	pulse  cov: 75 ft: 77 corp: 2/3b lim: 1048576 exec/s: 2730 rss: 48Mb
+#16384	pulse  cov: 75 ft: 77 corp: 2/3b lim: 1048576 exec/s: 2730 rss: 48Mb
+#32768	pulse  cov: 75 ft: 77 corp: 2/3b lim: 1048576 exec/s: 2730 rss: 48Mb
+#65536	pulse  cov: 75 ft: 77 corp: 2/3b lim: 1048576 exec/s: 2621 rss: 48Mb
+#80908	DONE   cov: 75 ft: 77 corp: 2/3b lim: 1048576 exec/s: 2609 rss: 48Mb
 ###### Recommended dictionary. ######
-&#34;\346\003\000\000&#34; # Uses: 5
-&#34;IIII&#34; # Uses: 4
-&#34;\377\002&#34; # Uses: 3
-&#34;\000\000\000\000\377\377\377\377&#34; # Uses: 2
-&#34;MMMM&#34; # Uses: 2
-&#34;\&#34;\012\000\000&#34; # Uses: 0
+&#34;\001\000\000\000\000\000^-&#34; # Uses: 2731
+&#34;\377\377\377\377&#34; # Uses: 2888
 ###### End of recommended dictionary. ######
-Done 259 runs in 37 second(s)
-stat::number_of_executed_units: 259
-stat::average_exec_per_sec:     7
-stat::new_units_added:          42
+Done 80908 runs in 31 second(s)
+stat::number_of_executed_units: 80908
+stat::average_exec_per_sec:     2609
+stat::new_units_added:          39
 stat::slowest_unit_time_sec:    0
-stat::peak_rss_mb:              95
+stat::peak_rss_mb:              48
 
 </pre>
 
