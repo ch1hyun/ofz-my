@@ -1,0 +1,434 @@
+<!doctype html>
+
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Experiment results</title>
+<style>
+* {
+    box-sizing: border-box;
+}
+
+html {
+    line-height: 1.15;
+}
+
+body {
+    font-family: sans-serif;
+    font-size: 16px;
+}
+
+table {
+    border-collapse: collapse;
+    border-spacing: 0;
+}
+
+td, th {
+    border-right: 1px #dedede solid;
+    border-bottom: 1px #dedede solid;
+    padding: 5px;
+    text-align: left;
+}
+td:first-child, th:first-child {
+    border-left: 1px #dedede solid;
+}
+th {
+    border-top: 1px #dedede solid;
+}
+
+tbody tr:nth-child(odd) {
+    background-color: #f4f5ff;
+}
+</style>
+<body>
+    LLM: 
+    
+<h1>output-libraw-_zn6libraw17crxloaddecodeloopepvi / 01</h1>
+Bug: True
+<br>
+Crash reason: NO_SEMANTIC_ERR
+<br>
+<br>
+
+<h2>Triage</h2>
+<pre>
+Crash is caused by bug in project.
+
+The crash is due to a heap-buffer-overflow error in the function crxDecodePlane of the project&#39;s code. This function is called by crxLoadDecodeLoop which is called by the fuzz driver. The error occurs because crxDecodePlane attempts to read beyond the allocated memory of the data buffer. This is an error in the project&#39;s code as it does not correctly handle the bounds of the data buffer.
+</pre>
+<br>
+
+
+
+
+
+<h3>Final code</h3>
+
+<pre>
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+#include &lt;cstddef&gt;
+#include &lt;cstdint&gt;
+#include &lt;cstdlib&gt;
+#include &lt;string&gt;
+#include &lt;vector&gt;
+
+#include &#34;/src/libraw/libraw/libraw.h&#34;
+
+class MyLibRaw : public LibRaw {
+public:
+  using LibRaw::crxLoadDecodeLoop;
+};
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
+  FuzzedDataProvider stream(data, size);
+
+  MyLibRaw RawProcessor;
+  int bpc = stream.ConsumeIntegral&lt;int&gt;();
+  
+  std::vector&lt;unsigned char&gt; buffer = stream.ConsumeRemainingBytes&lt;unsigned char&gt;();
+  void* data_buffer = static_cast&lt;void*&gt;(buffer.data());
+
+  RawProcessor.crxLoadDecodeLoop(data_buffer, bpc);
+  
+  return 0;
+}
+</pre>
+
+
+<h3>Fixer prompt #1</h3>
+<pre>
+
+Given the following C++ fuzz harness and its build error message, fix the code to make it build for fuzzing.
+
+If there is undeclared identifier or unknown type name error, fix it by finding and including the related libraries.
+
+MUST RETURN THE FULL CODE, INCLUDING UNCHANGED PARTS.
+
+Below is the code needs to be built:
+&lt;code&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+#include &lt;cstddef&gt;
+#include &lt;cstdint&gt;
+#include &lt;cstdlib&gt;
+#include &lt;string&gt;
+
+#include &#34;libraw/libraw.h&#34;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
+  FuzzedDataProvider stream(data, size);
+
+  LibRaw RawProcessor;
+  int bpc = stream.ConsumeIntegral&lt;int&gt;();
+  
+  std::vector&lt;unsigned char&gt; buffer = stream.ConsumeRemainingBytes&lt;unsigned char&gt;();
+  void* data_buffer = static_cast&lt;void*&gt;(buffer.data());
+
+  RawProcessor.crxLoadDecodeLoop(data_buffer, bpc);
+  
+  return 0;
+}
+&lt;/code&gt;
+
+Below is the error to fix:
+The code has the following build issues:
+&lt;error&gt;
+/src/libraw_fuzzer.cc:7:10: fatal error: &#39;libraw/libraw.h&#39; file not found
+    7 | #include &#34;libraw/libraw.h&#34;
+      |          ^~~~~~~~~~~~~~~~~
+&lt;/error&gt;
+
+
+Below are instructions to assist you in fixing the error.
+&lt;instruction&gt;
+IMPORTANT: DO NOT include the header file libraw/libraw.h in the generated fuzz target again, the file does not exist in the project-under-test.
+Replace the non-existent &lt;filepath&gt;libraw/libraw.h&lt;/filepath&gt; with the following statement, which share the same file name but exists under the correct path in the project-under-test:
+&lt;code&gt;
+#include &#34;/src/libraw/libraw/libraw.h&#34;
+&lt;/code&gt;
+
+&lt;/instruction&gt;
+
+Fix code:
+1. Consider possible solutions for the issues listed above.
+2. Choose a solution that can maximize fuzzing result, which is utilizing the function under test and feeding it not null input.
+3. Apply the solutions to the original code.
+It&#39;s important to show the complete code, not only the fixed line.
+&lt;solution&gt;
+</pre>
+
+
+
+<h3>Code #1</h3>
+
+<pre>
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+#include &lt;cstddef&gt;
+#include &lt;cstdint&gt;
+#include &lt;cstdlib&gt;
+#include &lt;string&gt;
+#include &lt;vector&gt;
+
+#include &#34;/src/libraw/libraw/libraw.h&#34;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
+  FuzzedDataProvider stream(data, size);
+
+  LibRaw RawProcessor;
+  int bpc = stream.ConsumeIntegral&lt;int&gt;();
+  
+  std::vector&lt;unsigned char&gt; buffer = stream.ConsumeRemainingBytes&lt;unsigned char&gt;();
+  void* data_buffer = static_cast&lt;void*&gt;(buffer.data());
+
+  RawProcessor.crxLoadDecodeLoop(data_buffer, bpc);
+  
+  return 0;
+}
+</pre>
+
+
+<h3>Fixer prompt #2</h3>
+<pre>
+
+Given the following C++ fuzz harness and its build error message, fix the code to make it build for fuzzing.
+
+If there is undeclared identifier or unknown type name error, fix it by finding and including the related libraries.
+
+MUST RETURN THE FULL CODE, INCLUDING UNCHANGED PARTS.
+
+Below is the code needs to be built:
+&lt;code&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+#include &lt;cstddef&gt;
+#include &lt;cstdint&gt;
+#include &lt;cstdlib&gt;
+#include &lt;string&gt;
+#include &lt;vector&gt;
+
+#include &#34;/src/libraw/libraw/libraw.h&#34;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
+  FuzzedDataProvider stream(data, size);
+
+  LibRaw RawProcessor;
+  int bpc = stream.ConsumeIntegral&lt;int&gt;();
+  
+  std::vector&lt;unsigned char&gt; buffer = stream.ConsumeRemainingBytes&lt;unsigned char&gt;();
+  void* data_buffer = static_cast&lt;void*&gt;(buffer.data());
+
+  RawProcessor.crxLoadDecodeLoop(data_buffer, bpc);
+  
+  return 0;
+}
+&lt;/code&gt;
+
+Below is the error to fix:
+The code has the following build issues:
+&lt;error&gt;
+/src/libraw_fuzzer.cc:19:16: error: &#39;crxLoadDecodeLoop&#39; is a protected member of &#39;LibRaw&#39;
+   19 |   RawProcessor.crxLoadDecodeLoop(data_buffer, bpc);
+      |                ^
+/src/libraw/libraw/libraw.h:373:16: note: declared protected here
+  373 |   virtual void crxLoadDecodeLoop(void *, int);
+      |                ^
+&lt;/error&gt;
+
+
+
+
+Fix code:
+1. Consider possible solutions for the issues listed above.
+2. Choose a solution that can maximize fuzzing result, which is utilizing the function under test and feeding it not null input.
+3. Apply the solutions to the original code.
+It&#39;s important to show the complete code, not only the fixed line.
+&lt;solution&gt;
+</pre>
+
+
+
+<h3>Code #2</h3>
+
+<pre>
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+#include &lt;cstddef&gt;
+#include &lt;cstdint&gt;
+#include &lt;cstdlib&gt;
+#include &lt;string&gt;
+#include &lt;vector&gt;
+
+#include &#34;/src/libraw/libraw/libraw.h&#34;
+
+class MyLibRaw : public LibRaw {
+public:
+  using LibRaw::crxLoadDecodeLoop;
+};
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
+  FuzzedDataProvider stream(data, size);
+
+  MyLibRaw RawProcessor;
+  int bpc = stream.ConsumeIntegral&lt;int&gt;();
+  
+  std::vector&lt;unsigned char&gt; buffer = stream.ConsumeRemainingBytes&lt;unsigned char&gt;();
+  void* data_buffer = static_cast&lt;void*&gt;(buffer.data());
+
+  RawProcessor.crxLoadDecodeLoop(data_buffer, bpc);
+  
+  return 0;
+}
+&lt;/solution&gt;
+
+Explanation:
+The error message indicates that the method &#39;crxLoadDecodeLoop&#39; is a protected member of &#39;LibRaw&#39;. This means that it can only be accessed within its class and its derived classes. To fix this, we can create a new class &#39;MyLibRaw&#39; that inherits from &#39;LibRaw&#39; and use the &#39;using&#39; keyword to bring the protected method into the public scope of the new class. Then we can create an object of the new class &#39;MyLibRaw&#39; and call the method &#39;crxLoadDecodeLoop&#39; on it.
+</pre>
+
+
+<h2>Logs</h2>
+<pre>
+Fixing /home/chyun/oss-fuzz-gen/results/output-libraw-_zn6libraw17crxloaddecodeloopepvi/fixed_targets/01.cc with gpt-4, attempt 1.
+Fixing /home/chyun/oss-fuzz-gen/results/output-libraw-_zn6libraw17crxloaddecodeloopepvi/fixed_targets/01.cc with gpt-4, attempt 2.
+Successfully built /home/chyun/oss-fuzz-gen/results/output-libraw-_zn6libraw17crxloaddecodeloopepvi/fixed_targets/01.cc with gpt-4 in 2 iterations of fixing.
+Triaging the crash related to /home/chyun/oss-fuzz-gen/results/output-libraw-_zn6libraw17crxloaddecodeloopepvi/fixed_targets/01.cc with gpt-4.
+Result for libraw-zn6libraw17crxloaddecodeloopepvi-01: crashes=True, coverage=0.0029425079221367134 (52/17672), coverage diff=0.00010829249803719848 (4/36937)
+
+</pre>
+
+<h2>Run logs</h2>
+<pre>
+INFO:__main__:Running: docker run --privileged --shm-size=2g --platform linux/amd64 --rm -e FUZZING_ENGINE=libfuzzer -e SANITIZER=address -e RUN_FUZZER_MODE=interactive -e HELPER=True -v /home/chyun/oss-fuzz-gen/results/output-libraw-_zn6libraw17crxloaddecodeloopepvi/corpora/01.cc:/tmp/libraw_cr2_fuzzer_corpus -v /tmp/tmpknsr2s9w/build/out/libraw-zn6libraw17crxloaddecodeloopepvi-01:/out -t gcr.io/oss-fuzz-base/base-runner run_fuzzer libraw_cr2_fuzzer -print_final_stats=1 -max_total_time=30 -len_control=0 -timeout=30.
+vm.mmap_rnd_bits = 28
+rm: cannot remove &#39;/tmp/libraw_cr2_fuzzer_corpus&#39;: Device or resource busy
+Using seed corpus: libraw_cr2_fuzzer_seed_corpus.zip
+/out/libraw_cr2_fuzzer -rss_limit_mb=2560 -timeout=25 -print_final_stats=1 -max_total_time=30 -len_control=0 -timeout=30 /tmp/libraw_cr2_fuzzer_corpus &lt; /dev/null
+INFO: Running with entropic power schedule (0xFF, 100).
+INFO: Seed: 3106964045
+INFO: Loaded 1 modules   (17672 inline 8-bit counters): 17672 [0x55fd9fe15388, 0x55fd9fe19890), 
+INFO: Loaded 1 PC tables (17672 PCs): 17672 [0x55fd9fe19890,0x55fd9fe5e910), 
+INFO:        3 files found in /tmp/libraw_cr2_fuzzer_corpus
+INFO: -max_len is not provided; libFuzzer will not generate inputs larger than 1048576 bytes
+INFO: seed corpus: files: 3 min: 6884212b max: 12304199b total: 27614165b rss: 33Mb
+#4	INITED cov: 52 ft: 53 corp: 1/1024Kb exec/s: 0 rss: 47Mb
+#8	REDUCE cov: 52 ft: 53 corp: 1/536Kb lim: 1048576 exec/s: 0 rss: 48Mb L: 549578/549578 MS: 4 ChangeBinInt-CMP-CrossOver-EraseBytes- DE: &#34;\000\000\000\000&#34;-
+#11	REDUCE cov: 52 ft: 53 corp: 1/390Kb lim: 1048576 exec/s: 0 rss: 48Mb L: 400320/400320 MS: 3 ChangeByte-InsertByte-EraseBytes-
+#21	REDUCE cov: 52 ft: 53 corp: 1/362Kb lim: 1048576 exec/s: 0 rss: 48Mb L: 371186/371186 MS: 5 CrossOver-ChangeByte-InsertRepeatedBytes-InsertRepeatedBytes-EraseBytes-
+#34	REDUCE cov: 52 ft: 53 corp: 1/211Kb lim: 1048576 exec/s: 0 rss: 48Mb L: 216455/216455 MS: 3 ChangeBinInt-ChangeBinInt-EraseBytes-
+#53	REDUCE cov: 52 ft: 53 corp: 1/185Kb lim: 1048576 exec/s: 0 rss: 48Mb L: 189849/189849 MS: 4 ChangeBinInt-InsertRepeatedBytes-ChangeBinInt-EraseBytes-
+#67	REDUCE cov: 52 ft: 53 corp: 1/155Kb lim: 1048576 exec/s: 0 rss: 48Mb L: 159496/159496 MS: 4 ChangeASCIIInt-CMP-ChangeByte-EraseBytes- DE: &#34;\000\000\000\000&#34;-
+#70	REDUCE cov: 52 ft: 53 corp: 1/117Kb lim: 1048576 exec/s: 0 rss: 48Mb L: 120121/120121 MS: 3 ChangeByte-ChangeByte-EraseBytes-
+#79	REDUCE cov: 52 ft: 53 corp: 1/80Kb lim: 1048576 exec/s: 0 rss: 48Mb L: 82040/82040 MS: 4 PersAutoDict-InsertByte-ChangeByte-EraseBytes- DE: &#34;\000\000\000\000&#34;-
+#82	REDUCE cov: 52 ft: 53 corp: 1/71Kb lim: 1048576 exec/s: 0 rss: 48Mb L: 72841/72841 MS: 3 CopyPart-ChangeASCIIInt-EraseBytes-
+#83	REDUCE cov: 52 ft: 53 corp: 1/63Kb lim: 1048576 exec/s: 0 rss: 48Mb L: 64570/64570 MS: 1 EraseBytes-
+#91	REDUCE cov: 52 ft: 53 corp: 1/61Kb lim: 1048576 exec/s: 0 rss: 48Mb L: 63151/63151 MS: 3 ChangeByte-InsertByte-EraseBytes-
+#94	REDUCE cov: 52 ft: 53 corp: 1/50Kb lim: 1048576 exec/s: 0 rss: 48Mb L: 51657/51657 MS: 3 InsertRepeatedBytes-InsertByte-EraseBytes-
+#143	REDUCE cov: 52 ft: 53 corp: 1/28Kb lim: 1048576 exec/s: 0 rss: 48Mb L: 29230/29230 MS: 4 CopyPart-ShuffleBytes-PersAutoDict-EraseBytes- DE: &#34;\000\000\000\000&#34;-
+#147	REDUCE cov: 52 ft: 53 corp: 1/27Kb lim: 1048576 exec/s: 0 rss: 48Mb L: 28651/28651 MS: 4 ChangeASCIIInt-ChangeByte-ShuffleBytes-EraseBytes-
+#156	REDUCE cov: 52 ft: 53 corp: 1/20Kb lim: 1048576 exec/s: 0 rss: 48Mb L: 20796/20796 MS: 4 InsertRepeatedBytes-CrossOver-ChangeBinInt-EraseBytes-
+#162	REDUCE cov: 52 ft: 53 corp: 1/13058b lim: 1048576 exec/s: 0 rss: 48Mb L: 13058/13058 MS: 1 EraseBytes-
+#173	REDUCE cov: 52 ft: 53 corp: 1/12073b lim: 1048576 exec/s: 0 rss: 48Mb L: 12073/12073 MS: 1 EraseBytes-
+#181	REDUCE cov: 52 ft: 53 corp: 1/11419b lim: 1048576 exec/s: 0 rss: 48Mb L: 11419/11419 MS: 3 ChangeByte-InsertByte-EraseBytes-
+#191	REDUCE cov: 52 ft: 53 corp: 1/9299b lim: 1048576 exec/s: 0 rss: 49Mb L: 9299/9299 MS: 5 ShuffleBytes-ChangeBinInt-ChangeASCIIInt-InsertRepeatedBytes-EraseBytes-
+#254	REDUCE cov: 52 ft: 53 corp: 1/7058b lim: 1048576 exec/s: 0 rss: 50Mb L: 7058/7058 MS: 3 ShuffleBytes-InsertRepeatedBytes-EraseBytes-
+#255	REDUCE cov: 52 ft: 53 corp: 1/6744b lim: 1048576 exec/s: 0 rss: 50Mb L: 6744/6744 MS: 1 EraseBytes-
+#257	REDUCE cov: 52 ft: 53 corp: 1/3618b lim: 1048576 exec/s: 0 rss: 50Mb L: 3618/3618 MS: 2 CrossOver-EraseBytes-
+#276	REDUCE cov: 52 ft: 53 corp: 1/1872b lim: 1048576 exec/s: 0 rss: 51Mb L: 1872/1872 MS: 4 ShuffleBytes-CMP-PersAutoDict-EraseBytes- DE: &#34;\001\000&#34;-&#34;\000\000\000\000&#34;-
+#277	REDUCE cov: 52 ft: 53 corp: 1/1038b lim: 1048576 exec/s: 0 rss: 51Mb L: 1038/1038 MS: 1 EraseBytes-
+#303	REDUCE cov: 52 ft: 53 corp: 1/993b lim: 1048576 exec/s: 0 rss: 51Mb L: 993/993 MS: 1 EraseBytes-
+#343	REDUCE cov: 52 ft: 53 corp: 1/782b lim: 1048576 exec/s: 0 rss: 51Mb L: 782/782 MS: 5 InsertByte-ShuffleBytes-ChangeBit-CrossOver-EraseBytes-
+#344	REDUCE cov: 52 ft: 53 corp: 1/638b lim: 1048576 exec/s: 0 rss: 51Mb L: 638/638 MS: 1 EraseBytes-
+#350	REDUCE cov: 52 ft: 53 corp: 1/580b lim: 1048576 exec/s: 0 rss: 51Mb L: 580/580 MS: 1 EraseBytes-
+#355	REDUCE cov: 52 ft: 53 corp: 1/442b lim: 1048576 exec/s: 0 rss: 51Mb L: 442/442 MS: 5 CopyPart-PersAutoDict-PersAutoDict-CMP-EraseBytes- DE: &#34;\000\000\000\000&#34;-&#34;\000\000\000\000&#34;-&#34;Hb\036\311&#34;-
+#356	REDUCE cov: 52 ft: 53 corp: 1/403b lim: 1048576 exec/s: 0 rss: 51Mb L: 403/403 MS: 1 EraseBytes-
+#383	REDUCE cov: 52 ft: 53 corp: 1/258b lim: 1048576 exec/s: 0 rss: 51Mb L: 258/258 MS: 2 ShuffleBytes-EraseBytes-
+#389	REDUCE cov: 52 ft: 53 corp: 1/161b lim: 1048576 exec/s: 0 rss: 51Mb L: 161/161 MS: 1 EraseBytes-
+#421	REDUCE cov: 52 ft: 53 corp: 1/81b lim: 1048576 exec/s: 0 rss: 51Mb L: 81/81 MS: 2 ShuffleBytes-EraseBytes-
+#429	REDUCE cov: 52 ft: 53 corp: 1/59b lim: 1048576 exec/s: 0 rss: 51Mb L: 59/59 MS: 3 ShuffleBytes-ChangeASCIIInt-EraseBytes-
+#437	REDUCE cov: 52 ft: 53 corp: 1/58b lim: 1048576 exec/s: 0 rss: 51Mb L: 58/58 MS: 3 ChangeBinInt-CopyPart-EraseBytes-
+#442	REDUCE cov: 52 ft: 53 corp: 1/40b lim: 1048576 exec/s: 0 rss: 51Mb L: 40/40 MS: 5 CopyPart-ShuffleBytes-ChangeBinInt-CrossOver-EraseBytes-
+#444	REDUCE cov: 52 ft: 53 corp: 1/21b lim: 1048576 exec/s: 0 rss: 51Mb L: 21/21 MS: 2 ChangeByte-EraseBytes-
+#450	REDUCE cov: 52 ft: 53 corp: 1/19b lim: 1048576 exec/s: 0 rss: 51Mb L: 19/19 MS: 1 EraseBytes-
+#472	REDUCE cov: 52 ft: 53 corp: 1/13b lim: 1048576 exec/s: 0 rss: 51Mb L: 13/13 MS: 2 ChangeBit-EraseBytes-
+#500	REDUCE cov: 52 ft: 53 corp: 1/12b lim: 1048576 exec/s: 0 rss: 51Mb L: 12/12 MS: 3 PersAutoDict-PersAutoDict-EraseBytes- DE: &#34;Hb\036\311&#34;-&#34;\000\000\000\000&#34;-
+#514	REDUCE cov: 52 ft: 53 corp: 1/10b lim: 1048576 exec/s: 0 rss: 51Mb L: 10/10 MS: 4 ChangeBinInt-ChangeByte-CMP-EraseBytes- DE: &#34;\001\000&#34;-
+#520	REDUCE cov: 52 ft: 53 corp: 1/5b lim: 1048576 exec/s: 0 rss: 51Mb L: 5/5 MS: 1 EraseBytes-
+=================================================================
+[1m[31m==13==ERROR: AddressSanitizer: heap-buffer-overflow on address 0x50200000083d at pc 0x55fd9fb9b610 bp 0x7ffff6034d90 sp 0x7ffff6034d88
+[1m[0m[1m[34mREAD of size 1 at 0x50200000083d thread T0[1m[0m
+SCARINESS: 12 (1-byte-read-heap-buffer-overflow)
+    #0 0x55fd9fb9b60f in LibRaw::crxDecodePlane(void*, unsigned int) /src/libraw/src/decoders/crx.cpp:1895:34
+    #1 0x55fd9fba582a in LibRaw::crxLoadDecodeLoop(void*, int) /src/libraw/src/decoders/crx.cpp:2636:9
+    #2 0x55fd9fb4ae37 in LLVMFuzzerTestOneInput /src/libraw_fuzzer.cc:24:16
+    #3 0x55fd9f9fd5c0 in fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:614:13
+    #4 0x55fd9f9fcde5 in fuzzer::Fuzzer::RunOne(unsigned char const*, unsigned long, bool, fuzzer::InputInfo*, bool, bool*) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:516:7
+    #5 0x55fd9f9fe5b5 in fuzzer::Fuzzer::MutateAndTestOne() /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:760:19
+    #6 0x55fd9f9ff3a5 in fuzzer::Fuzzer::Loop(std::__Fuzzer::vector&lt;fuzzer::SizedFile, std::__Fuzzer::allocator&lt;fuzzer::SizedFile&gt;&gt;&amp;) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:905:5
+    #7 0x55fd9f9ed6b6 in fuzzer::F
+...truncated...
+xDecodePlane(void*, unsigned int)--LibRaw::crxLoadDecodeLoop(void*, int)--LLVMFuzzerTestOneInput
+[1m[32m0x50200000083d is located 4 bytes after 9-byte region [0x502000000830,0x502000000839)
+[1m[0m[1m[35mallocated by thread T0 here:[1m[0m
+    #0 0x55fd9fb488ed in operator new(unsigned long) /src/llvm-project/compiler-rt/lib/asan/asan_new_delete.cpp:95:3
+    #1 0x55fd9fb4b237 in __libcpp_operator_new&lt;unsigned long&gt; /usr/local/bin/../include/c++/v1/new:268:10
+    #2 0x55fd9fb4b237 in __libcpp_allocate /usr/local/bin/../include/c++/v1/new:294:10
+    #3 0x55fd9fb4b237 in allocate /usr/local/bin/../include/c++/v1/__memory/allocator.h:114:38
+    #4 0x55fd9fb4b237 in __allocate_at_least&lt;std::__1::allocator&lt;unsigned char&gt; &gt; /usr/local/bin/../include/c++/v1/__memory/allocate_at_least.h:55:19
+    #5 0x55fd9fb4b237 in __vallocate /usr/local/bin/../include/c++/v1/vector:756:29
+    #6 0x55fd9fb4b237 in std::__1::vector&lt;unsigned char, std::__1::allocator&lt;unsigned char&gt;&gt;::vector(unsigned long) /usr/local/bin/../include/c++/v1/vector:1195:9
+    #7 0x55fd9fb4ada8 in ConsumeBytes&lt;unsigned char&gt; /usr/local/lib/clang/18/include/fuzzer/FuzzedDataProvider.h:361:18
+    #8 0x55fd9fb4ada8 in ConsumeBytes&lt;unsigned char&gt; /usr/local/lib/clang/18/include/fuzzer/FuzzedDataProvider.h:110:10
+    #9 0x55fd9fb4ada8 in ConsumeRemainingBytes&lt;unsigned char&gt; /usr/local/lib/clang/18/include/fuzzer/FuzzedDataProvider.h:129:10
+    #10 0x55fd9fb4ada8 in LLVMFuzzerTestOneInput /src/libraw_fuzzer.cc:21:46
+    #11 0x55fd9f9fd5c0 in fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:614:13
+    #12 0x55fd9f9fcde5 in fuzzer::Fuzzer::RunOne(unsigned char const*, unsigned long, bool, fuzzer::InputInfo*, bool, bool*) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:516:7
+    #13 0x55fd9f9fe5b5 in fuzzer::Fuzzer::MutateAndTestOne() /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:760:19
+    #14 0x55fd9f9ff3a5 in fuzzer::Fuzzer::Loop(std::__Fuzzer::vector&lt;fuzzer::SizedFile, std::__Fuzzer::allocator&lt;fuzzer::SizedFile&gt;&gt;&amp;) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:905:5
+    #15 0x55fd9f9ed6b6 in fuzzer::FuzzerDriver(int*, char***, int (*)(unsigned char const*, unsigned long)) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:914:6
+    #16 0x55fd9fa19be2 in main /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMain.cpp:20:10
+    #17 0x7f340bded082 in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x24082) (BuildId: 0702430aef5fa3dda43986563e9ffcc47efbd75e)
+
+DEDUP_TOKEN: operator new(unsigned long)--__libcpp_operator_new&lt;unsigned long&gt;--__libcpp_allocate
+SUMMARY: AddressSanitizer: heap-buffer-overflow /src/libraw/src/decoders/crx.cpp:1895:34 in LibRaw::crxDecodePlane(void*, unsigned int)
+Shadow bytes around the buggy address:
+  0x502000000580: [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[35mfd[1m[0m [1m[35mfd[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[35mfd[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[35mfd[1m[0m [1m[35mfd[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[35mfd[1m[0m [1m[31mfa[1m[0m
+  0x502000000600: [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[35mfd[1m[0m [1m[35mfd[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[35mfd[1m[0m [1m[35mfd[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[35mfd[1m[0m [1m[35mfd[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[35mfd[1m[0m [1m[35mfd[1m[0m
+  0x502000000680: [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m
+  0x502000000700: [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m
+  0x502000000780: [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m
+=&gt;0x502000000800: [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[0m00[1m[0m[[1m[0m01[1m[0m][1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m
+  0x502000000880: [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[35mfd[1m[0m [1m[35mfd[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[0m00[1m[0m [1m[0m05[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[35mfd[1m[0m [1m[35mfd[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[35mfd[1m[0m [1m[35mfd[1m[0m
+  0x502000000900: [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[35mfd[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[35mfd[1m[0m [1m[35mfd[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[35mfd[1m[0m [1m[35mfd[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[35mfd[1m[0m [1m[31mfa[1m[0m
+  0x502000000980: [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[35mfd[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[35mfd[1m[0m [1m[35mfd[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[35mfd[1m[0m [1m[35mfd[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[35mfd[1m[0m [1m[35mfd[1m[0m
+  0x502000000a00: [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[35mfd[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[35mfd[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[35mfd[1m[0m [1m[35mfd[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[35mfd[1m[0m [1m[31mfa[1m[0m
+  0x502000000a80: [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[35mfd[1m[0m [1m[35mfd[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[35mfd[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           [1m[0m00[1m[0m
+  Partially addressable: [1m[0m01[1m[0m [1m[0m02[1m[0m [1m[0m03[1m[0m [1m[0m04[1m[0m [1m[0m05[1m[0m [1m[0m06[1m[0m [1m[0m07[1m[0m 
+  Heap left redzone:       [1m[31mfa[1m[0m
+  Freed heap region:       [1m[35mfd[1m[0m
+  Stack left redzone:      [1m[31mf1[1m[0m
+  Stack mid redzone:       [1m[31mf2[1m[0m
+  Stack right redzone:     [1m[31mf3[1m[0m
+  Stack after return:      [1m[35mf5[1m[0m
+  Stack use after scope:   [1m[35mf8[1m[0m
+  Global redzone:          [1m[31mf9[1m[0m
+  Global init order:       [1m[36mf6[1m[0m
+  Poisoned by user:        [1m[34mf7[1m[0m
+  Container overflow:      [1m[34mfc[1m[0m
+  Array cookie:            [1m[31mac[1m[0m
+  Intra object redzone:    [1m[33mbb[1m[0m
+  ASan internal:           [1m[33mfe[1m[0m
+  Left alloca redzone:     [1m[34mca[1m[0m
+  Right alloca redzone:    [1m[34mcb[1m[0m
+==13==ABORTING
+MS: 4 ChangeByte-CMP-ChangeBit-ChangeByte- DE: &#34;\000\000\000\000\000\000\000\005&#34;-; base unit: 7ead3ffccdcb7d9faca206c5fc98ad9bb5821a1a
+0xbb,0x1,0x25,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x5,0xa6,
+\273\001%\000\000\000\000\000\000\000\000\005\246
+artifact_prefix=&#39;./&#39;; Test unit written to ./crash-9b6b0b4779340bb68a62ac76655cdef8bfa028c2
+Base64: uwElAAAAAAAAAAAFpg==
+stat::number_of_executed_units: 544
+stat::average_exec_per_sec:     0
+stat::new_units_added:          42
+stat::slowest_unit_time_sec:    0
+stat::peak_rss_mb:              52
+
+</pre>
+
+
+</body>

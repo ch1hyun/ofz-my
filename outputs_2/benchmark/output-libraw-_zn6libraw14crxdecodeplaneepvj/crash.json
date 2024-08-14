@@ -1,0 +1,43 @@
+{
+    "samples": [
+
+    {
+        "benchmark": "output-libraw-_zn6libraw14crxdecodeplaneepvj",
+        "sample": "01",
+        "status": "Done",
+        "compiles": "True",
+        "crashes": "True",
+        "crash_reason": "FP_NEAR_INIT_CRASH",
+        "bug": "False",
+        "coverage": "0.00",
+        "coverage_diff": "0.0",
+        "coverage_report": "#",
+        "stacktrace": "/stacktrace",
+        "target_binary": "/target_binary",
+        "reproducer": "/artifacts",
+        "run_log": "run.log",
+        "source_code": "#include <fuzzer/FuzzedDataProvider.h>\\n#include \"/src/libraw/libraw/libraw.h\"\\n\\nclass MyLibRaw : public LibRaw {\\npublic:\\n    using LibRaw::crxDecodePlane;\\n};\\n\\nextern \"C\" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {\\n  FuzzedDataProvider fuzzed_data_provider(data, size);\\n  MyLibRaw rawProcessor;\\n  \\n  void *planeBuffer = NULL;\\n  uint32_t planeBufSize = 0;\\n  \\n  if (fuzzed_data_provider.remaining_bytes() < 2) return 0;\\n  \\n  // split the data into two parts for buffer and size\\n  size_t planeSize = fuzzed_data_provider.ConsumeIntegralInRange<size_t>(1, fuzzed_data_provider.remaining_bytes() - 1);\\n  \\n  auto planeData = fuzzed_data_provider.ConsumeBytes<uint8_t>(planeSize);\\n  planeBuffer = static_cast<void*>(const_cast<uint8_t*>(planeData.data()));\\n  planeBufSize = planeData.size();\\n\\n  // decoding crx plane\\n  if (planeBuffer != NULL && planeBufSize > 0) {\\n    try {\\n      rawProcessor.open_buffer(planeBuffer, planeBufSize);\\n      rawProcessor.unpack();\\n      rawProcessor.crxDecodePlane(planeBuffer, planeBufSize);\\n    } catch (...) {\\n      // Ignore exceptions for fuzzing\\n    }\\n  }\\n  \\n  return 0;\\n}",
+        "model": ""
+    },
+
+    {
+        "benchmark": "output-libraw-_zn6libraw14crxdecodeplaneepvj",
+        "sample": "02",
+        "status": "Done",
+        "compiles": "True",
+        "crashes": "True",
+        "crash_reason": "NO_SEMANTIC_ERR",
+        "bug": "True",
+        "coverage": "0.22",
+        "coverage_diff": "0.0",
+        "coverage_report": "#",
+        "stacktrace": "/stacktrace",
+        "target_binary": "/target_binary",
+        "reproducer": "/artifacts",
+        "run_log": "run.log",
+        "source_code": "#include <fuzzer/FuzzedDataProvider.h>\\n#include <libraw.h>\\n\\nclass LibRawPublic : public LibRaw {\\npublic:\\n  int crxDecodePlanePublic(void *src, uint32_t planeNumber) {\\n    return crxDecodePlane(src, planeNumber);\\n  }\\n};\\n\\nextern \"C\" int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {\\n  FuzzedDataProvider stream(data, size);\\n  \\n  LibRawPublic raw;\\n  uint32_t length1 = stream.ConsumeIntegral<uint32_t>();\\n\\n  if (stream.remaining_bytes() <= sizeof(int)*length1)\\n    return 0;\\n\\n  // Allocate memory for the buffer\\n  void* buffer = malloc(sizeof(int)*length1);\\n\\n  // Fill the buffer with the stream data\\n  stream.ConsumeData(buffer, sizeof(int)*length1);\\n\\n  raw.crxDecodePlanePublic(buffer, length1);\\n\\n  free(buffer);\\n\\n  return 0;\\n}",
+        "model": ""
+    }
+
+    ]
+}
