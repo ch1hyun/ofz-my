@@ -1,0 +1,43 @@
+{
+    "samples": [
+
+    {
+        "benchmark": "output-libraw-_zn6libraw17crxloaddecodeloopepvi",
+        "sample": "01",
+        "status": "Done",
+        "compiles": "True",
+        "crashes": "True",
+        "crash_reason": "FP_NEAR_INIT_CRASH",
+        "bug": "False",
+        "coverage": "0.00",
+        "coverage_diff": "0.0",
+        "coverage_report": "#",
+        "stacktrace": "/stacktrace",
+        "target_binary": "/target_binary",
+        "reproducer": "/artifacts",
+        "run_log": "run.log",
+        "source_code": "#include <fuzzer/FuzzedDataProvider.h>\\n\\n#include <cstddef>\\n#include <cstdint>\\n#include <vector>\\n\\n#include \"/src/libraw/libraw/libraw.h\"\\n\\nextern \"C\" int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {\\n  if (size < 3) {\\n    return 0;\\n  }\\n\\n  FuzzedDataProvider stream(data, size);\\n  const int remaining_bytes = stream.remaining_bytes();\\n  std::vector<uint8_t> vec = stream.ConsumeBytes<uint8_t>(remaining_bytes);\\n\\n  LibRaw MyRawProcessor;\\n  MyRawProcessor.open_buffer(vec.data(), remaining_bytes);\\n  MyRawProcessor.unpack();\\n\\n  // Call the required function\\n  // MyRawProcessor.crxLoadDecodeLoop(vec.data(), remaining_bytes); // This line is causing error because crxLoadDecodeLoop is a protected member of LibRaw\\n\\n  // We need to create a derived class from LibRaw and use it to call the protected function\\n  class MyDerivedClass : public LibRaw {\\n  public:\\n    void call_crxLoadDecodeLoop(const uint8_t* data, size_t size) {\\n      crxLoadDecodeLoop((void *)data, size); // Cast data to void* to match the function signature\\n    }\\n  };\\n\\n  MyDerivedClass MyDerivedProcessor;\\n  MyDerivedProcessor.open_buffer(vec.data(), remaining_bytes);\\n  MyDerivedProcessor.unpack();\\n  MyDerivedProcessor.call_crxLoadDecodeLoop(vec.data(), remaining_bytes);\\n\\n  return 0;\\n}",
+        "model": ""
+    },
+
+    {
+        "benchmark": "output-libraw-_zn6libraw17crxloaddecodeloopepvi",
+        "sample": "02",
+        "status": "Done",
+        "compiles": "True",
+        "crashes": "False",
+        "crash_reason": "NO_SEMANTIC_ERR",
+        "bug": "True",
+        "coverage": "0.00",
+        "coverage_diff": "0.0",
+        "coverage_report": "#",
+        "stacktrace": "/stacktrace",
+        "target_binary": "/target_binary",
+        "reproducer": "/artifacts",
+        "run_log": "run.log",
+        "source_code": "#include <fuzzer/FuzzedDataProvider.h>\\n\\n#include <cstddef>\\n#include <cstdint>\\n#include <cstdlib>\\n#include <string>\\n#include <vector>\\n\\n#include \"/src/libraw/libraw/libraw.h\"\\n\\nclass FuzzingRawProcessor : public LibRaw {\\npublic:\\n  void FuzzingCrxLoadDecodeLoop(void *dataPtr, int seed) {\\n    crxLoadDecodeLoop(dataPtr, seed);\\n  }\\n};\\n\\nextern \"C\" int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {\\n  FuzzedDataProvider stream(data, size);\\n\\n  const int dataSize = stream.ConsumeIntegralInRange<int>(4, 128);\\n  std::vector<uint8_t> charArray = stream.ConsumeBytes<uint8_t>(dataSize);\\n  void *dataPtr = static_cast<void *>(charArray.data());\\n\\n  if (!dataPtr) {\\n    return 0;\\n  }\\n\\n  const int seed = stream.ConsumeIntegral<int>();\\n  \\n  FuzzingRawProcessor RawProcessor;\\n  RawProcessor.FuzzingCrxLoadDecodeLoop(dataPtr, seed);\\n  return 0;\\n}",
+        "model": ""
+    }
+
+    ]
+}

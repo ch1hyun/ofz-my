@@ -1,0 +1,43 @@
+{
+    "samples": [
+
+    {
+        "benchmark": "output-libraw-_zn6libraw14crxdecodeplaneepvj",
+        "sample": "01",
+        "status": "Done",
+        "compiles": "True",
+        "crashes": "True",
+        "crash_reason": "FP_NEAR_INIT_CRASH",
+        "bug": "False",
+        "coverage": "0.00",
+        "coverage_diff": "0.0",
+        "coverage_report": "#",
+        "stacktrace": "/stacktrace",
+        "target_binary": "/target_binary",
+        "reproducer": "/artifacts",
+        "run_log": "run.log",
+        "source_code": "#include <fuzzer/FuzzedDataProvider.h>\\n\\n#include <cstddef>\\n#include <cstdint>\\n#include <cstdlib>\\n#include <cstring>\\n\\n#include \"libraw.h\"\\n\\n#define MAX_SIZE 0xFFFFFF\\n\\nextern \"C\" int LLVMFuzzerTestOneInput(const uint8_t *data, const size_t size) {\\n  FuzzedDataProvider stream(data, size);\\n\\n  uint32_t n = stream.ConsumeIntegralInRange<uint32_t>(1, MAX_SIZE);\\n  const auto buffer = stream.ConsumeBytes<uint8_t>(n);\\n\\n  // Initialize LibRaw\\n  LibRaw raw_processor;\\n  \\n  // crxDecodePlane is a protected member of 'LibRaw', so we can't call it directly.\\n  // Instead, we need to create a derived class and make the call through that.\\n  class DerivedLibRaw : public LibRaw {\\n    public:\\n    using LibRaw::crxDecodePlane;\\n  };\\n\\n  DerivedLibRaw derived_raw_processor;\\n\\n  // The function's return value isn't checked as it always returns 0\\n  // according to the library's documentation.\\n  // Also, reinterpret_cast from 'const value_type *' (aka 'const unsigned char *') to 'void *' casts away qualifiers\\n  // So, we need to use const_cast to remove the const qualifier from the buffer.data() pointer.\\n  // Check if the buffer is not empty and contains enough data before calling crxDecodePlane to avoid segmentation fault.\\n  if (!buffer.empty() && buffer.size() >= n) {\\n    void* buffer_data = malloc(n);\\n    if (buffer_data) {\\n      memcpy(buffer_data, buffer.data(), n);\\n      derived_raw_processor.crxDecodePlane(buffer_data, n);\\n      free(buffer_data);\\n    }\\n  }\\n\\n  return 0;\\n}",
+        "model": ""
+    },
+
+    {
+        "benchmark": "output-libraw-_zn6libraw14crxdecodeplaneepvj",
+        "sample": "02",
+        "status": "Done",
+        "compiles": "False",
+        "crashes": "False",
+        "crash_reason": "-",
+        "bug": "True",
+        "coverage": "0.00",
+        "coverage_diff": "0.0",
+        "coverage_report": "#",
+        "stacktrace": "/stacktrace",
+        "target_binary": "/target_binary",
+        "reproducer": "/artifacts",
+        "run_log": "run.log",
+        "source_code": "#include <fuzzer/FuzzedDataProvider.h>\\n\\n#include <cstddef>\\n#include <cstdint>\\n#include <cstdlib>\\n#include <string>\\n\\n#include \"/src/libraw/libraw/libraw_types.h\"\\n#include \"/src/libraw/libraw/libraw.h\"\\n#include \"libraw/internal/dcraw_defs.h\"\\n#include \"libraw/internal/crx.h\"\\n\\nextern \"C\" int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {\\n  FuzzedDataProvider stream(data, size);\\n\\n  // Pointer that is passed to libraw. Can be arbitrary for this defined function. It would just get written to with results.\\n  void* pointer = nullptr;\\n\\n  // Extract plane to decode.\\n  uint32_t plane = stream.ConsumeIntegral<uint32_t>();\\n\\n  // Initialize the object that contains the function.\\n  LibRaw libraw;\\n\\n  // Call the function.\\n  int return_value = libraw.crxDecodePlane(pointer, plane);\\n\\n  return 0;\\n}",
+        "model": ""
+    }
+
+    ]
+}
