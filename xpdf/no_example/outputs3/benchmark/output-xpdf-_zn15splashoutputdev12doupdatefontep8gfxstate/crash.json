@@ -1,0 +1,43 @@
+{
+    "samples": [
+
+    {
+        "benchmark": "output-xpdf-_zn15splashoutputdev12doupdatefontep8gfxstate",
+        "sample": "01",
+        "status": "Done",
+        "compiles": "True",
+        "crashes": "True",
+        "crash_reason": "FP_NEAR_INIT_CRASH",
+        "bug": "False",
+        "coverage": "0.00",
+        "coverage_diff": "0.0",
+        "coverage_report": "#",
+        "stacktrace": "/stacktrace",
+        "target_binary": "/target_binary",
+        "reproducer": "/artifacts",
+        "run_log": "run.log",
+        "source_code": "#include <fuzzer/FuzzedDataProvider.h>\\n\\n#include <aconf.h>\\n#include <png.h>\\n#include <stddef.h>\\n#include <stdint.h>\\n#include <stdio.h>\\n#include <stdlib.h>\\n#include <string.h>\\n#include <vector>\\n\\n#include \"GString.h\"\\n#include \"GlobalParams.h\"\\n#include \"JBIG2Stream.h\"\\n#include \"Object.h\"\\n#include \"PDFDoc.h\"\\n#include \"Splash.h\"\\n#include \"SplashBitmap.h\"\\n#include \"SplashOutputDev.h\"\\n#include \"Stream.h\"\\n#include \"config.h\"\\n#include \"gfile.h\"\\n#include \"gmem.h\"\\n#include \"gmempp.h\"\\n#include \"parseargs.h\"\\n\\n#include \"GfxFont.h\"\\n\\nextern \"C\" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {\\n  FuzzedDataProvider fdp(data, size);\\n  SplashColor paperColor;\\n  for (int i = 0; i < splashMaxColorComps; ++i)\\n    paperColor[i] = fdp.ConsumeIntegral<uint8_t>();\\n\\n  GfxFontLoc *gfxFontLoc = nullptr;\\n  double *matrix = new double[6];\\n  for (int i = 0; i < 6; ++i)\\n    matrix[i] = fdp.ConsumeFloatingPoint<double>();\\n  SysFontType type = static_cast<SysFontType>(fdp.ConsumeIntegral<int>());\\n  Ref embRef;\\n  Dict *fontDict = new Dict(nullptr);\\n  GfxFont *gfxFont = GfxFont::makeFont(nullptr, \"fooo\", embRef, fontDict);\\n  PDFRectangle pageBox;\\n  GfxState *gfxState = new GfxState(72.0, 72.0, &pageBox, 0, gFalse);\\n\\n  SplashOutputDev *splashOut = new SplashOutputDev(splashModeRGB8, 1, gFalse, paperColor);\\n  splashOut->startDoc(nullptr);\\n  splashOut->updateFont(gfxState);\\n  //splashOut->doUpdateFont(gfxState); // Removed this line to fix the error\\n\\n  delete splashOut;\\n  delete gfxState;\\n  delete gfxFont;\\n  delete fontDict;\\n  delete[] matrix;\\n\\n  return 0;\\n}",
+        "model": ""
+    },
+
+    {
+        "benchmark": "output-xpdf-_zn15splashoutputdev12doupdatefontep8gfxstate",
+        "sample": "02",
+        "status": "Done",
+        "compiles": "False",
+        "crashes": "False",
+        "crash_reason": "-",
+        "bug": "True",
+        "coverage": "0.00",
+        "coverage_diff": "0.0",
+        "coverage_report": "#",
+        "stacktrace": "/stacktrace",
+        "target_binary": "/target_binary",
+        "reproducer": "/artifacts",
+        "run_log": "run.log",
+        "source_code": "#include <fuzzer/FuzzedDataProvider.h>\\n\\n#include <setjmp.h>\\n#include <stddef.h>\\n#include <stdint.h>\\n\\n#include \"config.h\"\\n#include \"Object.h\"\\n#include \"PDFDoc.h\"\\n#include \"PDFDocEncoding.h\"\\n#include \"Page.h\"\\n#include \"SplashOutputDev.h\"\\n#include \"/src/xpdf-4.05/goo/GString.h\"\\n#include \"XRef.h\"\\n#include \"Gfx.h\"\\n#include \"GfxFont.h\"\\n#include \"GfxState.h\"\\n#include \"Catalog.h\"\\n#include \"/src/xpdf-4.05/xpdf/UnicodeMap.h\"\\n#include \"/src/xpdf-4.05/xpdf/UnicodeMapTables.h\"\\n#include \"/src/xpdf-4.05/xpdf/UnicodeRemapping.h\"\\n#include \"/src/xpdf-4.05/xpdf/CharCodeToUnicode.h\"\\n#include \"/src/xpdf-4.05/xpdf/NameToUnicodeTable.h\"\\n#include \"/src/xpdf-4.05/xpdf/SplashOutputDev.h\"\\n\\nextern \"C\" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {\\n    FuzzedDataProvider stream(data, size);\\n\\n    const std::string fontName = stream.ConsumeBytesAsString(stream.remaining_bytes());\\n\\n    Object obj1;\\n    obj1.initNull();\\n    SplashOutputDev splashOutputDev(\\n        splashModeMono1, 4, false, nullptr, false, false\\n    );\\n\\n    PDFDoc pdfDoc(\\n        new GString(\"./pdf_fuzzer/fitz/test.pdf\"),\\n        new GString(\"./pdf_fuzzer/fitz\")\\n    );\\n    XRef *xref = pdfDoc.getXRef();\\n    Catalog *catalog = pdfDoc.getCatalog();\\n    int numPages = pdfDoc.getNumPages();\\n\\n    Object obj2;\\n    const std::string fontName2 = fontName.c_str();\\n    obj2.initName((const char *)fontName2.data());\\n    Dict *fontDict = new Dict(xref);\\n    Object obj3;\\n    fontDict->add((char *)\"BaseFont\", &obj2);\\n    obj3.initDict(fontDict);\\n\\n    for (int i = 0; i < numPages; i++) {\\n        Page *page = catalog->getPage(i + 1);\\n        const PDFRectangle r(0., 0., page->getMediaWidth(), page->getMediaHeight());\\n        const double pageDPI = 72.0;\\n        const double hDPI = pageDPI, vDPI = pageDPI;\\n        const int rotate = 0;\\n\\n        Gfx *gfx = page->createGfx(&splashOutputDev, hDPI, vDPI, rotate, &r, true, false);\\n\\n        GString *str1 = new GString(fontName.c_str());\\n        GfxFont *gfxFont = GfxFont::makeFont(xref, str1->getCString(), obj3.copy(&obj3), NULL);\\n\\n        gfx->setWordSpace(0.);\\n        gfx->setCharSpace(0.);\\n        gfx->setHorizScaling(1.);\\n        gfx->setFont(gfxFont, 1.);\\n        gfx->setTextMat(1., 0., 0., 1., 0., 0.);\\n        gfx->textSetPos(0., 0.);\\n\\n        splashOutputDev.updateFont(gfx->getState());\\n        delete gfx;\\n    }\\n\\n    return 0;\\n}",
+        "model": ""
+    }
+
+    ]
+}

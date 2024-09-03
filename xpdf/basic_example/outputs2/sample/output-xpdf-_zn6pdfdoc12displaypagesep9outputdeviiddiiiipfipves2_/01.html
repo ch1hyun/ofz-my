@@ -1,0 +1,343 @@
+<!doctype html>
+
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Experiment results</title>
+<style>
+* {
+    box-sizing: border-box;
+}
+
+html {
+    line-height: 1.15;
+}
+
+body {
+    font-family: sans-serif;
+    font-size: 16px;
+}
+
+table {
+    border-collapse: collapse;
+    border-spacing: 0;
+}
+
+td, th {
+    border-right: 1px #dedede solid;
+    border-bottom: 1px #dedede solid;
+    padding: 5px;
+    text-align: left;
+}
+td:first-child, th:first-child {
+    border-left: 1px #dedede solid;
+}
+th {
+    border-top: 1px #dedede solid;
+}
+
+tbody tr:nth-child(odd) {
+    background-color: #f4f5ff;
+}
+</style>
+<body>
+    LLM: 
+    
+<h1>output-xpdf-_zn6pdfdoc12displaypagesep9outputdeviiddiiiipfipves2_ / 01</h1>
+Bug: True
+<br>
+Crash reason: NO_SEMANTIC_ERR
+<br>
+<br>
+
+<h2>Triage</h2>
+<pre>
+Crash is caused by bug in fuzz driver.
+
+The fuzz driver is creating a new PDFDoc object using `new` keyword but it&#39;s not being deleted anywhere, causing a memory leak. The memory allocated for the PDFDoc object needs to be deallocated using `delete` to prevent the memory leak.
+</pre>
+<br>
+
+
+
+
+
+<h3>Final code</h3>
+
+<pre>
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+#include &lt;stdlib.h&gt;
+
+#include &#34;Object.h&#34;
+#include &#34;PDFDoc.h&#34;
+#include &#34;SplashOutputDev.h&#34;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
+  FuzzedDataProvider stream(data, size);
+  int fisrt_page = stream.ConsumeIntegral&lt;int&gt;();
+  int last_page = stream.ConsumeIntegral&lt;int&gt;();
+  double h_dpi = stream.ConsumeFloatingPoint&lt;double&gt;();
+  double v_dpi = stream.ConsumeFloatingPoint&lt;double&gt;();
+  GBool useMediaBox = stream.ConsumeBool();
+  GBool crop = stream.ConsumeBool();
+  GBool printing = stream.ConsumeBool();
+
+  const char* fileName = &#34;/tmp/temp.txt&#34;;
+  PDFDoc* doc = new PDFDoc(new GString(fileName));
+  if (!doc-&gt;isOk()) {
+    return 0;
+  }
+
+  SplashColor paperColor = {0xff, 0xff, 0xff};
+  SplashOutputDev* splashOut = new SplashOutputDev(splashModeRGB8, 1, gFalse, paperColor);
+
+  if (!splashOut || !doc) {
+    delete doc;
+    delete splashOut;
+    return 0;
+  }
+
+  splashOut-&gt;startDoc(doc-&gt;getXRef());
+  doc-&gt;displayPages(splashOut, fisrt_page, last_page, h_dpi, v_dpi, 0,
+                    useMediaBox, crop, printing, nullptr);
+
+  delete doc;
+  delete splashOut;
+  
+  return 0;
+}
+</pre>
+
+
+<h2>Logs</h2>
+<pre>
+Successfully built /home/chyun/oss-fuzz-gen1/results2/output-xpdf-_zn6pdfdoc12displaypagesep9outputdeviiddiiiipfipves2_/fixed_targets/01.cc with gpt-4 in 0 iterations of fixing.
+Triaging the crash related to /home/chyun/oss-fuzz-gen1/results2/output-xpdf-_zn6pdfdoc12displaypagesep9outputdeviiddiiiipfipves2_/fixed_targets/01.cc with gpt-4.
+Result for xpdf-zn6pdfdoc12displaypagesep9outputdeviiddiiiipfipves2-01: crashes=True, coverage=0.0018358475207398812 (106/57739), coverage diff=0.0004249144158228508 (53/124731)
+
+</pre>
+
+<h2>Run logs</h2>
+<pre>
+INFO:__main__:Running: docker run --privileged --shm-size=2g --platform linux/amd64 --rm -e FUZZING_ENGINE=libfuzzer -e SANITIZER=address -e RUN_FUZZER_MODE=interactive -e HELPER=True -v /home/chyun/oss-fuzz-gen1/results2/output-xpdf-_zn6pdfdoc12displaypagesep9outputdeviiddiiiipfipves2_/corpora/01.cc:/tmp/fuzz_JBIG2_corpus -v /tmp/tmpo_sbi_uc/build/out/xpdf-zn6pdfdoc12displaypagesep9outputdeviiddiiiipfipves2-01:/out -t gcr.io/oss-fuzz-base/base-runner run_fuzzer fuzz_JBIG2 -print_final_stats=1 -max_total_time=30 -len_control=0 -timeout=30.
+vm.mmap_rnd_bits = 28
+rm: cannot remove &#39;/tmp/fuzz_JBIG2_corpus&#39;: Device or resource busy
+/out/fuzz_JBIG2 -rss_limit_mb=2560 -timeout=25 -print_final_stats=1 -max_total_time=30 -len_control=0 -timeout=30 /tmp/fuzz_JBIG2_corpus -detect_leaks=0 &lt; /dev/null
+INFO: Running with entropic power schedule (0xFF, 100).
+INFO: Seed: 2525351655
+INFO: Loaded 1 modules   (57739 inline 8-bit counters): 57739 [0x55575df77a48, 0x55575df85bd3), 
+INFO: Loaded 1 PC tables (57739 PCs): 57739 [0x55575df85bd8,0x55575e067488), 
+INFO:        0 files found in /tmp/fuzz_JBIG2_corpus
+INFO: -max_len is not provided; libFuzzer will not generate inputs larger than 4096 bytes
+I/O Error: Couldn&#39;t open file &#39;/tmp/temp.txt&#39;
+INFO: A corpus is not provided, starting from an empty corpus
+I/O Error: Couldn&#39;t open file &#39;/tmp/temp.txt&#39;
+#2	INITED cov: 87 ft: 88 corp: 1/1b exec/s: 0 rss: 36Mb
+I/O Error: Couldn&#39;t open file &#39;/tmp/temp.txt&#39;
+#3	NEW    cov: 87 ft: 90 corp: 2/3b lim: 4096 exec/s: 0 rss: 36Mb L: 2/2 MS: 1 CrossOver-
+I/O Error: Couldn&#39;t open file &#39;/tmp/temp.txt&#39;
+I/O Error: Couldn&#39;t open file &#39;/tmp/temp.txt&#39;
+I/O Error: Couldn&#39;t open file &#39;/tmp/temp.txt&#39;
+I/O Error: Couldn&#39;t open file &#39;/tmp/temp.txt&#39;
+I/O Error: Couldn&#39;t open file &#39;/tmp/temp.txt&#39;
+I/O Error: Couldn&#39;t open file &#39;/tmp/temp.txt&#39;
+I/O Error: Couldn&#39;t open file &#39;/tmp/temp.txt&#39;
+#10	NEW    cov: 87 ft: 92 corp: 3/6b lim: 4096 exec/s: 0 rss: 36Mb L: 3/3 MS: 2 ShuffleBytes-InsertByte-
+I/O Error: Couldn&#39;t open file &#39;/tmp/temp.txt&#39;
+#11	NEW    cov: 104 ft: 113 corp: 4/70b lim: 4096 exec/s: 0 rss: 36Mb L: 64/64 MS: 1 InsertRepeatedBytes-
+I/O Error: Couldn&#39;t open file &#39;/tmp/temp.txt&#39;
+I/O Error: Couldn&#39;t open file &#39;/tmp/temp.txt&#39;
+I/O Error: Couldn&#39;t open file &#39;/tmp/temp.txt&#39;
+#14	NEW    cov: 104 ft: 115 corp: 5/85b lim: 4096 exec/s: 0 rss: 36Mb L: 15/64 MS: 3 CopyPart-EraseBytes-CrossOver-
+I/O Error: Couldn&#39;t open file &#39;/tmp/temp.txt&#39;
+I/O Error: Couldn&#39;t open file &#39;/tmp/temp.txt&#39;
+I/O Error: Couldn&#39;t open file &#39;/tmp/temp.txt&#39;
+I/O Error: Couldn&#39;t open file &#39;/tmp/temp.txt&#39;
+I/O Error: Couldn&#39;t open file &#39;/tmp/temp.txt&#39;
+I/O Error: Couldn&#39;t open file &#39;/tmp/temp.txt&#39;
+I/O Error: Couldn&#39;t open file &#39;/tmp/temp.txt&#39;
+I/O Error: Couldn&#39;t open file &#39;/tmp/temp.txt&#39;
+I/O Error: Couldn&#39;t open file &#39;/tmp/temp.txt&#39;
+I/O Error: Couldn&#39;t open file &#39;/tmp/temp.txt&#39;
+I/O Error: Couldn&#39;t open file &#39;/tmp/temp.txt&#39;
+#25	NEW    cov: 106 ft: 117 corp: 6/202b lim: 4096 exec/s: 0 rss: 36Mb L: 117/117 MS: 1 InsertRepeatedBytes-
+I/O Error: Couldn&#39;t open file &#39;/tmp/temp.txt&#39;
+#26	NEW    cov: 106 ft: 119 corp: 7/225b lim: 4096 exec/s: 0 rss: 36Mb L: 23/117 MS: 1 CopyPart-
+I/O Error: Couldn&#39;t open file &#39;/tmp/temp.txt&#39;
+I/O Error: Couldn&#39;t open file &#39;/tmp/temp.txt&#39;
+I/O Error: Couldn&#39;t open file &#39;/tmp/temp.txt&#39;
+I/O Error: Couldn&#39;t open file &#39;/tmp/temp.txt&#39;
+I/O Error: Couldn&#39;t open file &#39;/tmp/temp.txt&#39;
+I/O Error: Couldn&#39;t open file &#39;/tmp/temp.txt&#39;
+I/O Error: Couldn&#39;t open file &#39;/tmp/temp.txt&#39;
+I/O Error: Couldn&#39;t open file &#39;/tmp/temp.txt&#39;
+I/O Error: Couldn&#39;t open file &#39;/tmp/temp.txt&#39;
+I/O Error: Couldn&#39;t open file &#39;/tmp/temp.txt&#39;
+I/O Error: Couldn&#39;t open file &#39;/tmp/temp.txt&#39;
+I/O Error: Couldn&#39;t open file &#39;/tmp/temp.txt&#39;
+#38	NEW    cov: 106 ft: 121 corp: 8/245b lim: 4096 exec/s: 0 rss: 36Mb L: 20/117 MS: 2 ChangeByte-EraseBytes-
+I/O Error: Couldn&#39;t open file &#39;/tmp/temp.txt&#39;
+I/O Error: Couldn&#39;t open file &#39;/tmp/temp.txt&#39;
+#40	REDUCE cov: 106 ft: 121 corp: 8/243b lim: 4096 exec/s: 0 rss: 36Mb L: 13/117 MS: 2 ChangeBit-EraseBytes-
+I/O Error: Couldn&#39;t open file &#39;/tmp/temp.txt&#39;
+I/O Error: Couldn&#39;t open file &#39;/tmp/temp.txt&#39;
+I/O Error: Couldn&#39;t open file &#39;/tmp/temp.txt&#39;
+I/O Error: Couldn&#39;t open file &#39;/tmp/temp.txt&#39;
+#44	REDUCE cov: 106 ft: 121 corp: 8/242b lim: 4096 exec/s: 0 rss: 36Mb L: 22/117 MS: 4 ChangeBinInt-ChangeBinInt-InsertRepeatedBytes-EraseBytes-
+I/O Error: Couldn&#39;t open file &#39;/tmp/temp.txt&#39;
+I/O Error: Couldn&#39;t open file &#39;/tmp/temp.txt&#39;
+I/O Error: Couldn&#39;t open file &#39;/tmp/temp.txt&#39;
+I/O Error: Couldn&#39;t open file &#39;/tmp/temp.txt&#39;
+I/O Error: Couldn&#39;t open file &#39;/tmp/temp.txt&#39;
+I/O Error: Couldn&#39;t open file &#39;/tmp/temp.txt&#39;
+I/O Error: Couldn&#39;t open file &#39;/tmp/temp.txt&#39;
+I/O Error: Couldn&#39;t open file &#39;/tmp/temp.txt&#39;
+I/O Error: Couldn&#39;t open file &#39;/tmp/temp.txt&#39;
+I/O Error: Couldn&#39;t open file &#39;/tmp/temp.txt&#39;
+I/O Error: Couldn&#39;t open file &#39;/tmp/temp.txt&#39;
+I/O Error: Couldn&#39;t open file &#39;/tmp/temp.txt&#39;
+I/O Error: Couldn&#39;t open file &#39;/tmp/temp.txt&#39;
+I/O Error: Couldn&#39;t open file &#39;/tmp/temp.txt&#39;
+I/O Error: Couldn&#39;t open file &#39;/tmp/temp.txt&#39;
+I/O Error: Couldn&#39;t open file &#39;/tmp/temp.txt&#39;
+I/O Error: Couldn&#39;t open file &#39;/tmp/temp.txt&#39;
+I/O Error: Couldn&#39;t open file &#39;/tmp/temp.txt&#39;
+I/O Error: Couldn&#39;t open file &#39;/tmp/temp.txt&#39;
+I/O Error: Couldn&#39;t open file &#39;/tmp/temp.txt&#39;
+I/O Error: Couldn&#39;t open file &#39;/tmp/temp.txt&#39;
+I/O Error: Couldn&#39;t open file &#39;/tmp/temp.txt&#39;
+I/O Error: Couldn&#39;t open file &#39;/tmp/temp.txt&#39;
+I/O Error: Couldn&#39;t open file &#39;/tmp/temp.txt&#39;
+I/O Error: Couldn&#39;t open file &#39;/tmp/temp.txt&#39;
+I/O Error: Couldn&#39;t open file &#39;/tmp/temp.txt&#39;
+I/O Error: Couldn&#39;t open file &#39;/tmp/temp.txt&#39;
+I/O Error: Couldn&#39;t open file &#39;/tmp/temp.txt&#39;
+I/O Error: Couldn&#39;t open file &#39;/tmp/temp.txt&#39;
+I/O Error: Couldn&#39;t open file &#39;/tmp/temp.txt&#39;
+I/O Error: Couldn&#39;t open file &#39;/tmp/temp.txt&#39;
+I/O Error: Couldn&#39;t open file &#39;/tmp/temp.txt&#39;
+I/O Error: Couldn&#39;t open file &#39;/tmp/temp.txt&#39;
+I/O Error: Couldn&#39;t open file &#39;/tmp/temp.txt&#39;
+I/O Error: Couldn&#39;t open file &#39;/tmp/temp.txt&#39;
+I/O Error: Couldn&#39;t open file &#39;/tmp/temp.txt&#39;
+I/O Error: Couldn&#39;t open file &#39;/tmp/temp.txt&#39;
+I/O Error: Couldn&#39;t open file &#39;/tmp/temp.txt&#39;
+I/O Error: Couldn&#39;t open file &#39;/tmp/temp.txt&#39;
+I/O Error: Couldn&#39;t open file &#39;/tmp/temp.txt&#39;
+I/O Error: Couldn&#39;t open file &#39;/tmp/temp.txt&#39;
+I/O Error: Couldn&#39;t open file &#39;/tmp/temp.txt&#39;
+I/O Error: Couldn&#39;t open file &#39;/tmp/temp.txt&#39;
+I/O Error: Couldn&#39;t open file &#39;/tmp/temp.txt&#39;
+I/O Error: Couldn&#39;t open file &#39;/tmp/temp.txt&#39;
+I/O Error: Couldn&#39;t open file &#39;/tmp/temp.txt&#39;
+I/O Error: Couldn&#39;t open file &#39;/tmp/temp.txt&#39;
+#91	REDUCE cov: 106 ft: 122 corp: 9/249b lim: 4096 exec/s: 0 rss: 37Mb L: 7/117 MS: 2 InsertByte-EraseBytes-
+I/O Error: Couldn&#39;t open file &#39;/tmp/temp.txt&#39;
+#92	NEW    cov: 106 ft: 124 corp: 10/259b lim: 4096 exec/s: 0 rss: 37Mb L: 10/117 MS: 1 EraseBytes-
+I/O Error: Couldn&#39;t open file &#39;/tmp/temp.txt&#39;
+I/O Error: Couldn&#39;t open file &#39;/tmp/temp.txt&#39;
+#94	REDUCE cov: 106 ft: 124 corp: 10/230b lim: 4096 exec/s: 0 rss: 37Mb L: 35/117 MS: 2 ChangeByte-EraseBytes-
+I/O Error: Couldn&#39;t open file &#39;/tmp/temp.txt&#39;
+I/O Error: Couldn&#39;t open file &#39;/tmp/temp.txt&#39;
+I/O Error: Couldn&#39;t open file &#39;/tmp/temp.txt&#39;
+I/O Error: Couldn&#39;t open file &#39;/tmp/temp.txt&#39;
+I/O Error: Couldn&#39;t open file &#39;/tmp/temp.txt&#39;
+I/O Error: Couldn&#39;t open file &#39;/tmp/temp.txt&#39;
+#100	NEW    cov: 106 ft: 126 corp: 11/235b lim: 4096 exec/s: 0 rss: 37Mb L: 5/117 MS: 1 EraseBytes-
+I/O Error: Couldn&#39;t open file &#39;/tmp/temp.txt&#39;
+I/O Error: Couldn&#39;t open file &#39;/tmp/temp.txt&#39;
+I/O Error: Couldn&#39;t open file &#39;/tmp/temp.txt&#39;
+I/O Error: Couldn&#39;t open file &#39;/tmp/temp.txt&#39;
+I/O Error: Couldn&#39;t open file &#39;/tmp/temp.txt&#39;
+I/O Error: Couldn&#39;t open file &#39;/tmp/temp.txt&#39;
+I/O Error: Couldn&#39;t open file &#39;/tmp/temp.txt&#39;
+#107	NEW    cov: 106 ft: 127 corp: 12/256b lim: 4096 exec/s: 0 rss: 37Mb L: 21/117 MS: 2 ChangeBit-InsertByte-
+I/O Error: Couldn&#39;t open file &#39;/tmp/temp.txt&#39;
+I/O Error: Couldn&#39;t open file &#39;/tmp/temp.txt&#39;
+I/O Error: Couldn&#39;t open file &#39;/tmp/temp.txt&#39;
+I/O Error: Couldn&#39;t open file &#39;/tmp/temp.txt&#39;
+I/O Error: Couldn&#39;t open file &#39;/tmp/temp.txt&#39;
+I/O Error: Couldn&#39;t open file &#39;/tmp/temp.txt&#39;
+I/O Error: Couldn&#39;t open file &#39;/tmp/temp.txt&#39;
+I/O Error: Couldn&#39;t open file &#39;/tmp/temp.txt&#39;
+I/O Error: Couldn&#39;t open file &#39;/tmp/temp.txt&#39;
+I/O Error: Couldn&#39;t op
+...truncated...
+cpp:98:3
+    #1 0x55575dad759c in GString::resize(int) /src/xpdf-4.05/goo/GString.cc:115:9
+    #2 0x55575dad7792 in GString::GString(char const*) /src/xpdf-4.05/goo/GString.cc:139:3
+    #3 0x55575d84c3a3 in LLVMFuzzerTestOneInput /src/xpdf-4.05/build/fuzz_JBIG2.cc:19:32
+    #4 0x55575d6fe660 in fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:614:13
+    #5 0x55575d6fde85 in fuzzer::Fuzzer::RunOne(unsigned char const*, unsigned long, bool, fuzzer::InputInfo*, bool, bool*) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:516:7
+    #6 0x55575d6ff655 in fuzzer::Fuzzer::MutateAndTestOne() /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:760:19
+    #7 0x55575d700445 in fuzzer::Fuzzer::Loop(std::__Fuzzer::vector&lt;fuzzer::SizedFile, std::__Fuzzer::allocator&lt;fuzzer::SizedFile&gt;&gt;&amp;) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:905:5
+    #8 0x55575d6ee756 in fuzzer::FuzzerDriver(int*, char***, int (*)(unsigned char const*, unsigned long)) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:914:6
+    #9 0x55575d71ac82 in main /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMain.cpp:20:10
+    #10 0x7f80f8113082 in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x24082) (BuildId: 0702430aef5fa3dda43986563e9ffcc47efbd75e)
+
+DEDUP_TOKEN: operator new[](unsigned long)--GString::resize(int)--GString::GString(char const*)
+[1m[34mIndirect leak of 16 byte(s) in 1 object(s) allocated from:
+[1m[0m    #0 0x55575d849a9d in operator new[](unsigned long) /src/llvm-project/compiler-rt/lib/asan/asan_new_delete.cpp:98:3
+    #1 0x55575dad759c in GString::resize(int) /src/xpdf-4.05/goo/GString.cc:115:9
+    #2 0x55575dad7792 in GString::GString(char const*) /src/xpdf-4.05/goo/GString.cc:139:3
+    #3 0x55575d84c3a3 in LLVMFuzzerTestOneInput /src/xpdf-4.05/build/fuzz_JBIG2.cc:19:32
+    #4 0x55575d6fe660 in fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:614:13
+    #5 0x55575d6fde85 in fuzzer::Fuzzer::RunOne(unsigned char const*, unsigned long, bool, fuzzer::InputInfo*, bool, bool*) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:516:7
+    #6 0x55575d6ffcd6 in fuzzer::Fuzzer::ReadAndExecuteSeedCorpora(std::__Fuzzer::vector&lt;fuzzer::SizedFile, std::__Fuzzer::allocator&lt;fuzzer::SizedFile&gt;&gt;&amp;) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:812:5
+    #7 0x55575d700147 in fuzzer::Fuzzer::Loop(std::__Fuzzer::vector&lt;fuzzer::SizedFile, std::__Fuzzer::allocator&lt;fuzzer::SizedFile&gt;&gt;&amp;) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:867:3
+    #8 0x55575d6ee756 in fuzzer::FuzzerDriver(int*, char***, int (*)(unsigned char const*, unsigned long)) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:914:6
+    #9 0x55575d71ac82 in main /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMain.cpp:20:10
+    #10 0x7f80f8113082 in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x24082) (BuildId: 0702430aef5fa3dda43986563e9ffcc47efbd75e)
+
+DEDUP_TOKEN: operator new[](unsigned long)--GString::resize(int)--GString::GString(char const*)
+[1m[34mIndirect leak of 16 byte(s) in 1 object(s) allocated from:
+[1m[0m    #0 0x55575d84998d in operator new(unsigned long) /src/llvm-project/compiler-rt/lib/asan/asan_new_delete.cpp:95:3
+    #1 0x55575d84c391 in LLVMFuzzerTestOneInput /src/xpdf-4.05/build/fuzz_JBIG2.cc:19:28
+    #2 0x55575d6fe660 in fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:614:13
+    #3 0x55575d6fde85 in fuzzer::Fuzzer::RunOne(unsigned char const*, unsigned long, bool, fuzzer::InputInfo*, bool, bool*) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:516:7
+    #4 0x55575d6ffcd6 in fuzzer::Fuzzer::ReadAndExecuteSeedCorpora(std::__Fuzzer::vector&lt;fuzzer::SizedFile, std::__Fuzzer::allocator&lt;fuzzer::SizedFile&gt;&gt;&amp;) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:812:5
+    #5 0x55575d700147 in fuzzer::Fuzzer::Loop(std::__Fuzzer::vector&lt;fuzzer::SizedFile, std::__Fuzzer::allocator&lt;fuzzer::SizedFile&gt;&gt;&amp;) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:867:3
+    #6 0x55575d6ee756 in fuzzer::FuzzerDriver(int*, char***, int (*)(unsigned char const*, unsigned long)) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:914:6
+    #7 0x55575d71ac82 in main /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMain.cpp:20:10
+    #8 0x7f80f8113082 in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x24082) (BuildId: 0702430aef5fa3dda43986563e9ffcc47efbd75e)
+
+DEDUP_TOKEN: operator new(unsigned long)--LLVMFuzzerTestOneInput--fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long)
+[1m[34mIndirect leak of 16 byte(s) in 1 object(s) allocated from:
+[1m[0m    #0 0x55575d849a9d in operator new[](unsigned long) /src/llvm-project/compiler-rt/lib/asan/asan_new_delete.cpp:98:3
+    #1 0x55575dad759c in GString::resize(int) /src/xpdf-4.05/goo/GString.cc:115:9
+    #2 0x55575dad7792 in GString::GString(char const*) /src/xpdf-4.05/goo/GString.cc:139:3
+    #3 0x55575d84c3a3 in LLVMFuzzerTestOneInput /src/xpdf-4.05/build/fuzz_JBIG2.cc:19:32
+    #4 0x55575d6fe660 in fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:614:13
+    #5 0x55575d6ffb61 in fuzzer::Fuzzer::ReadAndExecuteSeedCorpora(std::__Fuzzer::vector&lt;fuzzer::SizedFile, std::__Fuzzer::allocator&lt;fuzzer::SizedFile&gt;&gt;&amp;) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:807:3
+    #6 0x55575d700147 in fuzzer::Fuzzer::Loop(std::__Fuzzer::vector&lt;fuzzer::SizedFile, std::__Fuzzer::allocator&lt;fuzzer::SizedFile&gt;&gt;&amp;) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:867:3
+    #7 0x55575d6ee756 in fuzzer::FuzzerDriver(int*, char***, int (*)(unsigned char const*, unsigned long)) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:914:6
+    #8 0x55575d71ac82 in main /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMain.cpp:20:10
+    #9 0x7f80f8113082 in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x24082) (BuildId: 0702430aef5fa3dda43986563e9ffcc47efbd75e)
+
+DEDUP_TOKEN: operator new[](unsigned long)--GString::resize(int)--GString::GString(char const*)
+[1m[34mIndirect leak of 16 byte(s) in 1 object(s) allocated from:
+[1m[0m    #0 0x55575d84998d in operator new(unsigned long) /src/llvm-project/compiler-rt/lib/asan/asan_new_delete.cpp:95:3
+    #1 0x55575d84c391 in LLVMFuzzerTestOneInput /src/xpdf-4.05/build/fuzz_JBIG2.cc:19:28
+    #2 0x55575d6fe660 in fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:614:13
+    #3 0x55575d6ffb61 in fuzzer::Fuzzer::ReadAndExecuteSeedCorpora(std::__Fuzzer::vector&lt;fuzzer::SizedFile, std::__Fuzzer::allocator&lt;fuzzer::SizedFile&gt;&gt;&amp;) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:807:3
+    #4 0x55575d700147 in fuzzer::Fuzzer::Loop(std::__Fuzzer::vector&lt;fuzzer::SizedFile, std::__Fuzzer::allocator&lt;fuzzer::SizedFile&gt;&gt;&amp;) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:867:3
+    #5 0x55575d6ee756 in fuzzer::FuzzerDriver(int*, char***, int (*)(unsigned char const*, unsigned long)) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:914:6
+    #6 0x55575d71ac82 in main /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMain.cpp:20:10
+    #7 0x7f80f8113082 in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x24082) (BuildId: 0702430aef5fa3dda43986563e9ffcc47efbd75e)
+
+DEDUP_TOKEN: operator new(unsigned long)--LLVMFuzzerTestOneInput--fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long)
+SUMMARY: AddressSanitizer: 48910016 byte(s) leaked in 1222748 allocation(s).
+MS: 5 ChangeBit-InsertRepeatedBytes-ChangeBit-CopyPart-InsertRepeatedBytes-; base unit: 9d6b5ed19a02c4be29fa09c72c2b085cc3babda3
+
+
+artifact_prefix=&#39;./&#39;; Test unit written to ./crash-da39a3ee5e6b4b0d3255bfef95601890afd80709
+Base64: 
+stat::number_of_executed_units: 407584
+stat::average_exec_per_sec:     13147
+stat::new_units_added:          34
+stat::slowest_unit_time_sec:    0
+stat::peak_rss_mb:              203
+
+</pre>
+
+
+</body>

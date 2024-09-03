@@ -1,0 +1,484 @@
+<!doctype html>
+
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Experiment results</title>
+<style>
+* {
+    box-sizing: border-box;
+}
+
+html {
+    line-height: 1.15;
+}
+
+body {
+    font-family: sans-serif;
+    font-size: 16px;
+}
+
+table {
+    border-collapse: collapse;
+    border-spacing: 0;
+}
+
+td, th {
+    border-right: 1px #dedede solid;
+    border-bottom: 1px #dedede solid;
+    padding: 5px;
+    text-align: left;
+}
+td:first-child, th:first-child {
+    border-left: 1px #dedede solid;
+}
+th {
+    border-top: 1px #dedede solid;
+}
+
+tbody tr:nth-child(odd) {
+    background-color: #f4f5ff;
+}
+</style>
+<body>
+    LLM: 
+    
+<h1>output-xpdf-_zn6pdfdoc16displaypagesliceep9outputdeviddiiiiiiiipfipves2_ / 02</h1>
+Bug: True
+<br>
+Crash reason: NO_SEMANTIC_ERR
+<br>
+<br>
+
+<h2>Triage</h2>
+<pre>
+Crash is caused by bug in fuzz driver.
+
+The crash report indicates a stack-buffer-overflow error, which is happening due to the fuzz driver attempting to read beyond the allocated memory for the &#39;slice&#39; variable. In the fuzz driver code, &#39;slice&#39; is assigned a string of bytes from &#39;fdp&#39;, but the size of &#39;slice&#39; is not properly controlled. The &#39;out_stream&#39; is then created with a pointer to &#39;slice.c_str()&#39; and a length of &#39;remaining_slice_size&#39;. If &#39;remaining_slice_size&#39; is greater than the actual size of &#39;slice&#39;, this will cause a buffer overflow when &#39;out_stream&#39; is used in the &#39;PDFDoc&#39; constructor.
+</pre>
+<br>
+
+
+
+
+
+<h3>Final code</h3>
+
+<pre>
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+#include &lt;aconf.h&gt;
+#include &lt;stddef.h&gt;
+#include &lt;stdint.h&gt;
+#include &lt;string.h&gt;
+
+#include &#34;GfxState.h&#34;
+#include &#34;PDFDoc.h&#34;
+#include &#34;SplashBitmap.h&#34;
+#include &#34;SplashOutputDev.h&#34;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  FuzzedDataProvider fdp(data, size);
+  double hdpi = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  double vdpi = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  int rotate = fdp.ConsumeIntegral&lt;int&gt;();
+  bool useMediaBox = fdp.ConsumeBool();
+  bool crop = fdp.ConsumeBool();
+  bool printing = fdp.ConsumeBool();
+  int sliceX = fdp.ConsumeIntegral&lt;int&gt;();
+  int sliceY = fdp.ConsumeIntegral&lt;int&gt;();
+  int sliceH = fdp.ConsumeIntegral&lt;int&gt;();
+  int sliceW = fdp.ConsumeIntegral&lt;int&gt;();
+
+  std::string slice;
+  size_t remaining_slice_size = fdp.remaining_bytes();
+  if (remaining_slice_size &gt; 4) {
+	size_t slice_size = fdp.ConsumeIntegralInRange&lt;size_t&gt;(1, remaining_slice_size - 4);
+    slice = fdp.ConsumeBytesAsString(slice_size);
+  }
+
+  Object xpdf_object;
+  xpdf_object.initNull();
+  BaseStream*out_stream = new MemStream(
+    const_cast&lt;char *&gt;(slice.c_str()), 0, remaining_slice_size, &amp;xpdf_object
+  );
+
+  PDFDoc doc(out_stream, NULL, NULL, NULL);
+  if (doc.isOk()) {
+    SplashColor color;
+    color[0] = 255;
+    color[1] = 255;
+    color[2] = 255;
+    SplashOutputDev *splash_output_dev = new SplashOutputDev(splashModeRGB8, 4, gFalse, color);
+    splash_output_dev-&gt;setNoComposite(gFalse);
+    splash_output_dev-&gt;startDoc(doc.getXRef());
+
+	doc.displayPageSlice(
+	  splash_output_dev, 1, hdpi, vdpi,
+	  rotate, useMediaBox, crop, printing,
+	  sliceX, sliceY, sliceH, sliceW,
+	  NULL, NULL
+	);
+
+    delete splash_output_dev;
+  }
+
+  return 0;
+}
+</pre>
+
+
+<h3>Fixer prompt #1</h3>
+<pre>
+
+Given the following C++ fuzz harness and its build error message, fix the code to make it build for fuzzing.
+
+If there is undeclared identifier or unknown type name error, fix it by finding and including the related libraries.
+
+MUST RETURN THE FULL CODE, INCLUDING UNCHANGED PARTS.
+
+Below is the code needs to be built:
+&lt;code&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+#include &lt;aconf.h&gt;
+#include &lt;stddef.h&gt;
+#include &lt;stdint.h&gt;
+#include &lt;string.h&gt;
+
+#include &#34;GfxState.h&#34;
+#include &#34;PDFDoc.h&#34;
+#include &#34;SplashBitmap.h&#34;
+#include &#34;SplashOutputDev.h&#34;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  FuzzedDataProvider fdp(data, size);
+  double hdpi = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  double vdpi = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  int rotate = fdp.ConsumeIntegral&lt;int&gt;();
+  bool useMediaBox = fdp.ConsumeBool();
+  bool crop = fdp.ConsumeBool();
+  bool printing = fdp.ConsumeBool();
+  int sliceX = fdp.ConsumeIntegral&lt;int&gt;();
+  int sliceY = fdp.ConsumeIntegral&lt;int&gt;();
+  int sliceH = fdp.ConsumeIntegral&lt;int&gt;();
+  int sliceW = fdp.ConsumeIntegral&lt;int&gt;();
+
+  void *slice = nullptr;
+  size_t remaining_slice_size = fdp.remaining_bytes();
+  if (remaining_slice_size &gt; 4) {
+	size_t slice_size = fdp.ConsumeIntegralInRange&lt;size_t&gt;(1, remaining_slice_size - 4);
+    slice = reinterpret_cast&lt;void *&gt;(fdp.ConsumeBytesAsString(slice_size).c_str());
+  }
+
+  Object xpdf_object;
+  xpdf_object.initNull();
+  BaseStream*out_stream = new MemStream(
+    static_cast&lt;char *&gt;(slice), 0, remaining_slice_size, &amp;xpdf_object
+  );
+
+  PDFDoc doc(out_stream, NULL, NULL, NULL);
+  if (doc.isOk()) {
+    SplashColor color;
+    color[0] = 255;
+    color[1] = 255;
+    color[2] = 255;
+    SplashOutputDev *splash_output_dev = new SplashOutputDev(splashModeRGB8, 4, gFalse, color);
+    splash_output_dev-&gt;setNoComposite(gFalse);
+    splash_output_dev-&gt;startDoc(doc.getXRef());
+
+	doc.displayPageSlice(
+	  splash_output_dev, 1, hdpi, vdpi,
+	  rotate, useMediaBox, crop, printing,
+	  sliceX, sliceY, sliceH, sliceW,
+	  NULL, NULL
+	);
+
+    delete splash_output_dev;
+  }
+
+  return 0;
+}
+&lt;/code&gt;
+
+Below is the error to fix:
+The code has the following build issues:
+&lt;error&gt;
+fuzz_JBIG2.cc:30:13: error: reinterpret_cast from &#39;const value_type *&#39; (aka &#39;const char *&#39;) to &#39;void *&#39; casts away qualifiers
+   30 |     slice = reinterpret_cast&lt;void *&gt;(fdp.ConsumeBytesAsString(slice_size).c_str());
+      |             ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+&lt;/error&gt;
+
+
+
+
+Fix code:
+1. Consider possible solutions for the issues listed above.
+2. Choose a solution that can maximize fuzzing result, which is utilizing the function under test and feeding it not null input.
+3. Apply the solutions to the original code.
+It&#39;s important to show the complete code, not only the fixed line.
+&lt;solution&gt;
+</pre>
+
+
+
+<h3>Code #1</h3>
+
+<pre>
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+#include &lt;aconf.h&gt;
+#include &lt;stddef.h&gt;
+#include &lt;stdint.h&gt;
+#include &lt;string.h&gt;
+
+#include &#34;GfxState.h&#34;
+#include &#34;PDFDoc.h&#34;
+#include &#34;SplashBitmap.h&#34;
+#include &#34;SplashOutputDev.h&#34;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  FuzzedDataProvider fdp(data, size);
+  double hdpi = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  double vdpi = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  int rotate = fdp.ConsumeIntegral&lt;int&gt;();
+  bool useMediaBox = fdp.ConsumeBool();
+  bool crop = fdp.ConsumeBool();
+  bool printing = fdp.ConsumeBool();
+  int sliceX = fdp.ConsumeIntegral&lt;int&gt;();
+  int sliceY = fdp.ConsumeIntegral&lt;int&gt;();
+  int sliceH = fdp.ConsumeIntegral&lt;int&gt;();
+  int sliceW = fdp.ConsumeIntegral&lt;int&gt;();
+
+  std::string slice;
+  size_t remaining_slice_size = fdp.remaining_bytes();
+  if (remaining_slice_size &gt; 4) {
+	size_t slice_size = fdp.ConsumeIntegralInRange&lt;size_t&gt;(1, remaining_slice_size - 4);
+    slice = fdp.ConsumeBytesAsString(slice_size);
+  }
+
+  Object xpdf_object;
+  xpdf_object.initNull();
+  BaseStream*out_stream = new MemStream(
+    const_cast&lt;char *&gt;(slice.c_str()), 0, remaining_slice_size, &amp;xpdf_object
+  );
+
+  PDFDoc doc(out_stream, NULL, NULL, NULL);
+  if (doc.isOk()) {
+    SplashColor color;
+    color[0] = 255;
+    color[1] = 255;
+    color[2] = 255;
+    SplashOutputDev *splash_output_dev = new SplashOutputDev(splashModeRGB8, 4, gFalse, color);
+    splash_output_dev-&gt;setNoComposite(gFalse);
+    splash_output_dev-&gt;startDoc(doc.getXRef());
+
+	doc.displayPageSlice(
+	  splash_output_dev, 1, hdpi, vdpi,
+	  rotate, useMediaBox, crop, printing,
+	  sliceX, sliceY, sliceH, sliceW,
+	  NULL, NULL
+	);
+
+    delete splash_output_dev;
+  }
+
+  return 0;
+}
+
+</pre>
+
+
+<h2>Logs</h2>
+<pre>
+Fixing /home/chyun/oss-fuzz-gen/results1/output-xpdf-_zn6pdfdoc16displaypagesliceep9outputdeviddiiiiiiiipfipves2_/fixed_targets/02.cc with gpt-4, attempt 1.
+Successfully built /home/chyun/oss-fuzz-gen/results1/output-xpdf-_zn6pdfdoc16displaypagesliceep9outputdeviddiiiiiiiipfipves2_/fixed_targets/02.cc with gpt-4 in 1 iterations of fixing.
+Triaging the crash related to /home/chyun/oss-fuzz-gen/results1/output-xpdf-_zn6pdfdoc16displaypagesliceep9outputdeviddiiiiiiiipfipves2_/fixed_targets/02.cc with gpt-4.
+Result for xpdf-zn6pdfdoc16displaypagesliceep9outputdeviddiiiiiiiipfipves2-02: crashes=True, coverage=0.00263062252297468 (152/57781), coverage diff=0.0001924140750895928 (24/124731)
+
+</pre>
+
+<h2>Run logs</h2>
+<pre>
+INFO:__main__:Running: docker run --privileged --shm-size=2g --platform linux/amd64 --rm -e FUZZING_ENGINE=libfuzzer -e SANITIZER=address -e RUN_FUZZER_MODE=interactive -e HELPER=True -v /home/chyun/oss-fuzz-gen/results1/output-xpdf-_zn6pdfdoc16displaypagesliceep9outputdeviddiiiiiiiipfipves2_/corpora/02.cc:/tmp/fuzz_JBIG2_corpus -v /tmp/tmpycnpkkhe/build/out/xpdf-zn6pdfdoc16displaypagesliceep9outputdeviddiiiiiiiipfipves2-02:/out -t gcr.io/oss-fuzz-base/base-runner run_fuzzer fuzz_JBIG2 -print_final_stats=1 -max_total_time=30 -len_control=0 -timeout=30.
+vm.mmap_rnd_bits = 28
+rm: cannot remove &#39;/tmp/fuzz_JBIG2_corpus&#39;: Device or resource busy
+/out/fuzz_JBIG2 -rss_limit_mb=2560 -timeout=25 -print_final_stats=1 -max_total_time=30 -len_control=0 -timeout=30 /tmp/fuzz_JBIG2_corpus -detect_leaks=0 &lt; /dev/null
+INFO: Running with entropic power schedule (0xFF, 100).
+INFO: Seed: 3684225590
+INFO: Loaded 1 modules   (57781 inline 8-bit counters): 57781 [0x55c1472a8a48, 0x55c1472b6bfd), 
+INFO: Loaded 1 PC tables (57781 PCs): 57781 [0x55c1472b6c00,0x55c147398750), 
+INFO:        0 files found in /tmp/fuzz_JBIG2_corpus
+INFO: -max_len is not provided; libFuzzer will not generate inputs larger than 4096 bytes
+Syntax Warning: May not be a PDF file (continuing anyway)
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: PDF file is damaged - attempting to reconstruct xref table...
+Syntax Error: Couldn&#39;t find trailer dictionary
+Syntax Error: Couldn&#39;t read xref table
+INFO: A corpus is not provided, starting from an empty corpus
+Syntax Warning: May not be a PDF file (continuing anyway)
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: PDF file is damaged - attempting to reconstruct xref table...
+Syntax Error: Couldn&#39;t find trailer dictionary
+Syntax Error: Couldn&#39;t read xref table
+#2	INITED cov: 121 ft: 122 corp: 1/1b exec/s: 0 rss: 36Mb
+Syntax Warning: May not be a PDF file (continuing anyway)
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: PDF file is damaged - attempting to reconstruct xref table...
+Syntax Error: Couldn&#39;t find trailer dictionary
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: May not be a PDF file (continuing anyway)
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: PDF file is damaged - attempting to reconstruct xref table...
+Syntax Error: Couldn&#39;t find trailer dictionary
+Syntax Error: Couldn&#39;t read xref table
+#4	NEW    cov: 122 ft: 124 corp: 2/3b lim: 4096 exec/s: 0 rss: 37Mb L: 2/2 MS: 2 ChangeBit-InsertByte-
+Syntax Warning: May not be a PDF file (continuing anyway)
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: PDF file is damaged - attempting to reconstruct xref table...
+Syntax Error: Couldn&#39;t find trailer dictionary
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: May not be a PDF file (continuing anyway)
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: PDF file is damaged - attempting to reconstruct xref table...
+Syntax Error: Couldn&#39;t find trailer dictionary
+Syntax Error: Couldn&#39;t read xref table
+#6	NEW    cov: 123 ft: 125 corp: 3/5b lim: 4096 exec/s: 0 rss: 37Mb L: 2/2 MS: 2 ChangeBit-ChangeByte-
+Syntax Warning: May not be a PDF file (continuing anyway)
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: PDF file is damaged - attempting to reconstruct xref table...
+Syntax Error: Couldn&#39;t find trailer dictionary
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: May not be a PDF file (continuing anyway)
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: PDF file is damaged - attempting to reconstruct xref table...
+Syntax Error: Couldn&#39;t find trailer dictionary
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: May not be a PDF file (continuing anyway)
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: PDF file is damaged - attempting to reconstruct xref table...
+Syntax Error: Couldn&#39;t find trailer dictionary
+Syntax Error: Couldn&#39;t read xref table
+#9	NEW    cov: 123 ft: 127 corp: 4/9b lim: 4096 exec/s: 0 rss: 37Mb L: 4/4 MS: 3 CrossOver-ChangeBit-CrossOver-
+Syntax Warning: May not be a PDF file (continuing anyway)
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: PDF file is damaged - attempting to reconstruct xref table...
+Syntax Error: Couldn&#39;t find trailer dictionary
+Syntax Error: Couldn&#39;t read xref table
+#10	NEW    cov: 123 ft: 128 corp: 5/14b lim: 4096 exec/s: 0 rss: 37Mb L: 5/5 MS: 1 InsertRepeatedBytes-
+Syntax Warning: May not be a PDF file (continuing anyway)
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: PDF file is damaged - attempting to reconstruct xref table...
+Syntax Error: Couldn&#39;t find trailer dictionary
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: May not be a PDF file (continuing anyway)
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: PDF file is damaged - attempting to reconstruct xref table...
+Syntax Error: Couldn&#39;t find trailer dictionary
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: May not be a PDF file (continuing anyway)
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: PDF file is damaged - attempting to reconstruct xref table...
+Syntax Error: Couldn&#39;t find trailer dictionary
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: May not be a PDF file (continuing anyway)
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: PDF file is damaged - attempting to reconstruct xref table...
+Syntax Error: Couldn&#39;t find trailer dictionary
+Syntax Error: Couldn&#39;t read xref table
+	NEW_FUNC[1/1]: 0x55c146d187f0 in Lexer::isSpace(int) /src/xpdf-4.05/xpdf/Lexer.cc:552
+#14	NEW    cov: 152 ft: 165 corp: 6/56b lim: 4096 exec/s: 0 rss: 37Mb L: 42/42 MS: 4 CrossOver-ChangeByte-EraseBytes-InsertRepeatedBytes-
+Syntax Warning: May not be a PDF file (continuing anyway)
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: PDF file is damaged - attempting to reconstruct xref table...
+Syntax Error: Couldn&#39;t find trailer dictionary
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: May not be a PDF file (continuing anyway)
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: PDF file is damaged - attempting to reconstruct xref table...
+Syntax Error: Couldn&#39;t find trailer dictionary
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: May not be a PDF file (continuing anyway)
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: PDF file is damaged - attempting to reconstruct xref table...
+Syntax Error: Couldn&#39;t find trailer dictionary
+Syntax Error: Couldn&#39;t read xref table
+=================================================================
+[1m[31m==16==ERROR: AddressSanitizer: stack-buffer-overflow on address 0x7f86df081a38 at pc 0x55c146b3acba bp 0x7ffcfb1cce60 sp 0x7ffcfb1cc620
+[1m[0m[1m[34mREAD of size 29 at 0x7f86df081a38 thread T0[1m[0m
+SCARINESS: 41 (multi-byte-read-stack-buffer-overflow)
+    #0 0x55c146b3acb9 in __asan_memcpy /src/llvm-project/compiler-rt/lib/asan/asan_interceptors_memintrinsics.cpp:63:3
+    #1 0x55c146b8c840 in MemStream::getBlock(char*, int) /src/xpdf-4.05/xpdf/Stream.cc:934:3
+    #2 0x55c146b7e5c1 in PDFDoc::checkHeader() /src/xpdf-4.05/xpdf/PDFDoc.cc:376:8
+    #3 0x55c146b7db21 in PDFDoc::setup(GString*, GString*) /src/xpdf-4.05/xpdf/PDFDoc.cc:266:3
+    #4 0x55c146b7e360 in PDFDoc::PDFDoc(BaseStream*, GString*, GString*, PDFCore*) /src/xpdf-4.05/xpdf/PDFDoc.cc:243:8
+    #5 0x55c146b7cc96 in LLVMFuzzerTestOneInput /src/xpdf-4.05/build/fuzz_JBIG2.cc:39:10
+    #6 0x55c146a2e660 in fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:614:13
+    #7 0x55c146a2de85 in fuzzer::Fuzzer::RunOne(unsigned char const*, unsigned long, bool, fuzzer::InputInfo*, bool, bool*) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:516:7
+    #8 0x55c146a2f655 in fuzzer::Fuzzer::MutateAndTestOne() /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:760:19
+    #9 0x55c146a30445 in fuzzer::Fuzzer::Loop(std::__Fuzzer::vector&lt;fuzzer::SizedFile, std::__Fuzzer::allocator&lt;fuzzer::SizedFile&gt;&gt;&amp;) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:905:5
+    #10 0x55c146a1e756 in fuzzer::FuzzerDriver(int*, char***, int (*)(unsigned char const*, unsigned long)) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:914:6
+    #11 0x55c146a4ac82 in main /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMain.cpp:20:10
+    #12 0x7f86df845082 in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x24082) (BuildId: 0702430aef5fa3dda43986563e9ffcc47efbd75e)
+    #13 0x55c146a0f8cd in _start (/out/fuzz_JBIG2+0x29f8cd)
+
+DEDUP_TOKEN: __asan_memcpy--MemStream::getBlock(char*, int)--PDFDoc::checkHeader()
+[1m[32mAddress 0x7f86df081a38 is located in stack of thread T0 at offset 56 in frame[1m[0m
+[1m[0m    #0 0x55c146b7bc7f in LLVMFuzzerTestOneInput /src/xpdf-4.05/build/fuzz_JBIG2.cc:13
+
+DEDUP_TOKEN: LLVMFuzzerTestOneInput
+  This frame has 5 object(s):
+    [32, 56) &#39;slice&#39; (line 26)[1m[32m &lt;== Memory access at offset 56 overflows this variable[1m[0m
+    [96, 120) &#39;ref.tmp&#39; (line 30)
+    [160, 176) &#39;xpdf_object&#39; (line 33)
+    [192, 280) &#39;doc&#39; (line 39)
+    [320, 324) &#39;color&#39; (line 41)
+HINT: this may be a false positive if your program uses some custom stack unwind mechanism, swapcontext or vfork
+      (longjmp and C++ exceptions *are* supported)
+SUMMARY: AddressSanitizer: stack-buffer-overflow /src/llvm-project/compiler-rt/lib/asan/asan_interceptors_memintrinsics.cpp:63:3 in __asan_memcpy
+Shadow bytes around the buggy address:
+  0x7f86df081780: [1m[35mf5[1m[0m [1m[35mf5[1m[0m [1m[35mf5[1m[0m [1m[35mf5[1m[0m [1m[35mf5[1m[0m [1m[35mf5[1m[0m [1m[35mf5[1m[0m [1m[35mf5[1m[0m [1m[35mf5[1m[0m [1m[35mf5[1m[0m [1m[35mf5[1m[0m [1m[35mf5[1m[0m [1m[35mf5[1m[0m [1m[35mf5[1m[0m [1m[35mf5[1m[0m [1m[35mf5[1m[0m
+  0x7f86df081800: [1m[35mf5[1m[0m [1m[35mf5[1m[0m [1m[35mf5[1m[0m [1m[35mf5[1m[0m [1m[35mf5[1m[0m [1m[35mf5[1m[0m [1m[35mf5[1m[0m [1m[35mf5[1m[0m [1m[35mf5[1m[0m [1m[35mf5[1m[0m [1m[35mf5[1m[0m [1m[35mf5[1m[0m [1m[35mf5[1m[0m [1m[35mf5[1m[0m [1m[35mf5[1m[0m [1m[35mf5[1m[0m
+  0x7f86df081880: [1m[35mf5[1m[0m [1m[35mf5[1m[0m [1m[35mf5[1m[0m [1m[35mf5[1m[0m [1m[35mf5[1m[0m [1m[35mf5[1m[0m [1m[35mf5[1m[0m [1m[35mf5[1m[0m [1m[35mf5[1m[0m [1m[35mf5[1m[0m [1m[35mf5[1m[0m [1m[35mf5[1m[0m [1m[35mf5[1m[0m [1m[35mf5[1m[0m [1m[35mf5[1m[0m [1m[35mf5[1m[0m
+  0x7f86df081900: [1m[35mf5[1m[0m [1m[35mf5[1m[0m [1m[35mf5[1m[0m [1m[35mf5[1m[0m [1m[35mf5[1m[0m [1m[35mf5[1m[0m [1m[35mf5[1m[0m [1m[35mf5[1m[0m [1m[35mf5[1m[0m [1m[35mf5[1m[0m [1m[35mf5[1m[0m [1m[35mf5[1m[0m [1m[35mf5[1m[0m [1m[35mf5[1m[0m [1m[35mf5[1m[0m [1m[35mf5[1m[0m
+  0x7f86df081980: [1m[35mf5[1m[0m [1m[35mf5[1m[0m [1m[35mf5[1m[0m [1m[35mf5[1m[0m [1m[35mf5[1m[0m [1m[35mf5[1m[0m [1m[35mf5[1m[0m [1m[35mf5[1m[0m [1m[35mf5[1m[0m [1m[35mf5[1m[0m [1m[35mf5[1m[0m [1m[35mf5[1m[0m [1m[35mf5[1m[0m [1m[35mf5[1m[0m [1m[35mf5[1m[0m [1m[35mf5[1m[0m
+=&gt;0x7f86df081a00: [1m[31mf1[1m[0m [1m[31mf1[1m[0m [1m[31mf1[1m[0m [1m[31mf1[1m[0m [1m[0m00[1m[0m [1m[0m00[1m[0m [1m[0m00[1m[0m[[1m[31mf2[1m[0m][1m[31mf2[1m[0m [1m[31mf2[1m[0m [1m[31mf2[1m[0m [1m[31mf2[1m[0m [1m[35mf8[1m[0m [1m[35mf8[1m[0m [1m[35mf8[1m[0m [1m[31mf2[1m[0m
+  0x7f86df081a80: [1m[31mf2[1m[0m [1m[31mf2[1m[0m [1m[31mf2[1m[0m [1m[31mf2[1m[0m [1m[0m00[1m[0m [1m[0m00[1m[0m [1m[31mf2[1m[0m [1m[31mf2[1m[0m [1m[0m00[1m[0m [1m[0m00[1m[0m [1m[0m00[1m[0m [1m[0m00[1m[0m [1m[0m00[1m[0m [1m[0m00[1m[0m [1m[0m00[1m[0m [1m[0m00[1m[0m
+  0x7f86df081b00: [1m[0m00[1m[0m [1m[0m00[1m[0m [1m[0m00[1m[0m [1m[31mf2[1m[0m [1m[31mf2[1m[0m [1m[31mf2[1m[0m [1m[31mf2[1m[0m [1m[31mf2[1m[0m [1m[35mf8[1m[0m [1m[31mf3[1m[0m [1m[31mf3[1m[0m [1m[31mf3[1m[0m [1m[0m00[1m[0m [1m[0m00[1m[0m [1m[0m00[1m[0m [1m[0m00[1m[0m
+  0x7f86df081b80: [1m[0m00[1m[0m [1m[0m00[1m[0m [1m[0m00[1m[0m [1m[0m00[1m[0m [1m[0m00[1m[0m [1m[0m00[1m[0m [1m[0m00[1m[0m [1m[0m00[1m[0m [1m[0m00[1m[0m [1m[0m00[1m[0m [1m[0m00[1m[0m [1m[0m00[1m[0m [1m[0m00[1m[0m [1m[0m00[1m[0m [1m[0m00[1m[0m [1m[0m00[1m[0m
+  0x7f86df081c00: [1m[0m00[1m[0m [1m[0m00[1m[0m [1m[0m00[1m[0m [1m[0m00[1m[0m [1m[0m00[1m[0m [1m[0m00[1m[0m [1m[0m00[1m[0m [1m[0m00[1m[0m [1m[0m00[1m[0m [1m[0m00[1m[0m [1m[0m00[1m[0m [1m[0m00[1m[0m [1m[0m00[1m[0m [1m[0m00[1m[0m [1m[0m00[1m[0m [1m[0m00[1m[0m
+  0x7f86df081c80: [1m[0m00[1m[0m [1m[0m00[1m[0m [1m[0m00[1m[0m [1m[0m00[1m[0m [1m[0m00[1m[0m [1m[0m00[1m[0m [1m[0m00[1m[0m [1m[0m00[1m[0m [1m[0m00[1m[0m [1m[0m00[1m[0m [1m[0m00[1m[0m [1m[0m00[1m[0m [1m[0m00[1m[0m [1m[0m00[1m[0m [1m[0m00[1m[0m [1m[0m00[1m[0m
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           [1m[0m00[1m[0m
+  Partially addressable: [1m[0m01[1m[0m [1m[0m02[1m[0m [1m[0m03[1m[0m [1m[0m04[1m[0m [1m[0m05[1m[0m [1m[0m06[1m[0m [1m[0m07[1m[0m 
+  Heap left redzone:       [1m[31mfa[1m[0m
+  Freed heap region:       [1m[35mfd[1m[0m
+  Stack left redzone:      [1m[31mf1[1m[0m
+  Stack mid redzone:       [1m[31mf2[1m[0m
+  Stack right redzone:     [1m[31mf3[1m[0m
+  Stack after return:      [1m[35mf5[1m[0m
+  Stack use after scope:   [1m[35mf8[1m[0m
+  Global redzone:          [1m[31mf9[1m[0m
+  Global init order:       [1m[36mf6[1m[0m
+  Poisoned by user:        [1m[34mf7[1m[0m
+  Container overflow:      [1m[34mfc[1m[0m
+  Array cookie:            [1m[31mac[1m[0m
+  Intra object redzone:    [1m[33mbb[1m[0m
+  ASan internal:           [1m[33mfe[1m[0m
+  Left alloca redzone:     [1m[34mca[1m[0m
+  Right alloca redzone:    [1m[34mcb[1m[0m
+==16==ABORTING
+MS: 4 ShuffleBytes-ShuffleBytes-ShuffleBytes-InsertRepeatedBytes-; base unit: 52c0b9f2d58dcafc7450429f37a9116a8a1904ef
+0xa,0x28,0x28,0x28,0x28,0x28,0x28,0x28,0x28,0x28,0x28,0x28,0x28,0x28,0x28,0x28,0x28,0x28,0x28,0x28,0x28,0x28,0x28,0x28,0x28,0x28,0x28,0x28,0x28,0x28,0x28,0x28,0x28,0x28,0x28,0x66,0x66,0x66,0x66,0x66,0x66,0x66,0x66,0x66,0x66,0x66,0x66,0x66,0x66,0x66,0x66,0x66,0x66,0x66,0x66,0x66,0x66,0x66,0x66,0x66,0x66,0x66,0x66,0x28,0x28,0x28,0x28,0x28,0x28,0x28,
+\012((((((((((((((((((((((((((((((((((ffffffffffffffffffffffffffff(((((((
+artifact_prefix=&#39;./&#39;; Test unit written to ./crash-596249fa34b957c140a71da12f1a5874ebd26768
+Base64: CigoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKChmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmKCgoKCgoKA==
+stat::number_of_executed_units: 18
+stat::average_exec_per_sec:     0
+stat::new_units_added:          5
+stat::slowest_unit_time_sec:    0
+stat::peak_rss_mb:              38
+
+</pre>
+
+
+</body>

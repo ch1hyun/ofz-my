@@ -1,0 +1,1278 @@
+<!doctype html>
+
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Experiment results</title>
+<style>
+* {
+    box-sizing: border-box;
+}
+
+html {
+    line-height: 1.15;
+}
+
+body {
+    font-family: sans-serif;
+    font-size: 16px;
+}
+
+table {
+    border-collapse: collapse;
+    border-spacing: 0;
+}
+
+td, th {
+    border-right: 1px #dedede solid;
+    border-bottom: 1px #dedede solid;
+    padding: 5px;
+    text-align: left;
+}
+td:first-child, th:first-child {
+    border-left: 1px #dedede solid;
+}
+th {
+    border-top: 1px #dedede solid;
+}
+
+tbody tr:nth-child(odd) {
+    background-color: #f4f5ff;
+}
+</style>
+<body>
+    LLM: 
+    
+<h1>output-xpdf-_zn3gfx14opsetextgstateep6objecti / 02</h1>
+Bug: False
+<br>
+Crash reason: -
+<br>
+<br>
+
+<h2>Triage</h2>
+<pre>
+
+</pre>
+<br>
+
+
+
+
+
+<h3>Final code</h3>
+
+<pre>
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+#include &lt;cstddef&gt;
+#include &lt;cstdint&gt;
+#include &lt;cstdlib&gt;
+#include &lt;memory&gt;
+#include &lt;mutex&gt;
+
+#include &#34;Dict.h&#34;
+#include &#34;Error.h&#34;
+#include &#34;Gfx.h&#34;
+#include &#34;GlobalParams.h&#34;
+#include &#34;Object.h&#34;
+#include &#34;PDFDoc.h&#34;
+#include &#34;Stream.h&#34;
+#include &#34;/src/xpdf-4.05/xpdf/Stream.h&#34;
+#include &#34;Function.h&#34;
+
+std::unique_ptr&lt;GlobalParams&gt; globalParams;
+std::once_flag flag;
+Function* function;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
+  FuzzedDataProvider stream(data, size);
+  std::call_once(
+      flag,
+      []() { globalParams = std::make_unique&lt;GlobalParams&gt;(nullptr); });
+
+  Object obj;
+  GString* gstring = new GString(stream.ConsumeBytesAsString(1).c_str());
+  obj.initString(gstring);
+  const Object objArr[] = {obj};
+  const int numArgs = sizeof(objArr) / sizeof(objArr[0]);  
+  if (numArgs &lt; 1) {
+    return 0;
+  }
+
+  std::string fileName = stream.ConsumeRemainingBytesAsString();
+  GString* gFileName = new GString(fileName.c_str());
+  FILE* file = fopen(fileName.c_str(), &#34;rb&#34;);
+  BaseStream* docStream = new FileStream(file, 0, false, 0, false);
+  PDFDoc doc(docStream, nullptr, nullptr, nullptr);
+                    
+  Object object;
+  object.initName(&#34;test&#34;);
+  OutputDev* outputDev = nullptr;
+  auto gfx = std::unique_ptr&lt;Gfx&gt;(new Gfx(&amp;doc, outputDev, nullptr, &amp;objArr, numArgs, nullptr, nullptr));
+  gfx-&gt;opSetExtGState(&amp;object, numArgs);
+
+  return 0;
+}
+</pre>
+
+
+<h3>Fixer prompt #1</h3>
+<pre>
+
+Given the following C++ fuzz harness and its build error message, fix the code to make it build for fuzzing.
+
+If there is undeclared identifier or unknown type name error, fix it by finding and including the related libraries.
+
+MUST RETURN THE FULL CODE, INCLUDING UNCHANGED PARTS.
+
+Below is the code needs to be built:
+&lt;code&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+#include &lt;cstddef&gt;
+#include &lt;cstdint&gt;
+#include &lt;cstdlib&gt;
+
+#include &#34;Dict.h&#34;
+#include &#34;Error.h&#34;
+#include &#34;Gfx.h&#34;
+#include &#34;GlobalParams.h&#34;
+#include &#34;Object.h&#34;
+#include &#34;PDFDoc.h&#34;
+#include &#34;Stream.h&#34;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
+  FuzzedDataProvider stream(data, size);
+  std::static std::unique_ptr&lt;GlobalParams&gt; globalParams;
+  std::static std::once_flag flag;
+  std::call_once(
+      flag,
+      []() { globalParams = std::make_unique&lt;GlobalParams&gt;(nullptr); });
+
+  const auto obj = Object::initWithGhostscript(stream.ConsumeBytesAsString(1).c_str());
+  const Object objArr[] = {obj};
+  const int numArgs = sizeof(objArr) / sizeof(objArr[0]);  
+  if (numArgs &lt; 1) {
+    return 0;
+  }
+
+  std::string fileName = stream.ConsumeRemainingBytesAsString();
+  std::static PDFDoc doc(readNonSeekableStream(new MemStream(strdup(fileName.c_str()), 0, fileName.size(),
+                    std::make_shared&lt;Object&gt;(strObj(fileName))), nullptr, nullptr);
+                    
+  Object object;
+  object.initName(&#34;test&#34;);
+  auto gfx = std::unique_ptr&lt;Gfx&gt;(new Gfx(doc, function, &amp;objArr, numArgs));
+  gfx-&gt;opSetExtGState(&amp;object, numArgs);
+
+  return 0;
+}
+&lt;/code&gt;
+
+Below is the error to fix:
+The code has the following build issues:
+&lt;error&gt;
+In file included from fuzz_JBIG2.cc:7:
+In file included from ../xpdf/Dict.h:17:
+../xpdf/Object.h:251:16: error: member access into incomplete type &#39;Dict&#39;
+  251 |   { return dict-&gt;getLength(); }
+      |                ^
+../xpdf/Object.h:26:7: note: forward declaration of &#39;Dict&#39;
+   26 | class Dict;
+      |       ^
+../xpdf/Object.h:254:9: error: member access into incomplete type &#39;Dict&#39;
+  254 |   { dict-&gt;add(key, val); }
+      |         ^
+../xpdf/Object.h:26:7: note: forward declaration of &#39;Dict&#39;
+   26 | class Dict;
+      |       ^
+../xpdf/Object.h:257:16: error: member access into incomplete type &#39;Dict&#39;
+  257 |   { return dict-&gt;is(dictType); }
+      |                ^
+../xpdf/Object.h:26:7: note: forward declaration of &#39;Dict&#39;
+   26 | class Dict;
+      |       ^
+../xpdf/Object.h:263:16: error: member access into incomplete type &#39;Dict&#39;
+  263 |   { return dict-&gt;lookup(key, obj, recursion); }
+      |                ^
+../xpdf/Object.h:26:7: note: forward declaration of &#39;Dict&#39;
+   26 | class Dict;
+      |       ^
+../xpdf/Object.h:266:16: error: member access into incomplete type &#39;Dict&#39;
+  266 |   { return dict-&gt;lookupNF(key, obj); }
+      |                ^
+../xpdf/Object.h:26:7: note: forward declaration of &#39;Dict&#39;
+   26 | class Dict;
+      |       ^
+../xpdf/Object.h:269:16: error: member access into incomplete type &#39;Dict&#39;
+  269 |   { return dict-&gt;getKey(i); }
+      |                ^
+../xpdf/Object.h:26:7: note: forward declaration of &#39;Dict&#39;
+   26 | class Dict;
+      |       ^
+../xpdf/Object.h:272:16: error: member access into incomplete type &#39;Dict&#39;
+  272 |   { return dict-&gt;getVal(i, obj); }
+      |                ^
+../xpdf/Object.h:26:7: note: forward declaration of &#39;Dict&#39;
+   26 | class Dict;
+      |       ^
+../xpdf/Object.h:275:16: error: member access into incomplete type &#39;Dict&#39;
+  275 |   { return dict-&gt;getValNF(i, obj); }
+      |                ^
+../xpdf/Object.h:26:7: note: forward declaration of &#39;Dict&#39;
+   26 | class Dict;
+      |       ^
+../xpdf/Object.h:284:29: error: member access into incomplete type &#39;Dict&#39;
+  284 |   { return stream-&gt;getDict()-&gt;is(dictType); }
+      |                             ^
+../xpdf/Object.h:26:7: note: forward declaration of &#39;Dict&#39;
+   26 | class Dict;
+      |       ^
+fuzz_JBIG2.cc:17:8: error: expected unqualified-id
+   17 |   std::static std::unique_ptr&lt;GlobalParams&gt; globalParams;
+      |        ^
+fuzz_JBIG2.cc:18:8: error: expected unqualified-id
+   18 |   std::static std::once_flag flag;
+      |        ^
+fuzz_JBIG2.cc:21:29: error: assigning to &#39;GlobalParams *&#39; from incompatible type &#39;typename __unique_if&lt;GlobalParams&gt;::__unique_single&#39; (aka &#39;unique_ptr&lt;GlobalParams&gt;&#39;)
+   21 |       []() { globalParams = std::make_unique&lt;GlobalParams&gt;(nullptr); });
+      |                             ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+fuzz_JBIG2.cc:20:7: error: use of undeclared identifier &#39;flag&#39;
+   20 |       flag,
+      |       ^
+fuzz_JBIG2.cc:23:28: error: no member named &#39;initWithGhostscript&#39; in &#39;Object&#39;
+   23 |   const auto obj = Object::initWithGhostscript(stream.ConsumeBytesAsString(1).c_str());
+      |                    ~~~~~~~~^
+fuzz_JBIG2.cc:31:8: error: expected unqualified-id
+   31 |   std::static PDFDoc doc(readNonSeekableStream(new MemStream(strdup(fileName.c_str()), 0, fileName.size(),
+      |        ^
+&lt;/error&gt;
+
+
+
+
+Fix code:
+1. Consider possible solutions for the issues listed above.
+2. Choose a solution that can maximize fuzzing result, which is utilizing the function under test and feeding it not null input.
+3. Apply the solutions to the original code.
+It&#39;s important to show the complete code, not only the fixed line.
+&lt;solution&gt;
+</pre>
+
+
+
+<h3>Code #1</h3>
+
+<pre>
+&lt;code&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+#include &lt;cstddef&gt;
+#include &lt;cstdint&gt;
+#include &lt;cstdlib&gt;
+#include &lt;memory&gt;
+#include &lt;mutex&gt;
+
+#include &#34;Dict.h&#34;
+#include &#34;Error.h&#34;
+#include &#34;Gfx.h&#34;
+#include &#34;GlobalParams.h&#34;
+#include &#34;Object.h&#34;
+#include &#34;PDFDoc.h&#34;
+#include &#34;Stream.h&#34;
+
+std::unique_ptr&lt;GlobalParams&gt; globalParams;
+std::once_flag flag;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
+  FuzzedDataProvider stream(data, size);
+  std::call_once(
+      flag,
+      []() { globalParams = std::make_unique&lt;GlobalParams&gt;(nullptr); });
+
+  const auto obj = Object::init(stream.ConsumeBytesAsString(1).c_str());
+  const Object objArr[] = {obj};
+  const int numArgs = sizeof(objArr) / sizeof(objArr[0]);  
+  if (numArgs &lt; 1) {
+    return 0;
+  }
+
+  std::string fileName = stream.ConsumeRemainingBytesAsString();
+  PDFDoc doc(readNonSeekableStream(new MemStream(strdup(fileName.c_str()), 0, fileName.size(),
+                    std::make_shared&lt;Object&gt;(strObj(fileName))), nullptr, nullptr);
+                    
+  Object object;
+  object.initName(&#34;test&#34;);
+  auto gfx = std::unique_ptr&lt;Gfx&gt;(new Gfx(doc, function, &amp;objArr, numArgs));
+  gfx-&gt;opSetExtGState(&amp;object, numArgs);
+
+  return 0;
+}
+&lt;/code&gt;
+&lt;solution&gt;
+</pre>
+
+
+<h3>Fixer prompt #2</h3>
+<pre>
+
+Given the following C++ fuzz harness and its build error message, fix the code to make it build for fuzzing.
+
+If there is undeclared identifier or unknown type name error, fix it by finding and including the related libraries.
+
+MUST RETURN THE FULL CODE, INCLUDING UNCHANGED PARTS.
+
+Below is the code needs to be built:
+&lt;code&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+#include &lt;cstddef&gt;
+#include &lt;cstdint&gt;
+#include &lt;cstdlib&gt;
+#include &lt;memory&gt;
+#include &lt;mutex&gt;
+
+#include &#34;Dict.h&#34;
+#include &#34;Error.h&#34;
+#include &#34;Gfx.h&#34;
+#include &#34;GlobalParams.h&#34;
+#include &#34;Object.h&#34;
+#include &#34;PDFDoc.h&#34;
+#include &#34;Stream.h&#34;
+
+std::unique_ptr&lt;GlobalParams&gt; globalParams;
+std::once_flag flag;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
+  FuzzedDataProvider stream(data, size);
+  std::call_once(
+      flag,
+      []() { globalParams = std::make_unique&lt;GlobalParams&gt;(nullptr); });
+
+  const auto obj = Object::init(stream.ConsumeBytesAsString(1).c_str());
+  const Object objArr[] = {obj};
+  const int numArgs = sizeof(objArr) / sizeof(objArr[0]);  
+  if (numArgs &lt; 1) {
+    return 0;
+  }
+
+  std::string fileName = stream.ConsumeRemainingBytesAsString();
+  PDFDoc doc(readNonSeekableStream(new MemStream(strdup(fileName.c_str()), 0, fileName.size(),
+                    std::make_shared&lt;Object&gt;(strObj(fileName))), nullptr, nullptr);
+                    
+  Object object;
+  object.initName(&#34;test&#34;);
+  auto gfx = std::unique_ptr&lt;Gfx&gt;(new Gfx(doc, function, &amp;objArr, numArgs));
+  gfx-&gt;opSetExtGState(&amp;object, numArgs);
+
+  return 0;
+}
+&lt;/code&gt;
+
+Below is the error to fix:
+The code has the following build issues:
+&lt;error&gt;
+In file included from fuzz_JBIG2.cc:9:
+In file included from ../xpdf/Dict.h:17:
+../xpdf/Object.h:251:16: error: member access into incomplete type &#39;Dict&#39;
+  251 |   { return dict-&gt;getLength(); }
+      |                ^
+../xpdf/Object.h:26:7: note: forward declaration of &#39;Dict&#39;
+   26 | class Dict;
+      |       ^
+../xpdf/Object.h:254:9: error: member access into incomplete type &#39;Dict&#39;
+  254 |   { dict-&gt;add(key, val); }
+      |         ^
+../xpdf/Object.h:26:7: note: forward declaration of &#39;Dict&#39;
+   26 | class Dict;
+      |       ^
+../xpdf/Object.h:257:16: error: member access into incomplete type &#39;Dict&#39;
+  257 |   { return dict-&gt;is(dictType); }
+      |                ^
+../xpdf/Object.h:26:7: note: forward declaration of &#39;Dict&#39;
+   26 | class Dict;
+      |       ^
+../xpdf/Object.h:263:16: error: member access into incomplete type &#39;Dict&#39;
+  263 |   { return dict-&gt;lookup(key, obj, recursion); }
+      |                ^
+../xpdf/Object.h:26:7: note: forward declaration of &#39;Dict&#39;
+   26 | class Dict;
+      |       ^
+../xpdf/Object.h:266:16: error: member access into incomplete type &#39;Dict&#39;
+  266 |   { return dict-&gt;lookupNF(key, obj); }
+      |                ^
+../xpdf/Object.h:26:7: note: forward declaration of &#39;Dict&#39;
+   26 | class Dict;
+      |       ^
+../xpdf/Object.h:269:16: error: member access into incomplete type &#39;Dict&#39;
+  269 |   { return dict-&gt;getKey(i); }
+      |                ^
+../xpdf/Object.h:26:7: note: forward declaration of &#39;Dict&#39;
+   26 | class Dict;
+      |       ^
+../xpdf/Object.h:272:16: error: member access into incomplete type &#39;Dict&#39;
+  272 |   { return dict-&gt;getVal(i, obj); }
+      |                ^
+../xpdf/Object.h:26:7: note: forward declaration of &#39;Dict&#39;
+   26 | class Dict;
+      |       ^
+../xpdf/Object.h:275:16: error: member access into incomplete type &#39;Dict&#39;
+  275 |   { return dict-&gt;getValNF(i, obj); }
+      |                ^
+../xpdf/Object.h:26:7: note: forward declaration of &#39;Dict&#39;
+   26 | class Dict;
+      |       ^
+../xpdf/Object.h:284:29: error: member access into incomplete type &#39;Dict&#39;
+  284 |   { return stream-&gt;getDict()-&gt;is(dictType); }
+      |                             ^
+../xpdf/Object.h:26:7: note: forward declaration of &#39;Dict&#39;
+   26 | class Dict;
+      |       ^
+fuzz_JBIG2.cc:17:31: error: redefinition of &#39;globalParams&#39; with a different type: &#39;std::unique_ptr&lt;GlobalParams&gt;&#39; vs &#39;GlobalParams *&#39;
+   17 | std::unique_ptr&lt;GlobalParams&gt; globalParams;
+      |                               ^
+../xpdf/GlobalParams.h:43:22: note: previous declaration is here
+   43 | extern GlobalParams *globalParams;
+      |                      ^
+fuzz_JBIG2.cc:24:29: error: assigning to &#39;GlobalParams *&#39; from incompatible type &#39;typename __unique_if&lt;GlobalParams&gt;::__unique_single&#39; (aka &#39;unique_ptr&lt;GlobalParams&gt;&#39;)
+   24 |       []() { globalParams = std::make_unique&lt;GlobalParams&gt;(nullptr); });
+      |                             ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+fuzz_JBIG2.cc:26:28: error: no member named &#39;init&#39; in &#39;Object&#39;
+   26 |   const auto obj = Object::init(stream.ConsumeBytesAsString(1).c_str());
+      |                    ~~~~~~~~^
+fuzz_JBIG2.cc:26:28: error: &#39;intg&#39; is a private member of &#39;Object&#39;
+../xpdf/Object.h:204:9: note: declared private here
+  204 |     int intg;                   //   integer
+      |         ^
+fuzz_JBIG2.cc:35:46: error: use of undeclared identifier &#39;strObj&#39;
+   35 |                     std::make_shared&lt;Object&gt;(strObj(fileName))), nullptr, nullptr);
+      |                                              ^
+fuzz_JBIG2.cc:34:14: error: use of undeclared identifier &#39;readNonSeekableStream&#39;
+   34 |   PDFDoc doc(readNonSeekableStream(new MemStream(strdup(fileName.c_str()), 0, fileName.size(),
+      |              ^
+fuzz_JBIG2.cc:35:83: error: expected &#39;)&#39;
+   35 |                     std::make_shared&lt;Object&gt;(strObj(fileName))), nullptr, nullptr);
+      |                                                                                   ^
+fuzz_JBIG2.cc:34:13: note: to match this &#39;(&#39;
+   34 |   PDFDoc doc(readNonSeekableStream(new MemStream(strdup(fileName.c_str()), 0, fileName.size(),
+      |             ^
+fuzz_JBIG2.cc:39:48: error: use of undeclared identifier &#39;function&#39;
+   39 |   auto gfx = std::unique_ptr&lt;Gfx&gt;(new Gfx(doc, function, &amp;objArr, numArgs));
+      |                                                ^
+&lt;/error&gt;
+
+
+
+
+Fix code:
+1. Consider possible solutions for the issues listed above.
+2. Choose a solution that can maximize fuzzing result, which is utilizing the function under test and feeding it not null input.
+3. Apply the solutions to the original code.
+It&#39;s important to show the complete code, not only the fixed line.
+&lt;solution&gt;
+</pre>
+
+
+
+<h3>Code #2</h3>
+
+<pre>
+&lt;code&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+#include &lt;cstddef&gt;
+#include &lt;cstdint&gt;
+#include &lt;cstdlib&gt;
+#include &lt;memory&gt;
+#include &lt;mutex&gt;
+
+#include &#34;Dict.h&#34;
+#include &#34;Error.h&#34;
+#include &#34;Gfx.h&#34;
+#include &#34;GlobalParams.h&#34;
+#include &#34;Object.h&#34;
+#include &#34;PDFDoc.h&#34;
+#include &#34;Stream.h&#34;
+#include &#34;MemStream.h&#34;
+#include &#34;Function.h&#34;
+
+std::unique_ptr&lt;GlobalParams&gt; globalParams;
+std::once_flag flag;
+Function* function;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
+  FuzzedDataProvider stream(data, size);
+  std::call_once(
+      flag,
+      []() { globalParams = std::make_unique&lt;GlobalParams&gt;(nullptr); });
+
+  Object obj;
+  obj.initString(stream.ConsumeBytesAsString(1).c_str());
+  const Object objArr[] = {obj};
+  const int numArgs = sizeof(objArr) / sizeof(objArr[0]);  
+  if (numArgs &lt; 1) {
+    return 0;
+  }
+
+  std::string fileName = stream.ConsumeRemainingBytesAsString();
+  PDFDoc doc(new MemStream(strdup(fileName.c_str()), 0, fileName.size(),
+                    std::make_shared&lt;Object&gt;(obj)), nullptr, nullptr);
+                    
+  Object object;
+  object.initName(&#34;test&#34;);
+  auto gfx = std::unique_ptr&lt;Gfx&gt;(new Gfx(&amp;doc, function, &amp;objArr, numArgs));
+  gfx-&gt;opSetExtGState(&amp;object, numArgs);
+
+  return 0;
+}
+&lt;/code&gt;
+</pre>
+
+
+<h3>Fixer prompt #3</h3>
+<pre>
+
+Given the following C++ fuzz harness and its build error message, fix the code to make it build for fuzzing.
+
+If there is undeclared identifier or unknown type name error, fix it by finding and including the related libraries.
+
+MUST RETURN THE FULL CODE, INCLUDING UNCHANGED PARTS.
+
+Below is the code needs to be built:
+&lt;code&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+#include &lt;cstddef&gt;
+#include &lt;cstdint&gt;
+#include &lt;cstdlib&gt;
+#include &lt;memory&gt;
+#include &lt;mutex&gt;
+
+#include &#34;Dict.h&#34;
+#include &#34;Error.h&#34;
+#include &#34;Gfx.h&#34;
+#include &#34;GlobalParams.h&#34;
+#include &#34;Object.h&#34;
+#include &#34;PDFDoc.h&#34;
+#include &#34;Stream.h&#34;
+#include &#34;MemStream.h&#34;
+#include &#34;Function.h&#34;
+
+std::unique_ptr&lt;GlobalParams&gt; globalParams;
+std::once_flag flag;
+Function* function;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
+  FuzzedDataProvider stream(data, size);
+  std::call_once(
+      flag,
+      []() { globalParams = std::make_unique&lt;GlobalParams&gt;(nullptr); });
+
+  Object obj;
+  obj.initString(stream.ConsumeBytesAsString(1).c_str());
+  const Object objArr[] = {obj};
+  const int numArgs = sizeof(objArr) / sizeof(objArr[0]);  
+  if (numArgs &lt; 1) {
+    return 0;
+  }
+
+  std::string fileName = stream.ConsumeRemainingBytesAsString();
+  PDFDoc doc(new MemStream(strdup(fileName.c_str()), 0, fileName.size(),
+                    std::make_shared&lt;Object&gt;(obj)), nullptr, nullptr);
+                    
+  Object object;
+  object.initName(&#34;test&#34;);
+  auto gfx = std::unique_ptr&lt;Gfx&gt;(new Gfx(&amp;doc, function, &amp;objArr, numArgs));
+  gfx-&gt;opSetExtGState(&amp;object, numArgs);
+
+  return 0;
+}
+&lt;/code&gt;
+
+Below is the error to fix:
+The code has the following build issues:
+&lt;error&gt;
+In file included from fuzz_JBIG2.cc:9:
+In file included from ../xpdf/Dict.h:17:
+../xpdf/Object.h:251:16: error: member access into incomplete type &#39;Dict&#39;
+  251 |   { return dict-&gt;getLength(); }
+      |                ^
+../xpdf/Object.h:26:7: note: forward declaration of &#39;Dict&#39;
+   26 | class Dict;
+      |       ^
+../xpdf/Object.h:254:9: error: member access into incomplete type &#39;Dict&#39;
+  254 |   { dict-&gt;add(key, val); }
+      |         ^
+../xpdf/Object.h:26:7: note: forward declaration of &#39;Dict&#39;
+   26 | class Dict;
+      |       ^
+../xpdf/Object.h:257:16: error: member access into incomplete type &#39;Dict&#39;
+  257 |   { return dict-&gt;is(dictType); }
+      |                ^
+../xpdf/Object.h:26:7: note: forward declaration of &#39;Dict&#39;
+   26 | class Dict;
+      |       ^
+../xpdf/Object.h:263:16: error: member access into incomplete type &#39;Dict&#39;
+  263 |   { return dict-&gt;lookup(key, obj, recursion); }
+      |                ^
+../xpdf/Object.h:26:7: note: forward declaration of &#39;Dict&#39;
+   26 | class Dict;
+      |       ^
+../xpdf/Object.h:266:16: error: member access into incomplete type &#39;Dict&#39;
+  266 |   { return dict-&gt;lookupNF(key, obj); }
+      |                ^
+../xpdf/Object.h:26:7: note: forward declaration of &#39;Dict&#39;
+   26 | class Dict;
+      |       ^
+../xpdf/Object.h:269:16: error: member access into incomplete type &#39;Dict&#39;
+  269 |   { return dict-&gt;getKey(i); }
+      |                ^
+../xpdf/Object.h:26:7: note: forward declaration of &#39;Dict&#39;
+   26 | class Dict;
+      |       ^
+../xpdf/Object.h:272:16: error: member access into incomplete type &#39;Dict&#39;
+  272 |   { return dict-&gt;getVal(i, obj); }
+      |                ^
+../xpdf/Object.h:26:7: note: forward declaration of &#39;Dict&#39;
+   26 | class Dict;
+      |       ^
+../xpdf/Object.h:275:16: error: member access into incomplete type &#39;Dict&#39;
+  275 |   { return dict-&gt;getValNF(i, obj); }
+      |                ^
+../xpdf/Object.h:26:7: note: forward declaration of &#39;Dict&#39;
+   26 | class Dict;
+      |       ^
+../xpdf/Object.h:284:29: error: member access into incomplete type &#39;Dict&#39;
+  284 |   { return stream-&gt;getDict()-&gt;is(dictType); }
+      |                             ^
+../xpdf/Object.h:26:7: note: forward declaration of &#39;Dict&#39;
+   26 | class Dict;
+      |       ^
+fuzz_JBIG2.cc:16:10: fatal error: &#39;MemStream.h&#39; file not found
+   16 | #include &#34;MemStream.h&#34;
+      |          ^~~~~~~~~~~~~
+&lt;/error&gt;
+
+
+Below are instructions to assist you in fixing the error.
+&lt;instruction&gt;
+IMPORTANT: DO NOT include the header file MemStream.h in the generated fuzz target again, the file does not exist in the project-under-test.
+If the non-existent &lt;filepath&gt;MemStream.h&lt;/filepath&gt; was included for the declaration of &lt;code&gt;void Gfx::opSetExtGState(Object *, int)&lt;/code&gt;, you must replace it with the EXACT path of the actual file &lt;filepath&gt;#include &#34;/src/xpdf-4.05/xpdf/Gfx.h&#34;&lt;/filepath&gt;. For example:
+&lt;code&gt;
+#include &#34;#include &#34;/src/xpdf-4.05/xpdf/Gfx.h&#34;&#34;
+&lt;/code&gt;
+Otherwise, consider replacing it with some of the following statementsthat may be correct alternatives:
+&lt;code&gt;
+#include &#34;/src/xpdf-4.05/xpdf/Stream.h&#34;
+#include &#34;/src/xpdf-4.05/xpdf/JPXStream.h&#34;
+#include &#34;/src/xpdf-4.05/xpdf/JBIG2Stream.h&#34;
+#include &#34;/src/xpdf-4.05/xpdf/Stream-CCITT.h&#34;
+#include &#34;/src/freetype/src/psaux/psread.h&#34;
+&lt;/code&gt;
+
+&lt;/instruction&gt;
+
+Fix code:
+1. Consider possible solutions for the issues listed above.
+2. Choose a solution that can maximize fuzzing result, which is utilizing the function under test and feeding it not null input.
+3. Apply the solutions to the original code.
+It&#39;s important to show the complete code, not only the fixed line.
+&lt;solution&gt;
+</pre>
+
+
+
+<h3>Code #3</h3>
+
+<pre>
+&lt;code&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+#include &lt;cstddef&gt;
+#include &lt;cstdint&gt;
+#include &lt;cstdlib&gt;
+#include &lt;memory&gt;
+#include &lt;mutex&gt;
+
+#include &#34;Dict.h&#34;
+#include &#34;Error.h&#34;
+#include &#34;Gfx.h&#34;
+#include &#34;GlobalParams.h&#34;
+#include &#34;Object.h&#34;
+#include &#34;PDFDoc.h&#34;
+#include &#34;Stream.h&#34;
+#include &#34;/src/xpdf-4.05/xpdf/Stream.h&#34;
+#include &#34;Function.h&#34;
+
+std::unique_ptr&lt;GlobalParams&gt; globalParams;
+std::once_flag flag;
+Function* function;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
+  FuzzedDataProvider stream(data, size);
+  std::call_once(
+      flag,
+      []() { globalParams = std::make_unique&lt;GlobalParams&gt;(nullptr); });
+
+  Object obj;
+  obj.initString(stream.ConsumeBytesAsString(1).c_str());
+  const Object objArr[] = {obj};
+  const int numArgs = sizeof(objArr) / sizeof(objArr[0]);  
+  if (numArgs &lt; 1) {
+    return 0;
+  }
+
+  std::string fileName = stream.ConsumeRemainingBytesAsString();
+  Stream* docStream = new Stream(strdup(fileName.c_str()), 0, fileName.size(),
+                    std::make_shared&lt;Object&gt;(obj));
+  PDFDoc doc(docStream, nullptr, nullptr);
+                    
+  Object object;
+  object.initName(&#34;test&#34;);
+  auto gfx = std::unique_ptr&lt;Gfx&gt;(new Gfx(&amp;doc, function, &amp;objArr, numArgs));
+  gfx-&gt;opSetExtGState(&amp;object, numArgs);
+
+  return 0;
+}
+&lt;/code&gt;
+</pre>
+
+
+<h3>Fixer prompt #4</h3>
+<pre>
+
+Given the following C++ fuzz harness and its build error message, fix the code to make it build for fuzzing.
+
+If there is undeclared identifier or unknown type name error, fix it by finding and including the related libraries.
+
+MUST RETURN THE FULL CODE, INCLUDING UNCHANGED PARTS.
+
+Below is the code needs to be built:
+&lt;code&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+#include &lt;cstddef&gt;
+#include &lt;cstdint&gt;
+#include &lt;cstdlib&gt;
+#include &lt;memory&gt;
+#include &lt;mutex&gt;
+
+#include &#34;Dict.h&#34;
+#include &#34;Error.h&#34;
+#include &#34;Gfx.h&#34;
+#include &#34;GlobalParams.h&#34;
+#include &#34;Object.h&#34;
+#include &#34;PDFDoc.h&#34;
+#include &#34;Stream.h&#34;
+#include &#34;/src/xpdf-4.05/xpdf/Stream.h&#34;
+#include &#34;Function.h&#34;
+
+std::unique_ptr&lt;GlobalParams&gt; globalParams;
+std::once_flag flag;
+Function* function;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
+  FuzzedDataProvider stream(data, size);
+  std::call_once(
+      flag,
+      []() { globalParams = std::make_unique&lt;GlobalParams&gt;(nullptr); });
+
+  Object obj;
+  obj.initString(stream.ConsumeBytesAsString(1).c_str());
+  const Object objArr[] = {obj};
+  const int numArgs = sizeof(objArr) / sizeof(objArr[0]);  
+  if (numArgs &lt; 1) {
+    return 0;
+  }
+
+  std::string fileName = stream.ConsumeRemainingBytesAsString();
+  Stream* docStream = new Stream(strdup(fileName.c_str()), 0, fileName.size(),
+                    std::make_shared&lt;Object&gt;(obj));
+  PDFDoc doc(docStream, nullptr, nullptr);
+                    
+  Object object;
+  object.initName(&#34;test&#34;);
+  auto gfx = std::unique_ptr&lt;Gfx&gt;(new Gfx(&amp;doc, function, &amp;objArr, numArgs));
+  gfx-&gt;opSetExtGState(&amp;object, numArgs);
+
+  return 0;
+}
+&lt;/code&gt;
+
+Below is the error to fix:
+The code has the following build issues:
+&lt;error&gt;
+In file included from fuzz_JBIG2.cc:9:
+In file included from ../xpdf/Dict.h:17:
+../xpdf/Object.h:251:16: error: member access into incomplete type &#39;Dict&#39;
+  251 |   { return dict-&gt;getLength(); }
+      |                ^
+../xpdf/Object.h:26:7: note: forward declaration of &#39;Dict&#39;
+   26 | class Dict;
+      |       ^
+../xpdf/Object.h:254:9: error: member access into incomplete type &#39;Dict&#39;
+  254 |   { dict-&gt;add(key, val); }
+      |         ^
+../xpdf/Object.h:26:7: note: forward declaration of &#39;Dict&#39;
+   26 | class Dict;
+      |       ^
+../xpdf/Object.h:257:16: error: member access into incomplete type &#39;Dict&#39;
+  257 |   { return dict-&gt;is(dictType); }
+      |                ^
+../xpdf/Object.h:26:7: note: forward declaration of &#39;Dict&#39;
+   26 | class Dict;
+      |       ^
+../xpdf/Object.h:263:16: error: member access into incomplete type &#39;Dict&#39;
+  263 |   { return dict-&gt;lookup(key, obj, recursion); }
+      |                ^
+../xpdf/Object.h:26:7: note: forward declaration of &#39;Dict&#39;
+   26 | class Dict;
+      |       ^
+../xpdf/Object.h:266:16: error: member access into incomplete type &#39;Dict&#39;
+  266 |   { return dict-&gt;lookupNF(key, obj); }
+      |                ^
+../xpdf/Object.h:26:7: note: forward declaration of &#39;Dict&#39;
+   26 | class Dict;
+      |       ^
+../xpdf/Object.h:269:16: error: member access into incomplete type &#39;Dict&#39;
+  269 |   { return dict-&gt;getKey(i); }
+      |                ^
+../xpdf/Object.h:26:7: note: forward declaration of &#39;Dict&#39;
+   26 | class Dict;
+      |       ^
+../xpdf/Object.h:272:16: error: member access into incomplete type &#39;Dict&#39;
+  272 |   { return dict-&gt;getVal(i, obj); }
+      |                ^
+../xpdf/Object.h:26:7: note: forward declaration of &#39;Dict&#39;
+   26 | class Dict;
+      |       ^
+../xpdf/Object.h:275:16: error: member access into incomplete type &#39;Dict&#39;
+  275 |   { return dict-&gt;getValNF(i, obj); }
+      |                ^
+../xpdf/Object.h:26:7: note: forward declaration of &#39;Dict&#39;
+   26 | class Dict;
+      |       ^
+../xpdf/Object.h:284:29: error: member access into incomplete type &#39;Dict&#39;
+  284 |   { return stream-&gt;getDict()-&gt;is(dictType); }
+      |                             ^
+../xpdf/Object.h:26:7: note: forward declaration of &#39;Dict&#39;
+   26 | class Dict;
+      |       ^
+fuzz_JBIG2.cc:19:31: error: redefinition of &#39;globalParams&#39; with a different type: &#39;std::unique_ptr&lt;GlobalParams&gt;&#39; vs &#39;GlobalParams *&#39;
+   19 | std::unique_ptr&lt;GlobalParams&gt; globalParams;
+      |                               ^
+../xpdf/GlobalParams.h:43:22: note: previous declaration is here
+   43 | extern GlobalParams *globalParams;
+      |                      ^
+fuzz_JBIG2.cc:27:29: error: assigning to &#39;GlobalParams *&#39; from incompatible type &#39;typename __unique_if&lt;GlobalParams&gt;::__unique_single&#39; (aka &#39;unique_ptr&lt;GlobalParams&gt;&#39;)
+   27 |       []() { globalParams = std::make_unique&lt;GlobalParams&gt;(nullptr); });
+      |                             ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+fuzz_JBIG2.cc:30:18: error: cannot initialize a parameter of type &#39;GString *&#39; with an rvalue of type &#39;const value_type *&#39; (aka &#39;const char *&#39;)
+   30 |   obj.initString(stream.ConsumeBytesAsString(1).c_str());
+      |                  ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+../xpdf/Object.h:94:31: note: passing argument to parameter &#39;stringA&#39; here
+   94 |   Object *initString(GString *stringA)
+      |                               ^
+fuzz_JBIG2.cc:38:27: error: allocating an object of abstract class type &#39;Stream&#39;
+   38 |   Stream* docStream = new Stream(strdup(fileName.c_str()), 0, fileName.size(),
+      |                           ^
+../xpdf/Stream.h:72:19: note: unimplemented pure virtual method &#39;copy&#39; in &#39;Stream&#39;
+   72 |   virtual Stream *copy() = 0;
+      |                   ^
+../xpdf/Stream.h:75:22: note: unimplemented pure virtual method &#39;getKind&#39; in &#39;Stream&#39;
+   75 |   virtual StreamKind getKind() = 0;
+      |                      ^
+../xpdf/Stream.h:87:16: note: unimplemented pure virtual method &#39;reset&#39; in &#39;Stream&#39;
+   87 |   virtual void reset() = 0;
+      |                ^
+../xpdf/Stream.h:93:15: note: unimplemented pure virtual method &#39;getChar&#39; in &#39;Stream&#39;
+   93 |   virtual int getChar() = 0;
+      |               ^
+../xpdf/Stream.h:96:15: note: unimplemented pure virtual method &#39;lookChar&#39; in &#39;Stream&#39;
+   96 |   virtual int lookChar() = 0;
+      |               ^
+../xpdf/Stream.h:115:23: note: unimplemented pure virtual method &#39;getPos&#39; in &#39;Stream&#39;
+  115 |   virtual GFileOffset getPos() = 0;
+      |                       ^
+../xpdf/Stream.h:120:16: note: unimplemented pure virtual method &#39;setPos&#39; in &#39;Stream&#39;
+  120 |   virtual void setPos(GFileOffset pos, int dir = 0) = 0;
+      |                ^
+../xpdf/Stream.h:127:17: note: unimplemented pure virtual method &#39;isBinary&#39; in &#39;Stream&#39;
+  127 |   virtual GBool isBinary(GBool last = gTrue) = 0;
+      |                 ^
+../xpdf/Stream.h:134:23: note: unimplemented pure virtual method &#39;getBaseStream&#39; in &#39;Stream&#39;
+  134 |   virtual BaseStream *getBaseStream() = 0;
+      |                       ^
+../xpdf/Stream.h:138:19: note: unimplemented pure virtual method &#39;getUndecodedStream&#39; in &#39;Stream&#39;
+  138 |   virtual Stream *getUndecodedStream() = 0;
+      |                   ^
+../xpdf/Stream.h:141:17: note: unimplemented pure virtual method &#39;getDict&#39; in &#39;Stream&#39;
+  141 |   virtual Dict *getDict() = 0;
+      |                 ^
+fuzz_JBIG2.cc:40:10: error: no matching constructor for initialization of &#39;PDFDoc&#39;
+   40 |   PDFDoc doc(docStream, nullptr, nullptr);
+      |          ^   ~~~~~~~~~~~~~~~~~~~~~~~~~~~
+../xpdf/PDFDoc.h:38:3: note: candidate constructor not viable: no known conversion from &#39;Stream *&#39; to &#39;GString *&#39; for 1st argument
+   38 |   PDFDoc(GString *fileNameA, GString *ownerPassword = NULL,
+      |   ^      ~~~~~~~~~~~~~~~~~~
+../xpdf/PDFDoc.h:48:3: note: candidate constructor not viable: no known conversion from &#39;Stream *&#39; to &#39;char *&#39; for 1st argument
+   48 |   PDFDoc(char *fileNameA, GString *ownerPassword = NULL,
+      |   ^      ~~~~~~~~~~~~~~~
+../xpdf/PDFDoc.h:51:3: note: candidate constructor not viable: cannot convert from base class pointer &#39;Stream *&#39; to derived class pointer &#39;BaseStream *&#39; for 1st argument
+   51 |   PDFDoc(BaseStream *strA, GString *ownerPassword = NULL,
+      |   ^      ~~~~~~~~~~~~~~~~
+../xpdf/PDFDoc.h:35:7: note: candidate constructor (the implicit copy constructor) not viable: requires 1 argument, but 3 were provided
+   35 | class PDFDoc {
+      |       ^~~~~~
+fuzz_JBIG2.cc:44:39: error: no matching constructor for initialization of &#39;Gfx&#39;
+   44 |   auto gfx = std::unique_ptr&lt;Gfx&gt;(new Gfx(&amp;doc, function, &amp;objArr, numArgs));
+      |                                       ^   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+../xpdf/Gfx.h:128:7: note: candidate constructor (the implicit copy constructor) not viable: requires 1 argument, but 4 were provided
+  128 | class Gfx {
+      |       ^~~
+../xpdf/Gfx.h:139:3: note: candidate constructor not viable: requires at least 5 arguments, but 4 were provided
+  139 |   Gfx(PDFDoc *docA, OutputDev *outA, Dict *resDict,
+      |   ^   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  140 |       PDFRectangle *box, PDFRectangle *cropBox,
+      |       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  141 |       GBool (*abortCheckCbkA)(void *data) = NULL,
+      |       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  142 |       void *abortCheckCbkDataA = NULL);
+      |       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+../xpdf/Gfx.h:132:3: note: candidate constructor not viable: requires at least 9 arguments, but 4 were provided
+  132 |   Gfx(PDFDoc *docA, OutputDev *outA, int pageNum, Dict *resDict,
+      |   ^   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  133 |       double hDPI, double vDPI, PDFRectangle *box,
+      |       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  134 |       PDFRectangle *cropBox, int rotate,
+      |       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  135 |       GBool (*abortCheckCbkA)(void *data) = NULL,
+      |       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  136 |       void *abortCheckCbkDataA = NULL);
+      |       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+&lt;/error&gt;
+
+
+
+
+Fix code:
+1. Consider possible solutions for the issues listed above.
+2. Choose a solution that can maximize fuzzing result, which is utilizing the function under test and feeding it not null input.
+3. Apply the solutions to the original code.
+It&#39;s important to show the complete code, not only the fixed line.
+&lt;solution&gt;
+</pre>
+
+
+
+<h3>Code #4</h3>
+
+<pre>
+&lt;code&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+#include &lt;cstddef&gt;
+#include &lt;cstdint&gt;
+#include &lt;cstdlib&gt;
+#include &lt;memory&gt;
+#include &lt;mutex&gt;
+
+#include &#34;Dict.h&#34;
+#include &#34;Error.h&#34;
+#include &#34;Gfx.h&#34;
+#include &#34;GlobalParams.h&#34;
+#include &#34;Object.h&#34;
+#include &#34;PDFDoc.h&#34;
+#include &#34;Stream.h&#34;
+#include &#34;/src/xpdf-4.05/xpdf/Stream.h&#34;
+#include &#34;Function.h&#34;
+
+std::unique_ptr&lt;GlobalParams&gt; globalParams;
+std::once_flag flag;
+Function* function;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
+  FuzzedDataProvider stream(data, size);
+  std::call_once(
+      flag,
+      []() { globalParams = std::make_unique&lt;GlobalParams&gt;(nullptr); });
+
+  Object obj;
+  GString* gstring = new GString(stream.ConsumeBytesAsString(1).c_str());
+  obj.initString(gstring);
+  const Object objArr[] = {obj};
+  const int numArgs = sizeof(objArr) / sizeof(objArr[0]);  
+  if (numArgs &lt; 1) {
+    return 0;
+  }
+
+  std::string fileName = stream.ConsumeRemainingBytesAsString();
+  GString* gFileName = new GString(fileName.c_str());
+  BaseStream* docStream = new FileStream(gFileName, 0, false, 0, false);
+  PDFDoc doc(docStream, nullptr, nullptr, nullptr);
+                    
+  Object object;
+  object.initName(&#34;test&#34;);
+  auto gfx = std::unique_ptr&lt;Gfx&gt;(new Gfx(&amp;doc, function, &amp;objArr, numArgs, nullptr, nullptr));
+  gfx-&gt;opSetExtGState(&amp;object, numArgs);
+
+  return 0;
+}
+&lt;/code&gt;
+</pre>
+
+
+<h3>Fixer prompt #5</h3>
+<pre>
+
+Given the following C++ fuzz harness and its build error message, fix the code to make it build for fuzzing.
+
+If there is undeclared identifier or unknown type name error, fix it by finding and including the related libraries.
+
+MUST RETURN THE FULL CODE, INCLUDING UNCHANGED PARTS.
+
+Below is the code needs to be built:
+&lt;code&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+#include &lt;cstddef&gt;
+#include &lt;cstdint&gt;
+#include &lt;cstdlib&gt;
+#include &lt;memory&gt;
+#include &lt;mutex&gt;
+
+#include &#34;Dict.h&#34;
+#include &#34;Error.h&#34;
+#include &#34;Gfx.h&#34;
+#include &#34;GlobalParams.h&#34;
+#include &#34;Object.h&#34;
+#include &#34;PDFDoc.h&#34;
+#include &#34;Stream.h&#34;
+#include &#34;/src/xpdf-4.05/xpdf/Stream.h&#34;
+#include &#34;Function.h&#34;
+
+std::unique_ptr&lt;GlobalParams&gt; globalParams;
+std::once_flag flag;
+Function* function;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
+  FuzzedDataProvider stream(data, size);
+  std::call_once(
+      flag,
+      []() { globalParams = std::make_unique&lt;GlobalParams&gt;(nullptr); });
+
+  Object obj;
+  GString* gstring = new GString(stream.ConsumeBytesAsString(1).c_str());
+  obj.initString(gstring);
+  const Object objArr[] = {obj};
+  const int numArgs = sizeof(objArr) / sizeof(objArr[0]);  
+  if (numArgs &lt; 1) {
+    return 0;
+  }
+
+  std::string fileName = stream.ConsumeRemainingBytesAsString();
+  GString* gFileName = new GString(fileName.c_str());
+  BaseStream* docStream = new FileStream(gFileName, 0, false, 0, false);
+  PDFDoc doc(docStream, nullptr, nullptr, nullptr);
+                    
+  Object object;
+  object.initName(&#34;test&#34;);
+  auto gfx = std::unique_ptr&lt;Gfx&gt;(new Gfx(&amp;doc, function, &amp;objArr, numArgs, nullptr, nullptr));
+  gfx-&gt;opSetExtGState(&amp;object, numArgs);
+
+  return 0;
+}
+&lt;/code&gt;
+
+Below is the error to fix:
+The code has the following build issues:
+&lt;error&gt;
+In file included from fuzz_JBIG2.cc:9:
+In file included from ../xpdf/Dict.h:17:
+../xpdf/Object.h:251:16: error: member access into incomplete type &#39;Dict&#39;
+  251 |   { return dict-&gt;getLength(); }
+      |                ^
+../xpdf/Object.h:26:7: note: forward declaration of &#39;Dict&#39;
+   26 | class Dict;
+      |       ^
+../xpdf/Object.h:254:9: error: member access into incomplete type &#39;Dict&#39;
+  254 |   { dict-&gt;add(key, val); }
+      |         ^
+../xpdf/Object.h:26:7: note: forward declaration of &#39;Dict&#39;
+   26 | class Dict;
+      |       ^
+../xpdf/Object.h:257:16: error: member access into incomplete type &#39;Dict&#39;
+  257 |   { return dict-&gt;is(dictType); }
+      |                ^
+../xpdf/Object.h:26:7: note: forward declaration of &#39;Dict&#39;
+   26 | class Dict;
+      |       ^
+../xpdf/Object.h:263:16: error: member access into incomplete type &#39;Dict&#39;
+  263 |   { return dict-&gt;lookup(key, obj, recursion); }
+      |                ^
+../xpdf/Object.h:26:7: note: forward declaration of &#39;Dict&#39;
+   26 | class Dict;
+      |       ^
+../xpdf/Object.h:266:16: error: member access into incomplete type &#39;Dict&#39;
+  266 |   { return dict-&gt;lookupNF(key, obj); }
+      |                ^
+../xpdf/Object.h:26:7: note: forward declaration of &#39;Dict&#39;
+   26 | class Dict;
+      |       ^
+../xpdf/Object.h:269:16: error: member access into incomplete type &#39;Dict&#39;
+  269 |   { return dict-&gt;getKey(i); }
+      |                ^
+../xpdf/Object.h:26:7: note: forward declaration of &#39;Dict&#39;
+   26 | class Dict;
+      |       ^
+../xpdf/Object.h:272:16: error: member access into incomplete type &#39;Dict&#39;
+  272 |   { return dict-&gt;getVal(i, obj); }
+      |                ^
+../xpdf/Object.h:26:7: note: forward declaration of &#39;Dict&#39;
+   26 | class Dict;
+      |       ^
+../xpdf/Object.h:275:16: error: member access into incomplete type &#39;Dict&#39;
+  275 |   { return dict-&gt;getValNF(i, obj); }
+      |                ^
+../xpdf/Object.h:26:7: note: forward declaration of &#39;Dict&#39;
+   26 | class Dict;
+      |       ^
+../xpdf/Object.h:284:29: error: member access into incomplete type &#39;Dict&#39;
+  284 |   { return stream-&gt;getDict()-&gt;is(dictType); }
+      |                             ^
+../xpdf/Object.h:26:7: note: forward declaration of &#39;Dict&#39;
+   26 | class Dict;
+      |       ^
+fuzz_JBIG2.cc:19:31: error: redefinition of &#39;globalParams&#39; with a different type: &#39;std::unique_ptr&lt;GlobalParams&gt;&#39; vs &#39;GlobalParams *&#39;
+   19 | std::unique_ptr&lt;GlobalParams&gt; globalParams;
+      |                               ^
+../xpdf/GlobalParams.h:43:22: note: previous declaration is here
+   43 | extern GlobalParams *globalParams;
+      |                      ^
+fuzz_JBIG2.cc:27:29: error: assigning to &#39;GlobalParams *&#39; from incompatible type &#39;typename __unique_if&lt;GlobalParams&gt;::__unique_single&#39; (aka &#39;unique_ptr&lt;GlobalParams&gt;&#39;)
+   27 |       []() { globalParams = std::make_unique&lt;GlobalParams&gt;(nullptr); });
+      |                             ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+fuzz_JBIG2.cc:40:31: error: no matching constructor for initialization of &#39;FileStream&#39;
+   40 |   BaseStream* docStream = new FileStream(gFileName, 0, false, 0, false);
+      |                               ^          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+../xpdf/Stream.h:315:3: note: candidate constructor not viable: no known conversion from &#39;GString *&#39; to &#39;FILE *&#39; (aka &#39;_IO_FILE *&#39;) for 1st argument
+  315 |   FileStream(FILE *fA, GFileOffset startA, GBool limitedA,
+      |   ^          ~~~~~~~~
+../xpdf/Stream.h:335:3: note: candidate constructor not viable: no known conversion from &#39;GString *&#39; to &#39;SharedFile *&#39; for 1st argument
+  335 |   FileStream(SharedFile *fA, GFileOffset startA, GBool limitedA,
+      |   ^          ~~~~~~~~~~~~~~
+../xpdf/Stream.h:312:7: note: candidate constructor (the implicit copy constructor) not viable: requires 1 argument, but 5 were provided
+  312 | class FileStream: public BaseStream {
+      |       ^~~~~~~~~~
+fuzz_JBIG2.cc:45:39: error: no matching constructor for initialization of &#39;Gfx&#39;
+   45 |   auto gfx = std::unique_ptr&lt;Gfx&gt;(new Gfx(&amp;doc, function, &amp;objArr, numArgs, nullptr, nullptr));
+      |                                       ^   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+../xpdf/Gfx.h:139:3: note: candidate constructor not viable: no known conversion from &#39;Function *&#39; to &#39;OutputDev *&#39; for 2nd argument
+  139 |   Gfx(PDFDoc *docA, OutputDev *outA, Dict *resDict,
+      |   ^                 ~~~~~~~~~~~~~~~
+../xpdf/Gfx.h:128:7: note: candidate constructor (the implicit copy constructor) not viable: requires 1 argument, but 6 were provided
+  128 | class Gfx {
+      |       ^~~
+../xpdf/Gfx.h:132:3: note: candidate constructor not viable: requires at least 9 arguments, but 6 were provided
+  132 |   Gfx(PDFDoc *docA, OutputDev *outA, int pageNum, Dict *resDict,
+      |   ^   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  133 |       double hDPI, double vDPI, PDFRectangle *box,
+      |       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  134 |       PDFRectangle *cropBox, int rotate,
+      |       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  135 |       GBool (*abortCheckCbkA)(void *data) = NULL,
+      |       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  136 |       void *abortCheckCbkDataA = NULL);
+      |       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+&lt;/error&gt;
+
+
+
+
+Fix code:
+1. Consider possible solutions for the issues listed above.
+2. Choose a solution that can maximize fuzzing result, which is utilizing the function under test and feeding it not null input.
+3. Apply the solutions to the original code.
+It&#39;s important to show the complete code, not only the fixed line.
+&lt;solution&gt;
+</pre>
+
+
+
+<h3>Code #5</h3>
+
+<pre>
+&lt;code&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+#include &lt;cstddef&gt;
+#include &lt;cstdint&gt;
+#include &lt;cstdlib&gt;
+#include &lt;memory&gt;
+#include &lt;mutex&gt;
+
+#include &#34;Dict.h&#34;
+#include &#34;Error.h&#34;
+#include &#34;Gfx.h&#34;
+#include &#34;GlobalParams.h&#34;
+#include &#34;Object.h&#34;
+#include &#34;PDFDoc.h&#34;
+#include &#34;Stream.h&#34;
+#include &#34;/src/xpdf-4.05/xpdf/Stream.h&#34;
+#include &#34;Function.h&#34;
+
+std::unique_ptr&lt;GlobalParams&gt; globalParams;
+std::once_flag flag;
+Function* function;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
+  FuzzedDataProvider stream(data, size);
+  std::call_once(
+      flag,
+      []() { globalParams = std::make_unique&lt;GlobalParams&gt;(nullptr); });
+
+  Object obj;
+  GString* gstring = new GString(stream.ConsumeBytesAsString(1).c_str());
+  obj.initString(gstring);
+  const Object objArr[] = {obj};
+  const int numArgs = sizeof(objArr) / sizeof(objArr[0]);  
+  if (numArgs &lt; 1) {
+    return 0;
+  }
+
+  std::string fileName = stream.ConsumeRemainingBytesAsString();
+  GString* gFileName = new GString(fileName.c_str());
+  FILE* file = fopen(fileName.c_str(), &#34;rb&#34;);
+  BaseStream* docStream = new FileStream(file, 0, false, 0, false);
+  PDFDoc doc(docStream, nullptr, nullptr, nullptr);
+                    
+  Object object;
+  object.initName(&#34;test&#34;);
+  OutputDev* outputDev = nullptr;
+  auto gfx = std::unique_ptr&lt;Gfx&gt;(new Gfx(&amp;doc, outputDev, nullptr, &amp;objArr, numArgs, nullptr, nullptr));
+  gfx-&gt;opSetExtGState(&amp;object, numArgs);
+
+  return 0;
+}
+&lt;/code&gt;
+</pre>
+
+
+<h2>Logs</h2>
+<pre>
+Fixing /home/chyun/oss-fuzz-gen1/results3/output-xpdf-_zn3gfx14opsetextgstateep6objecti/fixed_targets/02.cc with gpt-4, attempt 1.
+Fixing /home/chyun/oss-fuzz-gen1/results3/output-xpdf-_zn3gfx14opsetextgstateep6objecti/fixed_targets/02.cc with gpt-4, attempt 2.
+Fixing /home/chyun/oss-fuzz-gen1/results3/output-xpdf-_zn3gfx14opsetextgstateep6objecti/fixed_targets/02.cc with gpt-4, attempt 3.
+Fixing /home/chyun/oss-fuzz-gen1/results3/output-xpdf-_zn3gfx14opsetextgstateep6objecti/fixed_targets/02.cc with gpt-4, attempt 4.
+Fixing /home/chyun/oss-fuzz-gen1/results3/output-xpdf-_zn3gfx14opsetextgstateep6objecti/fixed_targets/02.cc with gpt-4, attempt 5.
+Failed to build /home/chyun/oss-fuzz-gen1/results3/output-xpdf-_zn3gfx14opsetextgstateep6objecti/fixed_targets/02.cc with gpt-4 in 5 iterations of fixing.
+
+</pre>
+
+<h2>Run logs</h2>
+<pre>
+
+</pre>
+
+
+</body>

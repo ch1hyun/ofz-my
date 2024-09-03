@@ -1,0 +1,43 @@
+{
+    "samples": [
+
+    {
+        "benchmark": "output-xpdf-_zn15splashoutputdev8drawcharep8gfxstateddddddjipjiiii",
+        "sample": "01",
+        "status": "Done",
+        "compiles": "False",
+        "crashes": "False",
+        "crash_reason": "-",
+        "bug": "True",
+        "coverage": "0.00",
+        "coverage_diff": "0.0",
+        "coverage_report": "#",
+        "stacktrace": "/stacktrace",
+        "target_binary": "/target_binary",
+        "reproducer": "/artifacts",
+        "run_log": "run.log",
+        "source_code": "//\\n// you may not use this file except in compliance with the License.\\n// You may obtain a copy of the License at\\n//\\n// https://www.apache.org/licenses/LICENSE-2.0\\n//\\n// Unless required by applicable law or agreed to in writing, software\\n// distributed under the License is distributed on an \"AS IS\" BASIS,\\n// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\\n// See the License for the specific language governing permissions and\\n//\\n#include <fuzzer/FuzzedDataProvider.h>\\n\\n#include <cstddef>\\n#include <cstdint>\\n#include <stdlib.h>\\n\\n#include \"GlobalParams.h\"\\n#include \"Object.h\"\\n#include \"PDFDoc.h\"\\n#include \"Splash.h\"\\n#include \"SplashBitmap.h\"\\n#include \"SplashOutputDev.h\"\\n#include \"XRef.h\"\\n\\nextern \"C\" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {\\n  if(size < 5){\\n    return 0;\\n  }\\n  \\n  FuzzedDataProvider stream(data, size);\\n\\n  double dx = stream.ConsumeFloatingPoint<double>();\\n  double dy = stream.ConsumeFloatingPoint<double>();\\n  // minor adjustment\\n  if(dx > 2487168) dx = 2487168;\\n  if(dy > 2487168) dy = 2487168;\\n\\n  double ox = stream.ConsumeFloatingPoint<double>();\\n  double oy = stream.ConsumeFloatingPoint<double>();\\n\\n  double tdx = stream.ConsumeFloatingPoint<double>();\\n  double tdy = stream.ConsumeFloatingPoint<double>();\\n\\n  CharCode c = stream.ConsumeIntegral<CharCode>();\\n  int nBytes = stream.ConsumeIntegral<int>();\\n  int uLen = stream.ConsumeIntegral<int>();\\n  GBool reverse = stream.ConsumeBool();\\n  GBool addDx = stream.ConsumeBool();\\n  GBool fill = stream.ConsumeBool(); // added this line\\n\\n  Unicode *u = (Unicode *)malloc(uLen * sizeof(Unicode));\\n  for (int i = 0; i < uLen; ++i) {\\n    u[i] = stream.ConsumeIntegral<Unicode>();\\n  }\\n\\n  Unicode *to = (Unicode *)malloc(nBytes * sizeof(Unicode));\\n  for (int i = 0; i < nBytes; ++i) {\\n    to[i] = stream.ConsumeIntegral<Unicode>();\\n  }\\n\\n  if (globalParams == nullptr) {\\n    globalParams = new GlobalParams(\"\");\\n  }\\n\\n  SplashColor paperColor = {0xff, 0xff, 0xff};\\n  auto splashOut =\\n      std::unique_ptr<SplashOutputDev>(new SplashOutputDev(splashModeRGB8, 1, false, paperColor));\\n  if (!splashOut) {\\n    return 0;\\n  }\\n\\n  PDFDoc doc((char*)\"/tmp/2.pdf\");\\n\\n  splashOut->startDoc(doc.getXRef());\\n  Object obj;\\n  auto xObj = doc.getXRef()->fetch(1, 4396, &obj);\\n  auto ca = doc.getCatalog()->getPage(1);\\n  GfxState state(72.0, 72.0, ca->getMediaBox(), ca->getRotate(), gTrue);\\n  GfxState state2(72.0, 72.0, ca->getMediaBox(), ca->getRotate(), gTrue);\\n  state2.setCTM(1, 0, 0, 1, 0, 0);\\n\\n  splashOut->drawChar(&state2, dx, dy, tdx, tdy, ox, oy, c, nBytes, u, uLen, to, fill, addDx); // fixed this line\\n\\n  delete globalParams;\\n  free(u);\\n  free(to);\\n\\n  return 0;\\n}",
+        "model": ""
+    },
+
+    {
+        "benchmark": "output-xpdf-_zn15splashoutputdev8drawcharep8gfxstateddddddjipjiiii",
+        "sample": "02",
+        "status": "Done",
+        "compiles": "False",
+        "crashes": "False",
+        "crash_reason": "-",
+        "bug": "True",
+        "coverage": "0.00",
+        "coverage_diff": "0.0",
+        "coverage_report": "#",
+        "stacktrace": "/stacktrace",
+        "target_binary": "/target_binary",
+        "reproducer": "/artifacts",
+        "run_log": "run.log",
+        "source_code": "#include <cstdint>\\n#include <cstdlib>\\n#include <vector>\\n#include <fuzzer/FuzzedDataProvider.h>\\n\\n#include \"/src/xpdf-4.05/goo/GString.h\"\\n#include \"/src/xpdf-4.05/goo/gtypes.h\"\\n#include \"/src/xpdf-4.05/xpdf/CharTypes.h\"\\n#include \"/src/xpdf-4.05/xpdf/GlobalParams.h\"\\n#include \"/src/xpdf-4.05/xpdf/GfxState.h\"\\n#include \"/src/xpdf-4.05/xpdf/OutputDev.h\"\\n#include \"/src/xpdf-4.05/xpdf/SplashOutputDev.h\"\\n#include \"/src/xpdf-4.05/xpdf/UnicodeMap.h\"\\n#include \"/src/xpdf-4.05/xpdf/FoFiTrueType.h\"\\n#include \"/src/xpdf-4.05/xpdf/FoFiType1C.h\"\\n#include \"/src/xpdf-4.05/xpdf/FoFiType1.h\"\\n#include \"/src/xpdf-4.05/xpdf/FoFiIdentifier.h\"\\n\\nextern \"C\" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {\\n  static bool initialized = false;\\n  static UnicodeMap *unicodeMap;\\n  static GlobalParams *globalParams;\\n  if (!initialized) {\\n    globalParams = new GlobalParams(nullptr);\\n    unicodeMap = globalParams->getResidentUnicodeMap(new GString(\"Latin1\"));\\n    unicodeMap->incRefCnt();\\n    initialized = true;\\n  }\\n\\n  FuzzedDataProvider fdp(data, size);\\n  \\n  // Initialize variables for drawChar function\\n  GfxState* gfxState = new GfxState(72.0, 72.0, (PDFRectangle *)NULL, 0, gFalse);\\n  double x = fdp.ConsumeFloatingPoint<double>();\\n  double y = fdp.ConsumeFloatingPoint<double>();\\n  double dx = fdp.ConsumeFloatingPoint<double>();\\n  double dy = fdp.ConsumeFloatingPoint<double>();\\n  double originX = fdp.ConsumeFloatingPoint<double>();\\n  double originY = fdp.ConsumeFloatingPoint<double>();\\n  CharCode code = fdp.ConsumeIntegral<CharCode>();\\n  int nBytes = fdp.ConsumeIntegralInRange<int>(1, size);\\n  auto unicode = fdp.ConsumeBytes<uint8_t>(nBytes);\\n  int uLen = unicode.size();\\n  GBool glyphIsEncoded = fdp.ConsumeIntegral<GBool>();\\n  GBool printing = fdp.ConsumeIntegral<GBool>();\\n  \\n  SplashColor paperColor;\\n  paperColor[0] = 255;\\n  paperColor[1] = 255;\\n  paperColor[2] = 255;\\n\\n  SplashOutputDev* splashOut = new SplashOutputDev(splashModeRGB8, 4, gFalse, paperColor);\\n  splashOut->startDoc(nullptr);\\n\\n  //Call the drawChar function\\n  // Fix: convert the data type of unicode from unsigned char to unsigned int\\n  std::vector<Unicode> unicodeConverted(unicode.begin(), unicode.end());\\n  splashOut->drawChar(gfxState, x, y, dx, dy, originX, originY, code, nBytes, unicodeConverted.data(), uLen, glyphIsEncoded, glyphIsEncoded, printing);\\n\\n  delete splashOut;\\n  delete gfxState;\\n\\n  return 0;\\n}",
+        "model": ""
+    }
+
+    ]
+}
