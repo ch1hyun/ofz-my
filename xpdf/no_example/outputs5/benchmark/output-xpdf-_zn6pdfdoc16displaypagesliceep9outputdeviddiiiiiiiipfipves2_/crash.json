@@ -1,0 +1,43 @@
+{
+    "samples": [
+
+    {
+        "benchmark": "output-xpdf-_zn6pdfdoc16displaypagesliceep9outputdeviddiiiiiiiipfipves2_",
+        "sample": "01",
+        "status": "Done",
+        "compiles": "True",
+        "crashes": "True",
+        "crash_reason": "FP_NEAR_INIT_CRASH",
+        "bug": "False",
+        "coverage": "0.00",
+        "coverage_diff": "0.0",
+        "coverage_report": "#",
+        "stacktrace": "/stacktrace",
+        "target_binary": "/target_binary",
+        "reproducer": "/artifacts",
+        "run_log": "run.log",
+        "source_code": "#include <fuzzer/FuzzedDataProvider.h>\\n\\n#include <aconf.h>\\n#include <png.h>\\n#include <stddef.h>\\n#include <stdint.h>\\n#include <stdio.h>\\n#include <stdlib.h>\\n#include <string.h>\\n#include <vector>\\n\\n#include \"PDFDoc.h\"\\n#include \"OutputDev.h\"\\n#include \"config.h\"\\n#include \"gfile.h\"\\n#include \"gmem.h\"\\n#include \"gmempp.h\"\\n#include \"parseargs.h\"\\n\\n// Define callback functions\\nint progressCallback(void* data) {\\n  return 0; // Just return 0 for now, can be modified to do something useful\\n}\\n\\nvoid errorCallback(void* data) {\\n  // Do nothing for now, can be modified to handle errors\\n}\\n\\nextern \"C\" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {\\n  FuzzedDataProvider stream(data, size);\\n\\n  double hDPI = stream.ConsumeFloatingPoint<double>();\\n  double vDPI = stream.ConsumeFloatingPoint<double>();\\n  int rotate = stream.ConsumeIntegral<int>();\\n  GBool useMediaBox = stream.ConsumeBool();\\n  GBool crop = stream.ConsumeBool();\\n  GBool printing = stream.ConsumeBool();\\n  int sliceX = stream.ConsumeIntegral<int>();\\n  int sliceY = stream.ConsumeIntegral<int>();\\n  int sliceW = stream.ConsumeIntegral<int>();\\n  int sliceH = stream.ConsumeIntegral<int>();\\n\\n  std::string directory = stream.ConsumeBytesAsString(stream.remaining_bytes() / 2);\\n  std::string ownerPassword = stream.ConsumeBytesAsString(stream.remaining_bytes());\\n\\n  // Create a temporary file with the fuzzing data\\n  FILE* tempFile = tmpfile();\\n  fwrite(data, 1, size, tempFile);\\n  fflush(tempFile);\\n  const char* fileName = tempnam(NULL, NULL);\\n  rename(tempnam(NULL, NULL), fileName);\\n  fclose(tempFile);\\n\\n  int page = 1; // Arbitrary value\\n\\n  // Setup output device\\n  class MyOutputDev : public OutputDev {\\n    public:\\n    GBool upsideDown() override { return gFalse; }\\n    GBool useDrawChar() override { return gTrue; }\\n    GBool interpretType3Chars() override { return gFalse; }\\n  };\\n\\n  MyOutputDev outputDevice;\\n\\n  // Setup the doc with the temporary file name\\n  GString gFileName(fileName);\\n  PDFDoc doc(&gFileName);\\n    \\n  // Define a void* variable\\n  void* abortCheckCbkData = nullptr;\\n\\n  // Fuzz displayPageSlice method\\n  doc.displayPageSlice(&outputDevice, page, hDPI, vDPI, rotate, useMediaBox, crop,\\n      printing, sliceX, sliceY, sliceW, sliceH, progressCallback, abortCheckCbkData);\\n\\n  // Remove the temporary file\\n  remove(fileName);\\n\\n  return 0;\\n}",
+        "model": ""
+    },
+
+    {
+        "benchmark": "output-xpdf-_zn6pdfdoc16displaypagesliceep9outputdeviddiiiiiiiipfipves2_",
+        "sample": "02",
+        "status": "Done",
+        "compiles": "True",
+        "crashes": "False",
+        "crash_reason": "NO_SEMANTIC_ERR",
+        "bug": "True",
+        "coverage": "0.76",
+        "coverage_diff": "8.017253128733033e-06",
+        "coverage_report": "#",
+        "stacktrace": "/stacktrace",
+        "target_binary": "/target_binary",
+        "reproducer": "/artifacts",
+        "run_log": "run.log",
+        "source_code": "#include <fuzzer/FuzzedDataProvider.h>\\n\\n#include <aconf.h>\\n#include <png.h>\\n#include <stddef.h>\\n#include <stdint.h>\\n#include <stdio.h>\\n#include <stdlib.h>\\n#include <string.h>\\n#include <vector>\\n\\n#include \"GString.h\"\\n#include \"GlobalParams.h\"\\n#include \"JBIG2Stream.h\"\\n#include \"Object.h\"\\n#include \"PDFDoc.h\"\\n#include \"Splash.h\"\\n#include \"SplashBitmap.h\"\\n#include \"SplashOutputDev.h\"\\n#include \"Stream.h\"\\n#include \"config.h\"\\n#include \"gfile.h\"\\n#include \"gmem.h\"\\n#include \"gmempp.h\"\\n#include \"parseargs.h\"\\n\\nextern \"C\" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {\\n  FuzzedDataProvider fdp(data, size);\\n  double hdpi = fdp.ConsumeFloatingPoint<double>();\\n  double vdpi = fdp.ConsumeFloatingPoint<double>();\\n  int rotate = fdp.ConsumeIntegral<int>();\\n  bool useMediaBox = fdp.ConsumeBool();\\n  bool crop = fdp.ConsumeBool();\\n  bool printing = fdp.ConsumeBool();\\n  int sliceX = fdp.ConsumeIntegral<int>();\\n  int sliceY = fdp.ConsumeIntegral<int>();\\n  int sliceW = fdp.ConsumeIntegral<int>();\\n  int sliceH = fdp.ConsumeIntegral<int>();\\n  std::vector<char> payload = fdp.ConsumeRemainingBytes<char>();\\n\\n  Object xpdf_obj;\\n  xpdf_obj.initNull();\\n  BaseStream *stream = new MemStream(payload.data(), 0, payload.size(), &xpdf_obj);\\n\\n  Object info, xfa;\\n  Object *acroForm;\\n  globalParams = new GlobalParams(NULL);\\n  globalParams->setErrQuiet(1);\\n  globalParams->setupBaseFonts(NULL);\\n  char yes[] = \"yes\";\\n  globalParams->setEnableFreeType(yes); // Yes, it's a string and not a bool.\\n  globalParams->setErrQuiet(1);\\n\\n  PDFDoc *doc = NULL;\\n  try {\\n    PDFDoc doc(stream);\\n    if (doc.isOk() == gTrue) {\\n      doc.getNumPages();\\n      doc.getOutline();\\n      doc.getStructTreeRoot();\\n      doc.getXRef();\\n      doc.okToPrint(gTrue);\\n      doc.okToCopy(gTrue);\\n      doc.okToChange(gTrue);\\n      doc.okToAddNotes(gTrue);\\n      doc.isLinearized();\\n      doc.getPDFVersion();\\n\\n      GString *metadata;\\n      if ((metadata = doc.readMetadata())) {\\n        (void)metadata->getCString();\\n      }\\n      delete metadata;\\n\\n      doc.getDocInfo(&info);\\n      if (info.isDict()) {\\n        info.getDict();\\n      }\\n      info.free();\\n\\n      if ((acroForm = doc.getCatalog()->getAcroForm())->isDict()) {\\n        acroForm->dictLookup(\"XFA\", &xfa); // Corrected from 'dfa' to 'xfa'\\n        xfa.free();\\n      }\\n\\n      for (size_t i = 1; i <= doc.getNumPages(); i++) {\\n        doc.getLinks(i);\\n        auto page = doc.getCatalog()->getPage(i);\\n        if (!page->isOk()) {\\n          continue;\\n        }\\n        page->getResourceDict();\\n        page->getMetadata();\\n        page->getResourceDict();\\n      }\\n\\n      SplashColor paperColor = {0xff, 0xff, 0xff};\\n      SplashOutputDev *splashOut = new SplashOutputDev(splashModeRGB8, 1, gFalse, paperColor);\\n      splashOut->setNoComposite(gTrue);\\n      splashOut->startDoc(doc.getXRef());\\n      for (size_t i = 1; i <= doc.getNumPages(); ++i) {\\n        doc.displayPageSlice(splashOut, i, hdpi, vdpi, rotate, useMediaBox, crop, printing, \\n                             sliceX, sliceY, sliceW, sliceH);\\n      }\\n      (void)splashOut->getBitmap();\\n\\n      delete splashOut;\\n    }\\n  } catch (...) {\\n  }\\n\\n  delete globalParams;\\n\\n  return 0;\\n}",
+        "model": ""
+    }
+
+    ]
+}

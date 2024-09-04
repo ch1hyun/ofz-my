@@ -1,0 +1,43 @@
+{
+    "samples": [
+
+    {
+        "benchmark": "output-xpdf-_zn3gfx14opsetextgstateep6objecti",
+        "sample": "01",
+        "status": "Done",
+        "compiles": "False",
+        "crashes": "False",
+        "crash_reason": "-",
+        "bug": "True",
+        "coverage": "0.00",
+        "coverage_diff": "0.0",
+        "coverage_report": "#",
+        "stacktrace": "/stacktrace",
+        "target_binary": "/target_binary",
+        "reproducer": "/artifacts",
+        "run_log": "run.log",
+        "source_code": "#include <fuzzer/FuzzedDataProvider.h>\\n#include <memory>\\n#include <vector>\\n\\n#include \"Dict.h\"\\n#include \"NameToCharCode.h\"\\n#include \"Object.h\"\\n#include \"PDFDoc.h\"\\n#include \"Gfx.h\"\\n#include \"GfxState.h\"\\n#include \"Page.h\"\\n#include \"Stream.h\"\\n#include \"XRef.h\"\\n#include \"GlobalParams.h\"\\n\\nextern \"C\" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {\\n   FuzzedDataProvider stream(data, size);\\n   if (stream.remaining_bytes() == 0) {\\n     return 0;\\n   }\\n\\n   // Initialize PDF global parameters\\n   std::unique_ptr<GlobalParams> globalParams = std::make_unique<GlobalParams>(\"\");\\n\\n   char filename[256];\\n   sprintf(filename, \"/tmp/libfuzzer.jpg\");\\n\\n   FILE* f = fopen(filename, \"wb\");\\n   if (f == nullptr) {\\n     return 1;\\n   }\\n   std::vector<char> buffer = stream.ConsumeRemainingBytes<char>();\\n   fwrite(buffer.data(), 1, buffer.size(), f);\\n   fclose(f);\\n\\n   FILE *pdfFile = fopen(filename, \"rb\");\\n   if (!pdfFile) {\\n    return 0;\\n   }\\n\\n   Object obj;\\n\\n   char *pdfBuffer = (char *)gmalloc(buffer.size());\\n   for (size_t i = 0; i < buffer.size(); i++) {\\n     pdfBuffer[i] = fgetc(pdfFile);\\n   }\\n   fclose(pdfFile);\\n   unlink(filename);\\n\\n   GString *gstr = new GString(pdfBuffer, buffer.size());\\n   PDFDoc *pdfDoc = new PDFDoc(gstr);\\n   int pageNum = 1; // Assuming page number as 1\\n   Page *page = new Page(pdfDoc, pageNum);\\n   OutputDev *out = nullptr; // Assuming OutputDev as nullptr\\n   Object obj2;\\n   pdfDoc->getXRef()->getCatalog(&obj2);\\n   Dict *dict = obj2.getDict();\\n   \\n   // Provide valid parameters for Gfx constructor\\n   double hDPI = 72.0; // Assuming DPI as 72\\n   double vDPI = 72.0; // Assuming DPI as 72\\n   PDFRectangle box; // Assuming an empty box\\n   Gfx *gfx = new Gfx(pdfDoc, out, pageNum, dict, hDPI, vDPI, &box);\\n\\n   // Call the function under test\\n   Object extGStateObj;\\n   int numArgs = 0; // Assuming no arguments\\n   gfx->opSetExtGState(&extGStateObj, numArgs);\\n\\n   delete gfx;\\n   delete page;\\n   delete pdfDoc;\\n   gfree(pdfBuffer);\\n\\n   return 0;\\n}",
+        "model": ""
+    },
+
+    {
+        "benchmark": "output-xpdf-_zn3gfx14opsetextgstateep6objecti",
+        "sample": "02",
+        "status": "Done",
+        "compiles": "False",
+        "crashes": "False",
+        "crash_reason": "-",
+        "bug": "True",
+        "coverage": "0.00",
+        "coverage_diff": "0.0",
+        "coverage_report": "#",
+        "stacktrace": "/stacktrace",
+        "target_binary": "/target_binary",
+        "reproducer": "/artifacts",
+        "run_log": "run.log",
+        "source_code": "#include <fuzzer/FuzzedDataProvider.h>\\n#include <cstddef>\\n#include <cstdint>\\n#include <vector>\\n#include <string>\\n\\n#include \"/src/xpdf-4.05/xpdf/GlobalParams.h\"\\n#include \"/src/xpdf-4.05/xpdf/PDFDoc.h\"\\n#include \"/src/xpdf-4.05/goo/GString.h\"\\n#include \"/src/xpdf-4.05/xpdf/Gfx.h\"\\n#include \"/src/xpdf-4.05/xpdf/GfxState.h\"\\n\\nextern \"C\" int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {\\n  FuzzedDataProvider data_provider(data, size);\\n\\n  if(!globalParams) {\\n    static bool globalParams_inited = false;\\n    if(globalParams_inited) return 0;\\n    globalParams_inited = true;\\n\\n    globalParams = new GlobalParams(\"\");\\n  } else {\\n    return 0;\\n  }\\n\\n  if (size <= 1) {\\n    return 0;\\n  }\\n\\n  std::vector<uint8_t> pdf_doc_data = data_provider.ConsumeBytes<uint8_t>(data_provider.remaining_bytes()-1);\\n  Object array, gfxstate_dict;\\n  array.initNull();\\n  gfxstate_dict.initNull();\\n\\n  std::string gfxstate_name = data_provider.ConsumeRandomLengthString(1);\\n\\n  array.arrayAdd(&gfxstate_dict);\\n\\n  PDFDoc* pdfdoc = PDFDocFactory().createPDFDoc(GooString(reinterpret_cast<char*>(pdf_doc_data.data())), nullptr, nullptr);\\n\\n  if(pdfdoc == nullptr)\\n  {\\n    array.free();\\n    return 0;\\n  }\\n\\n  if(!pdfdoc->isOk()) {\\n    delete pdfdoc;\\n    array.free();\\n    return 0;\\n  }\\n\\n  GfxResources * res = nullptr;\\n  GfxState * state = nullptr;\\n  \\n  XRef* xref = pdfdoc->getXRef();\\n  res = new GfxResources(xref, gfxstate_dict.getDict(), gfxstate_dict.getDict());\\n  state = new GfxState(72.0, 72.0, res);\\n\\n  Gfx* gfx = new Gfx(pdfdoc, nullptr, -1, -1, -1, &array, state, res);\\n  gfx->opSetExtGState(&array, 1);\\n  \\n  delete gfx;\\n\\n  array.free();\\n  delete pdfdoc;\\n\\n  return 0;\\n}",
+        "model": ""
+    }
+
+    ]
+}

@@ -1,0 +1,404 @@
+<!doctype html>
+
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Experiment results</title>
+<style>
+* {
+    box-sizing: border-box;
+}
+
+html {
+    line-height: 1.15;
+}
+
+body {
+    font-family: sans-serif;
+    font-size: 16px;
+}
+
+table {
+    border-collapse: collapse;
+    border-spacing: 0;
+}
+
+td, th {
+    border-right: 1px #dedede solid;
+    border-bottom: 1px #dedede solid;
+    padding: 5px;
+    text-align: left;
+}
+td:first-child, th:first-child {
+    border-left: 1px #dedede solid;
+}
+th {
+    border-top: 1px #dedede solid;
+}
+
+tbody tr:nth-child(odd) {
+    background-color: #f4f5ff;
+}
+</style>
+<body>
+    LLM: 
+    
+<h1>output-xpdf-_zn6pdfdoc16displaypagesliceep9outputdeviddiiiiiiiipfipves2_ / 01</h1>
+Bug: False
+<br>
+Crash reason: NO_SEMANTIC_ERR
+<br>
+<br>
+
+<h2>Triage</h2>
+<pre>
+
+</pre>
+<br>
+
+
+
+
+
+<h3>Final code</h3>
+
+<pre>
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+#include &lt;cstddef&gt;
+#include &lt;cstdint&gt;
+#include &lt;string&gt;
+#include &lt;vector&gt;
+
+#include &#34;GlobalParams.h&#34;
+#include &#34;Object.h&#34;
+#include &#34;PDFDoc.h&#34;
+#include &#34;png.h&#34;
+#include &#34;SplashOutputDev.h&#34;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
+  FuzzedDataProvider provider(data, size);
+  const double hDPI = provider.ConsumeFloatingPoint&lt;double&gt;();
+  const double vDPI = provider.ConsumeFloatingPoint&lt;double&gt;();
+  const std::string fileName = provider.ConsumeRemainingBytesAsString();
+
+  const int rotate = 0;
+  const GBool useMediaBox = false;
+  const GBool crop = true;
+  const GBool printing = false;
+  const int sliceX = 0, sliceY = 0, sliceW = 500, sliceH = 500;
+  const int pageNo = 1;
+  void* context = nullptr;
+  
+  char zero = 0;
+  globalParams = new GlobalParams(&amp;zero);
+  globalParams-&gt;setErrQuiet(gTrue);
+
+  if(fileName.empty()){
+      delete globalParams;
+      return 0;
+  }
+
+  PDFDoc doc(new GString(fileName.c_str()), nullptr, nullptr);
+  
+  if(!doc.isOk()){
+      delete globalParams;
+      return 0;
+  }
+
+  SplashColor paperColor = {0xff, 0xff, 0xff};
+  SplashOutputDev splash(SplashColorMode::splashModeRGB8, 1, gFalse, paperColor);
+  
+  doc.displayPageSlice(&amp;splash, pageNo, hDPI, vDPI, rotate, useMediaBox, crop,
+                       printing, sliceX, sliceY, sliceW, sliceH, nullptr, context);
+  
+  delete globalParams;
+
+  return 0;
+}
+</pre>
+
+
+<h3>Fixer prompt #1</h3>
+<pre>
+
+Given the following C++ fuzz harness and its build error message, fix the code to make it build for fuzzing.
+
+If there is undeclared identifier or unknown type name error, fix it by finding and including the related libraries.
+
+MUST RETURN THE FULL CODE, INCLUDING UNCHANGED PARTS.
+
+Below is the code needs to be built:
+&lt;code&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+#include &lt;cstddef&gt;
+#include &lt;cstdint&gt;
+#include &lt;string&gt;
+#include &lt;vector&gt;
+
+#include &#34;GlobalParams.h&#34;
+#include &#34;Object.h&#34;
+#include &#34;PDFDoc.h&#34;
+#include &#34;png.h&#34;
+#include &#34;SplashOutputDev.h&#34;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
+  FuzzedDataProvider provider(data, size);
+  const double hDPI = provider.ConsumeFloatingPoint&lt;double&gt;();
+  const double vDPI = provider.ConsumeFloatingPoint&lt;double&gt;();
+  const std::string fileName = provider.ConsumeRemainingBytesAsString();
+
+  const int rotate = 0;
+  const GBool useMediaBox = false;
+  const GBool crop = true;
+  const GBool printing = false;
+  const int sliceX = 0, sliceY = 0, sliceW = 500, sliceH = 500;
+  const int pageNo = 1;
+  void* context = nullptr;
+  
+  char zero = 0;
+  globalParams = new GlobalParams(&amp;zero);
+  globalParams-&gt;setErrQuiet(gTrue);
+
+  PDFDoc doc(new GString(fileName.c_str()), nullptr, nullptr);
+  
+  SplashColor paperColor = {0xff, 0xff, 0xff};
+  SplashOutputDev splash(SplashColorMode::splashModeRGB8, 1, gFalse, paperColor);
+  
+  doc.displayPageSlice(&amp;splash, pageNo, hDPI, vDPI, rotate, useMediaBox, crop,
+                       printing, sliceX, sliceY, sliceW, sliceH, nullptr, context);
+  
+  delete globalParams;
+
+  return 0;
+}
+&lt;/code&gt;
+
+Below is the error to fix:
+The code can build successfully but has a runtime issue: Fuzzing crashed immediately at runtime (ASAN-ERROR: AddressSanitizer: SEGV on unknown address 0x000000000038 (pc 0x7f61cf7e7fc4 bp 0x7ffeb47b6cc0 sp 0x7ffeb47b6c88 T0)), indicating fuzz target code for invoking the function under test is incorrect or unrobust.
+&lt;error&gt;
+Crash stacks:
+Stack 0:
+#0 0x7f61cf7e7fc4 in __pthread_mutex_lock (/lib/x86_64-linux-gnu/libpthread.so.0+0xafc4) (BuildId: 9a65bb469e45a1c6fbcffae5b82a2fd7a69eb479)
+#1 0x5648fbaf8c66 in Catalog::getPage(int) /src/xpdf-4.05/xpdf/Catalog.cc:300:3
+#2 0x5648fba8f8af in PDFDoc::displayPageSlice(OutputDev*, int, double, double, int, int, int, int, int, int, int, int, int (*)(void*), void*) /src/xpdf-4.05/xpdf/PDFDoc.cc:476:12
+#3 0x5648fba7246c in LLVMFuzzerTestOneInput /src/xpdf-4.05/build/fuzz_JBIG2.cc:37:7
+#4 0x5648fb924660 in fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:614:13
+#5 0x5648fb925b61 in fuzzer::Fuzzer::ReadAndExecuteSeedCorpora(std::__Fuzzer::vector&lt;fuzzer::SizedFile, std::__Fuzzer::allocator&lt;fuzzer::SizedFile&gt;&gt;&amp;) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:807:3
+#6 0x5648fb926147 in fuzzer::Fuzzer::Loop(std::__Fuzzer::vector&lt;fuzzer::SizedFile, std::__Fuzzer::allocator&lt;fuzzer::SizedFile&gt;&gt;&amp;) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:867:3
+#7 0x5648fb914756 in fuzzer::FuzzerDriver(int*, char***, int (*)(unsigned char const*, unsigned long)) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:914:6
+#8 0x5648fb940c82 in main /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMain.cpp:20:10
+#9 0x7f61cf5c6082 in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x24082) (BuildId: 0702430aef5fa3dda43986563e9ffcc47efbd75e)
+#10 0x5648fb9058cd in _start (/out/fuzz_JBIG2+0x29f8cd)
+&lt;/error&gt;
+
+
+
+
+Fix code:
+1. Consider possible solutions for the issues listed above.
+2. Choose a solution that can maximize fuzzing result, which is utilizing the function under test and feeding it not null input.
+3. Apply the solutions to the original code.
+It&#39;s important to show the complete code, not only the fixed line.
+&lt;solution&gt;
+</pre>
+
+
+
+<h3>Code #1</h3>
+
+<pre>
+&lt;code&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+#include &lt;cstddef&gt;
+#include &lt;cstdint&gt;
+#include &lt;string&gt;
+#include &lt;vector&gt;
+
+#include &#34;GlobalParams.h&#34;
+#include &#34;Object.h&#34;
+#include &#34;PDFDoc.h&#34;
+#include &#34;png.h&#34;
+#include &#34;SplashOutputDev.h&#34;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
+  FuzzedDataProvider provider(data, size);
+  const double hDPI = provider.ConsumeFloatingPoint&lt;double&gt;();
+  const double vDPI = provider.ConsumeFloatingPoint&lt;double&gt;();
+  const std::string fileName = provider.ConsumeRemainingBytesAsString();
+
+  const int rotate = 0;
+  const GBool useMediaBox = false;
+  const GBool crop = true;
+  const GBool printing = false;
+  const int sliceX = 0, sliceY = 0, sliceW = 500, sliceH = 500;
+  const int pageNo = 1;
+  void* context = nullptr;
+  
+  char zero = 0;
+  globalParams = new GlobalParams(&amp;zero);
+  globalParams-&gt;setErrQuiet(gTrue);
+
+  if(fileName.empty()){
+      delete globalParams;
+      return 0;
+  }
+
+  PDFDoc doc(new GString(fileName.c_str()), nullptr, nullptr);
+  
+  if(!doc.isOk()){
+      delete globalParams;
+      return 0;
+  }
+
+  SplashColor paperColor = {0xff, 0xff, 0xff};
+  SplashOutputDev splash(SplashColorMode::splashModeRGB8, 1, gFalse, paperColor);
+  
+  doc.displayPageSlice(&amp;splash, pageNo, hDPI, vDPI, rotate, useMediaBox, crop,
+                       printing, sliceX, sliceY, sliceW, sliceH, nullptr, context);
+  
+  delete globalParams;
+
+  return 0;
+}
+&lt;/code&gt;
+&lt;solution&gt; 
+
+The fix includes checking if the filename is empty before creating the PDFDoc object. If it is, we cleanup and return. We also check if the PDFDoc object is ok before proceeding. If it&#39;s not, we cleanup and return. These checks should prevent the crashes and make the fuzzing more robust.
+</pre>
+
+
+<h2>Logs</h2>
+<pre>
+Fixing /home/chyun/oss-fuzz-gen1/results4/output-xpdf-_zn6pdfdoc16displaypagesliceep9outputdeviddiiiiiiiipfipves2_/fixed_targets/01.cc with gpt-4, attempt 1.
+Successfully built /home/chyun/oss-fuzz-gen1/results4/output-xpdf-_zn6pdfdoc16displaypagesliceep9outputdeviddiiiiiiiipfipves2_/fixed_targets/01.cc with gpt-4 in 1 iterations of fixing.
+Triaging the crash related to /home/chyun/oss-fuzz-gen1/results4/output-xpdf-_zn6pdfdoc16displaypagesliceep9outputdeviddiiiiiiiipfipves2_/fixed_targets/01.cc with gpt-4.
+Warning: no crash info in xpdf-zn6pdfdoc16displaypagesliceep9outputdeviddiiiiiiiipfipves2-01.
+Result for xpdf-zn6pdfdoc16displaypagesliceep9outputdeviddiiiiiiiipfipves2-01: crashes=False, coverage=0.0057143846646695185 (330/57749), coverage diff=0.0010743119192502264 (134/124731)
+
+</pre>
+
+<h2>Run logs</h2>
+<pre>
+INFO:__main__:Running: docker run --privileged --shm-size=2g --platform linux/amd64 --rm -e FUZZING_ENGINE=libfuzzer -e SANITIZER=address -e RUN_FUZZER_MODE=interactive -e HELPER=True -v /home/chyun/oss-fuzz-gen1/results4/output-xpdf-_zn6pdfdoc16displaypagesliceep9outputdeviddiiiiiiiipfipves2_/corpora/01.cc:/tmp/fuzz_JBIG2_corpus -v /tmp/tmp7y82dlpe/build/out/xpdf-zn6pdfdoc16displaypagesliceep9outputdeviddiiiiiiiipfipves2-01:/out -t gcr.io/oss-fuzz-base/base-runner run_fuzzer fuzz_JBIG2 -print_final_stats=1 -max_total_time=30 -len_control=0 -timeout=30.
+vm.mmap_rnd_bits = 28
+rm: cannot remove &#39;/tmp/fuzz_JBIG2_corpus&#39;: Device or resource busy
+/out/fuzz_JBIG2 -rss_limit_mb=2560 -timeout=25 -print_final_stats=1 -max_total_time=30 -len_control=0 -timeout=30 /tmp/fuzz_JBIG2_corpus -detect_leaks=0 &lt; /dev/null
+INFO: Running with entropic power schedule (0xFF, 100).
+INFO: Seed: 1023725667
+INFO: Loaded 1 modules   (57749 inline 8-bit counters): 57749 [0x55b1903bea48, 0x55b1903ccbdd), 
+INFO: Loaded 1 PC tables (57749 PCs): 57749 [0x55b1903ccbe0,0x55b1904ae530), 
+INFO:        0 files found in /tmp/fuzz_JBIG2_corpus
+INFO: -max_len is not provided; libFuzzer will not generate inputs larger than 4096 bytes
+INFO: A corpus is not provided, starting from an empty corpus
+#2	INITED cov: 230 ft: 231 corp: 1/1b exec/s: 0 rss: 41Mb
+#3	NEW    cov: 231 ft: 233 corp: 2/3b lim: 4096 exec/s: 0 rss: 42Mb L: 2/2 MS: 1 CrossOver-
+	NEW_FUNC[1/7]: 0x55b18fcaa000 in GlobalParams::getErrQuiet() /src/xpdf-4.05/xpdf/GlobalParams.cc:3562
+	NEW_FUNC[2/7]: 0x55b18fcad5d0 in PDFDoc::PDFDoc(GString*, GString*, GString*, PDFCore*) /src/xpdf-4.05/xpdf/PDFDoc.cc:61
+#7	NEW    cov: 266 ft: 271 corp: 3/92b lim: 4096 exec/s: 0 rss: 47Mb L: 89/89 MS: 4 ShuffleBytes-ChangeByte-EraseBytes-InsertRepeatedBytes-
+#8	NEW    cov: 269 ft: 276 corp: 4/114b lim: 4096 exec/s: 0 rss: 48Mb L: 22/89 MS: 1 InsertRepeatedBytes-
+#11	NEW    cov: 269 ft: 280 corp: 5/266b lim: 4096 exec/s: 0 rss: 50Mb L: 152/152 MS: 3 ShuffleBytes-ChangeBit-InsertRepeatedBytes-
+#12	NEW    cov: 269 ft: 284 corp: 6/304b lim: 4096 exec/s: 0 rss: 51Mb L: 38/152 MS: 1 CrossOver-
+#13	NEW    cov: 269 ft: 286 corp: 7/343b lim: 4096 exec/s: 0 rss: 52Mb L: 39/152 MS: 1 CrossOver-
+#14	NEW    cov: 269 ft: 290 corp: 8/404b lim: 4096 exec/s: 0 rss: 53Mb L: 61/152 MS: 1 CrossOver-
+#15	REDUCE cov: 269 ft: 290 corp: 8/393b lim: 4096 exec/s: 0 rss: 54Mb L: 78/152 MS: 1 EraseBytes-
+#20	NEW    cov: 270 ft: 291 corp: 9/506b lim: 4096 exec/s: 0 rss: 56Mb L: 113/152 MS: 5 ShuffleBytes-ChangeBit-ChangeByte-ChangeBit-InsertRepeatedBytes-
+#21	REDUCE cov: 270 ft: 293 corp: 10/584b lim: 4096 exec/s: 0 rss: 56Mb L: 78/152 MS: 1 ChangeBinInt-
+#29	NEW    cov: 270 ft: 295 corp: 11/645b lim: 4096 exec/s: 0 rss: 56Mb L: 61/152 MS: 3 ChangeBinInt-ChangeByte-ChangeBinInt-
+#30	NEW    cov: 271 ft: 298 corp: 12/648b lim: 4096 exec/s: 0 rss: 56Mb L: 3/152 MS: 1 InsertByte-
+#41	NEW    cov: 271 ft: 300 corp: 13/726b lim: 4096 exec/s: 0 rss: 56Mb L: 78/152 MS: 1 CMP- DE: &#34;\001\000\000\000\000\000\000\000&#34;-
+#43	NEW    cov: 271 ft: 304 corp: 14/804b lim: 4096 exec/s: 0 rss: 56Mb L: 78/152 MS: 2 CMP-CopyPart- DE: &#34;\000\000\000\000\000\000\000\000&#34;-
+#49	NEW    cov: 271 ft: 306 corp: 15/827b lim: 4096 exec/s: 0 rss: 56Mb L: 23/152 MS: 1 InsertByte-
+#63	NEW    cov: 271 ft: 308 corp: 16/972b lim: 4096 exec/s: 0 rss: 56Mb L: 145/152 MS: 4 CopyPart-InsertByte-CopyPart-InsertRepeatedBytes-
+#69	REDUCE cov: 271 ft: 308 corp: 16/954b lim: 4096 exec/s: 0 rss: 56Mb L: 60/152 MS: 1 EraseBytes-
+#93	NEW    cov: 271 ft: 312 corp: 17/985b lim: 4096 exec/s: 0 rss: 56Mb L: 31/152 MS: 4 CMP-ChangeByte-PersAutoDict-CrossOver- DE: &#34;\377\377\377\377\377\377\377\377&#34;-&#34;\001\000\000\000\000\000\000\000&#34;-
+#95	NEW    cov: 271 ft: 314 corp: 18/1047b lim: 4096 exec/s: 0 rss: 56Mb L: 62/152 MS: 2 InsertByte-InsertRepeatedBytes-
+#141	REDUCE cov: 271 ft: 314 corp: 18/1043b lim: 4096 exec/s: 0 rss: 56Mb L: 35/152 MS: 1 EraseBytes-
+#154	NEW    cov: 271 ft: 316 corp: 19/1054b lim: 4096 exec/s: 0 rss: 56Mb L: 11/152 MS: 3 CopyPart-InsertByte-CMP- DE: &#34;\001\000\000\000\000\000\000e&#34;-
+#195	NEW    cov: 273 ft: 318 corp: 20/1143b lim: 4096 exec/s: 195 rss: 57Mb L: 89/152 MS: 1 CrossOver-
+#206	REDUCE cov: 273 ft: 318 corp: 20/1140b lim: 4096 exec/s: 206 rss: 57Mb L: 75/152 MS: 1 EraseBytes-
+#222	REDUCE cov: 273 ft: 318 corp: 20/1121b lim: 4096 exec/s: 222 rss: 57Mb L: 70/152 MS: 1 EraseBytes-
+#224	REDUCE cov: 273 ft: 318 corp: 20/1118b lim: 4096 exec/s: 224 rss: 57Mb L: 110/152 MS: 2 InsertRepeatedBytes-EraseBytes-
+#246	NEW    cov: 273 ft: 320 corp: 21/1196b lim: 4096 exec/s: 246 rss: 57Mb L: 78/152 MS: 2 ShuffleBytes-ChangeBit-
+#303	REDUCE cov: 273 ft: 320 corp: 21/1178b lim: 4096 exec/s: 151 rss: 57Mb L: 92/152 MS: 2 CMP-EraseBytes- DE: &#34;yehmeemisolated&#34;-
+#327	REDUCE cov: 273 ft: 321 corp: 22/1439b lim: 4096 exec/s: 163 rss: 57Mb L: 261/261 MS: 4 InsertByte-InsertRepeatedBytes-ChangeBit-CopyPart-
+#334	NEW    cov: 273 ft: 323 corp: 23/1443b lim: 4096 exec/s: 167 rss: 57Mb L: 4/261 MS: 2 ChangeBit-InsertByte-
+#394	REDUCE cov: 273 ft: 323 corp: 23/1442b lim: 4096 exec/s: 197 rss: 57Mb L: 91/261 MS: 5 CopyPart-ChangeBinInt-PersAutoDict-PersAutoDict-EraseBytes- DE: &#34;\000\000\000\000\000\000\000\000&#34;-&#34;\000\000\000\000\000\000\000\000&#34;-
+#396	NEW    cov: 273 ft: 324 corp: 24/1448b lim: 4096 exec/s: 198 rss: 57Mb L: 6/261 MS: 2 InsertByte-CMP- DE: &#34;\000\000\020u&#34;-
+#437	REDUCE cov: 273 ft: 324 corp: 24/1414b lim: 4096 exec/s: 145 rss: 57Mb L: 111/261 MS: 1 EraseBytes-
+#496	REDUCE cov: 273 ft: 324 corp: 24/1395b lim: 4096 exec/s: 165 rss: 57Mb L: 72/261 MS: 4 PersAutoDict-InsertRepeatedBytes-CrossOver-EraseBytes- DE: &#34;\000\000\000\000\000\000\000\000&#34;-
+	NEW_FUNC[1/20]: 0x55b18fcadc40 in PDFDoc::setup(GString*, GString*) /src/xpdf-4.05/xpdf/PDFDoc.cc:261
+	NEW_FUNC[2/20]: 0x55b18fcae5c0 in PDFDoc::checkHeader() /src/xpdf-4.05/xpdf/PDFDoc.cc:369
+#511	NEW    cov: 330 ft: 386 corp: 25/1414b lim: 4096 exec/s: 170 rss: 57Mb L: 19/261 MS: 5 ChangeByte-CMP-PersAutoDict-ChangeBit-InsertByte- DE: &#34;\370\377\377\177&#34;-&#34;\001\000\000\000\000\000\000e&#34;-
+#512	pulse  cov: 330 ft: 386 corp: 25/1414b lim: 4096 exec/s: 170 rss: 57Mb
+#532	REDUCE cov: 330 ft: 386 corp: 25/1395b lim: 4096 exec/s: 177 rss: 57Mb L: 41/261 MS: 1 EraseBytes-
+#534	NEW    cov: 330 ft: 387 corp: 26/1412b lim: 4096 exec/s: 178 rss: 57Mb L: 17/261 MS: 2 CrossOver-InsertRepeatedBytes-
+#550	NEW    cov: 330 ft: 388 corp: 27/1426b lim: 4096 exec/s: 137 rss: 57Mb L: 14/261 MS: 1 EraseBytes-
+#560	REDUCE cov: 330 ft: 388 corp: 27/1412b lim: 4096 exec/s: 140 rss: 57Mb L: 64/261 MS: 5 PersAutoDict-CopyPart-InsertByte-ShuffleBytes-EraseBytes- DE: &#34;\000\000\020u&#34;-
+#563	NEW    cov: 330 ft: 389 corp: 28/1425b lim: 4096 exec/s: 140 rss: 57Mb L: 13/261 MS: 3 PersAutoDict-ShuffleBytes-CopyPart- DE: &#34;\001\000\000\000\000\000\000e&#34;-
+#647	NEW    cov: 330 ft: 391 corp: 29/1445b lim: 4096 exec/s: 161 rss: 57Mb L: 20/261 MS: 4 PersAutoDict-CopyPart-CrossOver-EraseBytes- DE: &#34;yehmeemisolated&#34;-
+#719	REDUCE cov: 330 ft: 391 corp: 29/1444b lim: 4096 exec/s: 143 rss: 57Mb L: 30/261 MS: 2 CrossOver-EraseBytes-
+#723	REDUCE cov: 330 ft: 391 corp: 29/1442b lim: 4096 exec/s: 144 rss: 57Mb L: 36/261 MS: 4 InsertByte-CrossOver-ShuffleBytes-EraseBytes-
+#755	NEW    cov: 330 ft: 393 corp: 30/1454b lim: 4096 exec/s: 151 rss: 57Mb L: 12/261 MS: 2 ChangeBinInt-EraseBytes-
+#819	REDUCE cov: 330 ft: 393 corp: 30/1453b lim: 4096 exec/s: 163 rss: 57Mb L: 16/261 MS: 4 ChangeBinInt-PersAutoDict-ShuffleBytes-EraseBytes- DE: &#34;\370\377\377\177&#34;-
+#897	REDUCE cov: 330 ft: 393 corp: 30/1408b lim: 4096 exec/s: 149 rss: 57Mb L: 66/261 MS: 3 ShuffleBytes-CopyPart-EraseBytes-
+#919	REDUCE cov: 330 ft: 393 corp: 30/1398b lim: 4096 exec/s: 153 rss: 57Mb L: 60/261 MS: 2 CMP-EraseBytes- DE: &#34;\377\377\377\377\377\377\3770&#34;-
+#941	REDUCE cov: 330 ft: 393 corp: 30/1373b lim: 4096 exec/s: 156 rss: 57Mb L: 41/261 MS: 2 ChangeBit-EraseBytes-
+#994	REDUCE cov: 330 ft: 393 corp: 30/1372b lim: 4096 exec/s: 142 rss: 57Mb L: 13/261 MS: 3 EraseBytes-CopyPart-EraseBytes-
+#1020	REDUCE cov: 330 ft: 393 corp: 30/1366b lim: 4096 exec/s: 145 rss: 57Mb L: 69/261 MS: 1 EraseBytes-
+#1024	pulse  cov: 330 ft: 393 corp: 30/1366b lim: 4096 exec/s: 146 rss: 57Mb
+#1033	REDUCE cov: 330 ft: 393 corp: 30/1354b lim: 4096 exec/s: 147 rss: 57Mb L: 29/261 MS: 3 PersAutoDict-ChangeASCIIInt-EraseBytes- DE: &#34;\377\377\377\377\377\377\3770&#34;-
+#1105	REDUCE cov: 330 ft: 393 corp: 30/1353b lim: 4096 exec/s: 138 rss: 57Mb L: 5/261 MS: 2 ShuffleBytes-EraseBytes-
+#1120	REDUCE cov: 330 ft: 393 corp: 30/1347b lim: 4096 exec/s: 140 rss: 57Mb L: 66/261 MS: 5 InsertByte-CrossOver-ChangeBit-InsertByte-EraseBytes-
+#1148	REDUCE cov: 330 ft: 393 corp: 30/1328b lim: 4096 exec/s: 143 rss: 57Mb L: 43/261 MS: 3 InsertByte-ShuffleBytes-EraseBytes-
+#1188	REDUCE cov: 330 ft: 393 corp: 30/1324b lim: 4096 exec/s: 148 rss: 57Mb L: 31/261 MS: 5 ChangeByte-EraseBytes-CMP-ChangeBit-CopyPart- DE: &#34;.x&#34;-
+#1245	REDUCE cov: 330 ft: 393 corp: 30/1323b lim: 4096 exec/s: 138 rss: 57Mb L: 35/261 MS: 2 ShuffleBytes-EraseBytes-
+#1467	REDUCE cov: 330 ft: 393 corp: 30/1305b lim: 4096 exec/s: 133 rss: 57Mb L: 25/261 MS: 2 ChangeBit-EraseBytes-
+#1559	REDUCE cov: 330 ft: 393 corp: 30/1298b lim: 4096 exec/s: 141 rss: 57Mb L: 54/261 MS: 2 PersAutoDict-EraseBytes- DE: &#34;\000\000\000\000\000\000\000\000&#34;-
+#1646	REDUCE cov: 330 ft: 393 corp: 30/1265b lim: 4096 exec/s: 137 rss: 57Mb L: 36/261 MS: 2 ChangeBinInt-EraseBytes-
+#1648	REDUCE cov: 330 ft: 393 corp: 30/1263b lim: 4096 exec/s: 137 rss: 57Mb L: 14/261 MS: 2 InsertByte-EraseBytes-
+#1910	REDUCE cov: 330 ft: 393 corp: 30/1260b lim: 4096 exec/s: 136 rss: 57Mb L: 75/261 MS: 2 ChangeBinInt-EraseBytes-
+#2011	REDUCE cov: 330 ft: 393 corp: 30/1251b lim: 4096 exec/s: 134 rss: 57Mb L: 45/261 MS: 1 EraseBytes-
+#2023	REDUCE cov: 330 ft: 393 corp: 30/1248b lim: 4096 exec/s: 134 rss: 57Mb L: 61/261 MS: 2 ChangeBinInt-EraseBytes-
+#2048	pulse  cov: 330 ft: 393 corp: 30/1248b lim: 4096 exec/s: 136 rss: 57Mb
+#2066	REDUCE cov: 330 ft: 393 corp: 30/1234b lim: 4096 exec/s: 137 rss: 57Mb L: 64/261 MS: 3 EraseBytes-PersAutoDict-ChangeBit- DE: &#34;\000\000\020u&#34;-
+#2102	REDUCE cov: 330 ft: 393 corp: 30/1226b lim: 4096 exec/s: 131 rss: 57Mb L: 67/261 MS: 1 EraseBytes-
+#2173	REDUCE cov: 330 ft: 393 corp: 30/1224b lim: 4096 exec/s: 135 rss: 57Mb L: 29/261 MS: 1 EraseBytes-
+#2280	REDUCE cov: 330 ft: 393 corp: 30/1210b lim: 4096 exec/s: 134 rss: 57Mb L: 46/261 MS: 2 PersAutoDict-EraseBytes- DE: &#34;\370\377\377\177&#34;-
+#2334	REDUCE cov: 330 ft: 393 corp: 30/1116b lim: 4096 exec/s: 137 rss: 57Mb L: 167/167 MS: 4 ChangeByte-ChangeByte-PersAutoDict-EraseBytes- DE: &#34;\370\377\377\177&#34;-
+#2661	REDUCE cov: 330 ft: 393 corp: 30/1111b lim: 4096 exec/s: 133 rss: 57Mb L: 61/167 MS: 2 PersAutoDict-EraseBytes- DE: &#34;yehmeemisolated&#34;-
+#2699	REDUCE cov: 330 ft: 393 corp: 30/1107b lim: 4096 exec/s: 134 rss: 57Mb L: 25/167 MS: 3 InsertByte-ChangeByte-EraseBytes-
+#2725	REDUCE cov: 330 ft: 393 corp: 30/1104b lim: 4096 exec/s: 129 rss: 57Mb L: 58/167 MS: 1 EraseBytes-
+#2728	REDUCE cov: 330 ft: 393 corp: 30/1087b lim: 4096 exec/s: 129 rss: 57Mb L: 47/167 MS: 3 CopyPart-ChangeBinInt-EraseBytes-
+#2963	REDUCE cov: 330 ft: 393 corp: 30/1079b lim: 4096 exec/s: 134 rss: 57Mb L: 38/167 MS: 5 ShuffleBytes-CrossOver-ChangeASCIIInt-CopyPart-EraseBytes-
+#2996	REDUCE cov: 330 ft: 393 corp: 30/1076b lim: 4096 exec/s: 136 rss: 57Mb L: 64/167 MS: 3 ChangeBit-InsertByte-EraseBytes-
+#3262	REDUCE cov: 330 ft: 393 corp: 30/1074b lim: 4096 exec/s: 135 rss: 57Mb L: 59/167 MS: 1 EraseBytes-
+#3288	REDUCE cov: 330 ft: 393 corp: 30/1073b lim: 4096 exec/s: 137 rss: 57Mb L: 28/167 MS: 1 EraseBytes-
+#3355	REDUCE cov: 330 ft: 393 corp: 30/1058b lim: 4096 exec/s: 134 rss: 57Mb L: 46/167 MS: 2 ChangeBinInt-EraseBytes-
+#3361	REDUCE cov: 330 ft: 393 corp: 30/1051b lim: 4096 exec/s: 134 rss: 57Mb L: 29/167 MS: 1 EraseBytes-
+#3743	REDUCE cov: 330 ft: 393 corp: 30/1049b lim: 4096 exec/s: 133 rss: 57Mb L: 23/167 MS: 2 ShuffleBytes-EraseBytes-
+#4028	REDUCE cov: 330 ft: 393 corp: 30/1038b lim: 4096 exec/s: 134 rss: 57Mb L: 53/167 MS: 5 InsertRepeatedBytes-CopyPart-ChangeBit-CopyPart-EraseBytes-
+#4033	DONE   cov: 330 ft: 393 corp: 30/1038b lim: 4096 exec/s: 130 rss: 57Mb
+###### Recommended dictionary. ######
+&#34;\001\000\000\000\000\000\000\000&#34; # Uses: 55
+&#34;\000\000\000\000\000\000\000\000&#34; # Uses: 55
+&#34;\377\377\377\377\377\377\377\377&#34; # Uses: 44
+&#34;\001\000\000\000\000\000\000e&#34; # Uses: 42
+&#34;yehmeemisolated&#34; # Uses: 39
+&#34;\000\000\020u&#34; # Uses: 30
+&#34;\370\377\377\177&#34; # Uses: 42
+&#34;\377\377\377\377\377\377\3770&#34; # Uses: 32
+&#34;.x&#34; # Uses: 24
+###### End of recommended dictionary. ######
+Done 4033 runs in 31 second(s)
+stat::number_of_executed_units: 4033
+stat::average_exec_per_sec:     130
+stat::new_units_added:          79
+stat::slowest_unit_time_sec:    0
+stat::peak_rss_mb:              57
+
+</pre>
+
+
+</body>

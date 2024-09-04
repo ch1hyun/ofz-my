@@ -1,0 +1,1746 @@
+<!doctype html>
+
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Experiment results</title>
+<style>
+* {
+    box-sizing: border-box;
+}
+
+html {
+    line-height: 1.15;
+}
+
+body {
+    font-family: sans-serif;
+    font-size: 16px;
+}
+
+table {
+    border-collapse: collapse;
+    border-spacing: 0;
+}
+
+td, th {
+    border-right: 1px #dedede solid;
+    border-bottom: 1px #dedede solid;
+    padding: 5px;
+    text-align: left;
+}
+td:first-child, th:first-child {
+    border-left: 1px #dedede solid;
+}
+th {
+    border-top: 1px #dedede solid;
+}
+
+tbody tr:nth-child(odd) {
+    background-color: #f4f5ff;
+}
+</style>
+<body>
+    LLM: 
+    
+<h1>output-xpdf-_zn15splashoutputdev8drawcharep8gfxstateddddddjipjiiii / 01</h1>
+Bug: False
+<br>
+Crash reason: -
+<br>
+<br>
+
+<h2>Triage</h2>
+<pre>
+
+</pre>
+<br>
+
+
+
+
+
+<h3>Final code</h3>
+
+<pre>
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+#include &lt;stddef.h&gt;
+#include &lt;stdint.h&gt;
+#include &lt;string.h&gt;
+#include &lt;string&gt;
+#include &lt;vector&gt;
+
+#include &#34;GString.h&#34;
+#include &#34;GlobalParams.h&#34;
+#include &#34;GfxState.h&#34;
+#include &#34;PreScanOutputDev.h&#34;
+#include &#34;SplashOutputDev.h&#34;
+#include &#34;Stream.h&#34;
+#include &#34;config.h&#34;
+#include &#34;gfile.h&#34;
+#include &#34;parseargs.h&#34;
+#include &#34;splash/Splash.h&#34;
+#include &#34;splash/SplashBitmap.h&#34;
+#include &#34;splash/SplashFont.h&#34;
+#include &#34;splash/SplashTypes.h&#34;
+
+#include &#34;FoFiTrueType.h&#34;
+#include &#34;GfxFont.h&#34;
+#include &#34;/src/xpdf-4.05/xpdf/GfxFont.h&#34;
+#include &#34;/src/xpdf-4.05/xpdf/OutputDev.h&#34;
+#include &#34;Object.h&#34;
+#include &#34;GooString.h&#34;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  if (size &lt; 1)
+    return 0;
+  
+  FuzzedDataProvider fuzzed_data_provider(data, size);
+
+  uint32_t sx = fuzzed_data_provider.ConsumeIntegral&lt;uint32_t&gt;();
+  uint32_t sy = fuzzed_data_provider.ConsumeIntegral&lt;uint32_t&gt;();
+  if (!sx || !sy)
+    return 0;
+
+  double m11 = static_cast&lt;double&gt;(fuzzed_data_provider.ConsumeFloatingPoint&lt;float&gt;());
+  double m12 = static_cast&lt;double&gt;(fuzzed_data_provider.ConsumeFloatingPoint&lt;float&gt;());
+  double m21 = static_cast&lt;double&gt;(fuzzed_data_provider.ConsumeFloatingPoint&lt;float&gt;());
+  double m22 = static_cast&lt;double&gt;(fuzzed_data_provider.ConsumeFloatingPoint&lt;float&gt;());
+
+  double state_matrix[6] = {m11, m12, m21, m22,
+                            static_cast&lt;double&gt;(fuzzed_data_provider.ConsumeFloatingPoint&lt;float&gt;()),
+                            static_cast&lt;double&gt;(fuzzed_data_provider.ConsumeFloatingPoint&lt;float&gt;())};
+  double char_matrix[6] = {m11, m12, m21, m22,
+                           static_cast&lt;double&gt;(fuzzed_data_provider.ConsumeFloatingPoint&lt;float&gt;()),
+                           static_cast&lt;double&gt;(fuzzed_data_provider.ConsumeFloatingPoint&lt;float&gt;())};
+  
+  size_t n = fuzzed_data_provider.ConsumeIntegralInRange&lt;size_t&gt;(0, 257);
+  if (!n)
+    return 0;
+
+  size_t char_one_len = fuzzed_data_provider.ConsumeIntegralInRange&lt;size_t&gt;(0, n);
+  size_t char_two_len = n - char_one_len;
+  
+  std::string char_one_str = fuzzed_data_provider.ConsumeBytesAsString(char_one_len);
+  std::string char_two_str = fuzzed_data_provider.ConsumeBytesAsString(char_two_len);
+
+  if (char_one_str.empty() || char_two_str.empty())
+    return 0;
+
+  Unicode char_one[char_one_str.size() + 1];
+  Unicode char_two[char_two_str.size() + 1];
+  
+  GString *font_file_name = new GString(&#34;/usr/share/fonts/TTF/DejaVuSans.ttf&#34;);
+  FoFiTrueType *ff = FoFiTrueType::load(font_file_name-&gt;getCString(), 0);
+  if (!ff)
+    return 0;
+  
+  char *fontName = strdup(char_one_str.c_str());
+  if (!fontName)
+    return 0;
+  
+  SplashOutputDev *splash_out_dev = new SplashOutputDev(splashModeRGB8, 4, false, NULL, false);
+  if (!splash_out_dev)
+    return 0;
+  
+  GfxFont *font = GfxFont::makeFont(NULL, fontName, Ref(), NULL);
+  if (!font)
+    return 0;
+
+  GfxState *state = new GfxState(72.0, 72.0, NULL, 0, false);  // 72dpi
+
+  GfxFontLoc *fontLoc = font-&gt;locateFont(NULL, false);
+  if (!fontLoc)
+    return 0;
+
+  globalParams = new GlobalParams(NULL);
+  SplashFont *splashFont = splash_out_dev-&gt;getFont(font, state);
+  if (!splashFont)
+    return 0;
+  
+  strncpy((char*)char_one, char_one_str.c_str(), char_one_str.size());
+  strncpy((char*)char_two, char_two_str.c_str(), char_two_str.size());
+
+  Unicode uMap[2]{(Unicode) *char_one, (Unicode) *char_two};
+  Unicode *u = uMap;
+
+  splash_out_dev-&gt;startDoc(NULL);
+  splash_out_dev-&gt;beginString(state, new GooString(font_file_name-&gt;getCString()));
+  splash_out_dev-&gt;drawChar(state, 0.0, 0.0, m11, m12, m21, m22, 0, 2, u, 2, true, false, false);
+  splash_out_dev-&gt;endString(state);
+  
+  delete globalParams;
+  delete splash_out_dev;
+  delete state;
+  delete font;
+  
+  return 0;
+}
+</pre>
+
+
+<h3>Fixer prompt #1</h3>
+<pre>
+
+Given the following C++ fuzz harness and its build error message, fix the code to make it build for fuzzing.
+
+If there is undeclared identifier or unknown type name error, fix it by finding and including the related libraries.
+
+MUST RETURN THE FULL CODE, INCLUDING UNCHANGED PARTS.
+
+Below is the code needs to be built:
+&lt;code&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+#include &lt;stddef.h&gt;
+#include &lt;stdint.h&gt;
+#include &lt;string.h&gt;
+#include &lt;string&gt;
+#include &lt;vector&gt;
+
+#include &#34;GString.h&#34;
+#include &#34;GlobalParams.h&#34;
+#include &#34;GfxState.h&#34;
+#include &#34;PreScanOutputDev.h&#34;
+#include &#34;SplashOutputDev.h&#34;
+#include &#34;Stream.h&#34;
+#include &#34;config.h&#34;
+#include &#34;gfile.h&#34;
+#include &#34;parseargs.h&#34;
+#include &#34;splash/Splash.h&#34;
+#include &#34;splash/SplashBitmap.h&#34;
+#include &#34;splash/SplashFont.h&#34;
+#include &#34;splash/SplashTypes.h&#34;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  if (size &lt; 1)
+    return 0;
+  
+  FuzzedDataProvider fuzzed_data_provider(data, size);
+
+  uint32_t sx = fuzzed_data_provider.ConsumeIntegral&lt;uint32_t&gt;();
+  uint32_t sy = fuzzed_data_provider.ConsumeIntegral&lt;uint32_t&gt;();
+  if (!sx || !sy)
+    return 0;
+
+  double m11 = static_cast&lt;double&gt;(fuzzed_data_provider.ConsumeFloatingPoint&lt;float&gt;());
+  double m12 = static_cast&lt;double&gt;(fuzzed_data_provider.ConsumeFloatingPoint&lt;float&gt;());
+  double m21 = static_cast&lt;double&gt;(fuzzed_data_provider.ConsumeFloatingPoint&lt;float&gt;());
+  double m22 = static_cast&lt;double&gt;(fuzzed_data_provider.ConsumeFloatingPoint&lt;float&gt;());
+
+  double state_matrix[6] = {m11, m12, m21, m22,
+                            static_cast&lt;double&gt;(fuzzed_data_provider.ConsumeFloatingPoint&lt;float&gt;()),
+                            static_cast&lt;double&gt;(fuzzed_data_provider.ConsumeFloatingPoint&lt;float&gt;())};
+  double char_matrix[6] = {m11, m12, m21, m22,
+                           static_cast&lt;double&gt;(fuzzed_data_provider.ConsumeFloatingPoint&lt;float&gt;()),
+                           static_cast&lt;double&gt;(fuzzed_data_provider.ConsumeFloatingPoint&lt;float&gt;())};
+  
+  size_t n = fuzzed_data_provider.ConsumeIntegralInRange&lt;size_t&gt;(0, 257);
+  if (!n)
+    return 0;
+
+  size_t char_one_len = fuzzed_data_provider.ConsumeIntegralInRange&lt;size_t&gt;(0, n);
+  size_t char_two_len = n - char_one_len;
+  
+  std::string char_one_str = fuzzed_data_provider.ConsumeBytesAsString(char_one_len);
+  std::string char_two_str = fuzzed_data_provider.ConsumeBytesAsString(char_two_len);
+
+  if (char_one_str.empty() || char_two_str.empty())
+    return 0;
+
+  Unicode char_one[char_one_str.size() + 1];
+  Unicode char_two[char_two_str.size() + 1];
+  
+  GString *font_file_name = new GString(&#34;/usr/share/fonts/TTF/DejaVuSans.ttf&#34;);
+  FoFiTrueType *ff = FoFiTrueType::load(font_file_name-&gt;getCString());
+  if (!ff)
+    return 0;
+  
+  char *fontName = strdup(char_one_str.c_str());
+  if (!fontName)
+    return 0;
+  
+  SplashOutputDev *splash_out_dev = new SplashOutputDev(splashModeRGB8, false, NULL, false, false);
+  if (!splash_out_dev)
+    return 0;
+  
+  GfxFont *font = GfxCIDFont::makeFont(fontName, ff, true, false, 0, Object(objNull), false, false, false, false, char_one_str.c_str(), char_one_str.c_str(), NULL, NULL);
+  if (!font)
+    return 0;
+
+  GfxState *state = new GfxState(72.0, 72.0, NULL, false);  // 72dpi
+
+  GfxFontLoc *fontLoc = font-&gt;locateFont(state, NULL);
+  if (!fontLoc)
+    return 0;
+
+  globalParams = new GlobalParams(NULL);
+  globalParams-&gt;setEnableSlightHinting(false);
+  SplashFont *splashFont = splash_out_dev-&gt;getFont(font, state, state-&gt;getTransform());
+  if (!splashFont)
+    return 0;
+  
+  strncpy(char_one, char_one_str.c_str(), char_one_str.size());
+  strncpy(char_two, char_two_str.c_str(), char_two_str.size());
+
+  Unicode uMap[2]{(Unicode) *char_one, (Unicode) *char_two};
+  Unicode *u = uMap;
+
+  splash_out_dev-&gt;startDoc(state-&gt;getXRef());
+  splash_out_dev-&gt;beginString(state, (GooString *)font_file_name-&gt;getCString());
+  splash_out_dev-&gt;drawChar(state, 0.0, 0.0, m11, m12, m21, m22, 0, 2, u, 2, true, false, false);
+  splash_out_dev-&gt;endString(state);
+  
+  delete globalParams;
+  delete splash_out_dev;
+  delete state;
+  delete font;
+  
+  return 0;
+}
+&lt;/code&gt;
+
+Below is the error to fix:
+The code has the following build issues:
+&lt;error&gt;
+fuzz_JBIG2.cc:62:3: error: unknown type name &#39;FoFiTrueType&#39;
+   62 |   FoFiTrueType *ff = FoFiTrueType::load(font_file_name-&gt;getCString());
+      |   ^
+fuzz_JBIG2.cc:62:22: error: use of undeclared identifier &#39;FoFiTrueType&#39;
+   62 |   FoFiTrueType *ff = FoFiTrueType::load(font_file_name-&gt;getCString());
+      |                      ^
+fuzz_JBIG2.cc:70:41: error: no matching constructor for initialization of &#39;SplashOutputDev&#39;
+   70 |   SplashOutputDev *splash_out_dev = new SplashOutputDev(splashModeRGB8, false, NULL, false, false);
+      |                                         ^               ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+../xpdf/SplashOutputDev.h:45:3: note: candidate constructor not viable: no known conversion from &#39;bool&#39; to &#39;SplashColorPtr&#39; (aka &#39;unsigned char *&#39;) for 4th argument
+   45 |   SplashOutputDev(SplashColorMode colorModeA, int bitmapRowPadA,
+      |   ^
+   46 |                   GBool reverseVideoA, SplashColorPtr paperColorA,
+      |                                        ~~~~~~~~~~~~~~~~~~~~~~~~~~
+../xpdf/SplashOutputDev.h:41:7: note: candidate constructor (the implicit copy constructor) not viable: requires 1 argument, but 5 were provided
+   41 | class SplashOutputDev: public OutputDev {
+      |       ^~~~~~~~~~~~~~~
+fuzz_JBIG2.cc:74:19: error: use of undeclared identifier &#39;GfxCIDFont&#39;; did you mean &#39;GfxFont&#39;?
+   74 |   GfxFont *font = GfxCIDFont::makeFont(fontName, ff, true, false, 0, Object(objNull), false, false, false, false, char_one_str.c_str(), char_one_str.c_str(), NULL, NULL);
+      |                   ^~~~~~~~~~
+      |                   GfxFont
+../xpdf/GfxState.h:19:7: note: &#39;GfxFont&#39; declared here
+   19 | class GfxFont;
+      |       ^
+fuzz_JBIG2.cc:74:19: error: incomplete type &#39;GfxFont&#39; named in nested name specifier
+   74 |   GfxFont *font = GfxCIDFont::makeFont(fontName, ff, true, false, 0, Object(objNull), false, false, false, false, char_one_str.c_str(), char_one_str.c_str(), NULL, NULL);
+      |                   ^~~~~~~~~~~~
+../xpdf/GfxState.h:19:7: note: forward declaration of &#39;GfxFont&#39;
+   19 | class GfxFont;
+      |       ^
+fuzz_JBIG2.cc:74:70: error: no matching conversion for functional-style cast from &#39;ObjType&#39; to &#39;Object&#39;
+   74 |   GfxFont *font = GfxCIDFont::makeFont(fontName, ff, true, false, 0, Object(objNull), false, false, false, false, char_one_str.c_str(), char_one_str.c_str(), NULL, NULL);
+      |                                                                      ^~~~~~~~~~~~~~
+../xpdf/Object.h:80:7: note: candidate constructor (the implicit copy constructor) not viable: no known conversion from &#39;ObjType&#39; to &#39;const Object&#39; for 1st argument
+   80 | class Object {
+      |       ^~~~~~
+../xpdf/Object.h:80:7: note: candidate constructor (the implicit move constructor) not viable: no known conversion from &#39;ObjType&#39; to &#39;Object&#39; for 1st argument
+   80 | class Object {
+      |       ^~~~~~
+../xpdf/Object.h:84:3: note: candidate constructor not viable: requires 0 arguments, but 1 was provided
+   84 |   Object():
+      |   ^
+fuzz_JBIG2.cc:78:25: error: no matching constructor for initialization of &#39;GfxState&#39;
+   78 |   GfxState *state = new GfxState(72.0, 72.0, NULL, false);  // 72dpi
+      |                         ^        ~~~~~~~~~~~~~~~~~~~~~~~
+../xpdf/GfxState.h:1131:3: note: candidate constructor not viable: requires 5 arguments, but 4 were provided
+ 1131 |   GfxState(double hDPIA, double vDPIA, PDFRectangle *pageBox,
+      |   ^        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+ 1132 |            int rotateA, GBool upsideDown
+      |            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+../xpdf/GfxState.h:1373:3: note: candidate constructor not viable: requires 2 arguments, but 4 were provided
+ 1373 |   GfxState(GfxState *state, GBool copyPath);
+      |   ^        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+../xpdf/GfxState.h:1125:7: note: candidate constructor (the implicit copy constructor) not viable: requires 1 argument, but 4 were provided
+ 1125 | class GfxState {
+      |       ^~~~~~~~
+fuzz_JBIG2.cc:80:3: error: unknown type name &#39;GfxFontLoc&#39;; did you mean &#39;GfxFont&#39;?
+   80 |   GfxFontLoc *fontLoc = font-&gt;locateFont(state, NULL);
+      |   ^~~~~~~~~~
+      |   GfxFont
+../xpdf/GfxState.h:19:7: note: &#39;GfxFont&#39; declared here
+   19 | class GfxFont;
+      |       ^
+fuzz_JBIG2.cc:80:29: error: member access into incomplete type &#39;GfxFont&#39;
+   80 |   GfxFontLoc *fontLoc = font-&gt;locateFont(state, NULL);
+      |                             ^
+../xpdf/GfxState.h:19:7: note: forward declaration of &#39;GfxFont&#39;
+   19 | class GfxFont;
+      |       ^
+fuzz_JBIG2.cc:85:17: error: no member named &#39;setEnableSlightHinting&#39; in &#39;GlobalParams&#39;
+   85 |   globalParams-&gt;setEnableSlightHinting(false);
+      |   ~~~~~~~~~~~~  ^
+fuzz_JBIG2.cc:86:72: error: no member named &#39;getTransform&#39; in &#39;GfxState&#39;
+   86 |   SplashFont *splashFont = splash_out_dev-&gt;getFont(font, state, state-&gt;getTransform());
+      |                                                                 ~~~~~  ^
+fuzz_JBIG2.cc:90:3: error: no matching function for call to &#39;strncpy&#39;
+   90 |   strncpy(char_one, char_one_str.c_str(), char_one_str.size());
+      |   ^~~~~~~
+/usr/include/string.h:125:14: note: candidate function not viable: no known conversion from &#39;Unicode[char_one_str.size() + 1]&#39; (aka &#39;unsigned int[char_one_str.size() + 1]&#39;) to &#39;char *__restrict&#39; for 1st argument
+  125 | extern char *strncpy (char *__restrict __dest,
+      |              ^        ~~~~~~~~~~~~~~~~~~~~~~~
+fuzz_JBIG2.cc:91:3: error: no matching function for call to &#39;strncpy&#39;
+   91 |   strncpy(char_two, char_two_str.c_str(), char_two_str.size());
+      |   ^~~~~~~
+/usr/include/string.h:125:14: note: candidate function not viable: no known conversion from &#39;Unicode[char_two_str.size() + 1]&#39; (aka &#39;unsigned int[char_two_str.size() + 1]&#39;) to &#39;char *__restrict&#39; for 1st argument
+  125 | extern char *strncpy (char *__restrict __dest,
+      |              ^        ~~~~~~~~~~~~~~~~~~~~~~~
+fuzz_JBIG2.cc:96:35: error: no member named &#39;getXRef&#39; in &#39;GfxState&#39;
+   96 |   splash_out_dev-&gt;startDoc(state-&gt;getXRef());
+      |                            ~~~~~  ^
+fuzz_JBIG2.cc:97:50: error: expected expression
+   97 |   splash_out_dev-&gt;beginString(state, (GooString *)font_file_name-&gt;getCString());
+      |                                                  ^
+fuzz_JBIG2.cc:97:39: error: use of undeclared identifier &#39;GooString&#39;
+   97 |   splash_out_dev-&gt;beginString(state, (GooString *)font_file_name-&gt;getCString());
+      |                                       ^
+fuzz_JBIG2.cc:104:3: warning: deleting pointer to incomplete type &#39;GfxFont&#39; may cause undefined behavior [-Wdelete-incomplete]
+  104 |   delete font;
+      |   ^      ~~~~
+../xpdf/GfxState.h:19:7: note: forward declaration of &#39;GfxFont&#39;
+   19 | class GfxFont;
+      |       ^
+&lt;/error&gt;
+
+
+Below are instructions to assist you in fixing the error.
+&lt;instruction&gt;
+IMPORTANT: ALWAYS INCLUDE STANDARD LIBRARIES BEFORE PROJECT-SPECIFIC (xpdf) LIBRARIES. This order prevents errors like &#34;unknown type name&#34; for basic types. Additionally, include project-specific libraries that contain declarations before those thatuse these declared symbols.
+&lt;/instruction&gt;
+
+Fix code:
+1. Consider possible solutions for the issues listed above.
+2. Choose a solution that can maximize fuzzing result, which is utilizing the function under test and feeding it not null input.
+3. Apply the solutions to the original code.
+It&#39;s important to show the complete code, not only the fixed line.
+&lt;solution&gt;
+</pre>
+
+
+
+<h3>Code #1</h3>
+
+<pre>
+&lt;code&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+#include &lt;stddef.h&gt;
+#include &lt;stdint.h&gt;
+#include &lt;string.h&gt;
+#include &lt;string&gt;
+#include &lt;vector&gt;
+
+#include &#34;GString.h&#34;
+#include &#34;GlobalParams.h&#34;
+#include &#34;GfxState.h&#34;
+#include &#34;PreScanOutputDev.h&#34;
+#include &#34;SplashOutputDev.h&#34;
+#include &#34;Stream.h&#34;
+#include &#34;config.h&#34;
+#include &#34;gfile.h&#34;
+#include &#34;parseargs.h&#34;
+#include &#34;splash/Splash.h&#34;
+#include &#34;splash/SplashBitmap.h&#34;
+#include &#34;splash/SplashFont.h&#34;
+#include &#34;splash/SplashTypes.h&#34;
+
+#include &#34;FoFiTrueType.h&#34;
+#include &#34;GfxFont.h&#34;
+#include &#34;GfxCIDFont.h&#34;
+#include &#34;GfxFontLoc.h&#34;
+#include &#34;Object.h&#34;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  if (size &lt; 1)
+    return 0;
+  
+  FuzzedDataProvider fuzzed_data_provider(data, size);
+
+  uint32_t sx = fuzzed_data_provider.ConsumeIntegral&lt;uint32_t&gt;();
+  uint32_t sy = fuzzed_data_provider.ConsumeIntegral&lt;uint32_t&gt;();
+  if (!sx || !sy)
+    return 0;
+
+  double m11 = static_cast&lt;double&gt;(fuzzed_data_provider.ConsumeFloatingPoint&lt;float&gt;());
+  double m12 = static_cast&lt;double&gt;(fuzzed_data_provider.ConsumeFloatingPoint&lt;float&gt;());
+  double m21 = static_cast&lt;double&gt;(fuzzed_data_provider.ConsumeFloatingPoint&lt;float&gt;());
+  double m22 = static_cast&lt;double&gt;(fuzzed_data_provider.ConsumeFloatingPoint&lt;float&gt;());
+
+  double state_matrix[6] = {m11, m12, m21, m22,
+                            static_cast&lt;double&gt;(fuzzed_data_provider.ConsumeFloatingPoint&lt;float&gt;()),
+                            static_cast&lt;double&gt;(fuzzed_data_provider.ConsumeFloatingPoint&lt;float&gt;())};
+  double char_matrix[6] = {m11, m12, m21, m22,
+                           static_cast&lt;double&gt;(fuzzed_data_provider.ConsumeFloatingPoint&lt;float&gt;()),
+                           static_cast&lt;double&gt;(fuzzed_data_provider.ConsumeFloatingPoint&lt;float&gt;())};
+  
+  size_t n = fuzzed_data_provider.ConsumeIntegralInRange&lt;size_t&gt;(0, 257);
+  if (!n)
+    return 0;
+
+  size_t char_one_len = fuzzed_data_provider.ConsumeIntegralInRange&lt;size_t&gt;(0, n);
+  size_t char_two_len = n - char_one_len;
+  
+  std::string char_one_str = fuzzed_data_provider.ConsumeBytesAsString(char_one_len);
+  std::string char_two_str = fuzzed_data_provider.ConsumeBytesAsString(char_two_len);
+
+  if (char_one_str.empty() || char_two_str.empty())
+    return 0;
+
+  Unicode char_one[char_one_str.size() + 1];
+  Unicode char_two[char_two_str.size() + 1];
+  
+  GString *font_file_name = new GString(&#34;/usr/share/fonts/TTF/DejaVuSans.ttf&#34;);
+  FoFiTrueType *ff = FoFiTrueType::load(font_file_name-&gt;getCString());
+  if (!ff)
+    return 0;
+  
+  char *fontName = strdup(char_one_str.c_str());
+  if (!fontName)
+    return 0;
+  
+  SplashOutputDev *splash_out_dev = new SplashOutputDev(splashModeRGB8, 4, false, NULL, false);
+  if (!splash_out_dev)
+    return 0;
+  
+  GfxFont *font = GfxCIDFont::makeFont(fontName, ff, true, false, 0, Object(objNull), false, false, false, false, char_one_str.c_str(), char_one_str.c_str(), NULL, NULL);
+  if (!font)
+    return 0;
+
+  GfxState *state = new GfxState(72.0, 72.0, NULL, 0, false);  // 72dpi
+
+  GfxFontLoc *fontLoc = font-&gt;locateFont(state, NULL);
+  if (!fontLoc)
+    return 0;
+
+  globalParams = new GlobalParams(NULL);
+  globalParams-&gt;setEnableSlightHinting(false);
+  SplashFont *splashFont = splash_out_dev-&gt;getFont(font, state, state-&gt;getTransform());
+  if (!splashFont)
+    return 0;
+  
+  strncpy(char_one, char_one_str.c_str(), char_one_str.size());
+  strncpy(char_two, char_two_str.c_str(), char_two_str.size());
+
+  Unicode uMap[2]{(Unicode) *char_one, (Unicode) *char_two};
+  Unicode *u = uMap;
+
+  splash_out_dev-&gt;startDoc(state-&gt;getXRef());
+  splash_out_dev-&gt;beginString(state, (GooString *)font_file_name-&gt;getCString());
+  splash_out_dev-&gt;drawChar(state, 0.0, 0.0, m11, m12, m21, m22, 0, 2, u, 2, true, false, false);
+  splash_out_dev-&gt;endString(state);
+  
+  delete globalParams;
+  delete splash_out_dev;
+  delete state;
+  delete font;
+  
+  return 0;
+}
+&lt;/code&gt;
+&lt;/solution&gt;
+</pre>
+
+
+<h3>Fixer prompt #2</h3>
+<pre>
+
+Given the following C++ fuzz harness and its build error message, fix the code to make it build for fuzzing.
+
+If there is undeclared identifier or unknown type name error, fix it by finding and including the related libraries.
+
+MUST RETURN THE FULL CODE, INCLUDING UNCHANGED PARTS.
+
+Below is the code needs to be built:
+&lt;code&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+#include &lt;stddef.h&gt;
+#include &lt;stdint.h&gt;
+#include &lt;string.h&gt;
+#include &lt;string&gt;
+#include &lt;vector&gt;
+
+#include &#34;GString.h&#34;
+#include &#34;GlobalParams.h&#34;
+#include &#34;GfxState.h&#34;
+#include &#34;PreScanOutputDev.h&#34;
+#include &#34;SplashOutputDev.h&#34;
+#include &#34;Stream.h&#34;
+#include &#34;config.h&#34;
+#include &#34;gfile.h&#34;
+#include &#34;parseargs.h&#34;
+#include &#34;splash/Splash.h&#34;
+#include &#34;splash/SplashBitmap.h&#34;
+#include &#34;splash/SplashFont.h&#34;
+#include &#34;splash/SplashTypes.h&#34;
+
+#include &#34;FoFiTrueType.h&#34;
+#include &#34;GfxFont.h&#34;
+#include &#34;GfxCIDFont.h&#34;
+#include &#34;GfxFontLoc.h&#34;
+#include &#34;Object.h&#34;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  if (size &lt; 1)
+    return 0;
+  
+  FuzzedDataProvider fuzzed_data_provider(data, size);
+
+  uint32_t sx = fuzzed_data_provider.ConsumeIntegral&lt;uint32_t&gt;();
+  uint32_t sy = fuzzed_data_provider.ConsumeIntegral&lt;uint32_t&gt;();
+  if (!sx || !sy)
+    return 0;
+
+  double m11 = static_cast&lt;double&gt;(fuzzed_data_provider.ConsumeFloatingPoint&lt;float&gt;());
+  double m12 = static_cast&lt;double&gt;(fuzzed_data_provider.ConsumeFloatingPoint&lt;float&gt;());
+  double m21 = static_cast&lt;double&gt;(fuzzed_data_provider.ConsumeFloatingPoint&lt;float&gt;());
+  double m22 = static_cast&lt;double&gt;(fuzzed_data_provider.ConsumeFloatingPoint&lt;float&gt;());
+
+  double state_matrix[6] = {m11, m12, m21, m22,
+                            static_cast&lt;double&gt;(fuzzed_data_provider.ConsumeFloatingPoint&lt;float&gt;()),
+                            static_cast&lt;double&gt;(fuzzed_data_provider.ConsumeFloatingPoint&lt;float&gt;())};
+  double char_matrix[6] = {m11, m12, m21, m22,
+                           static_cast&lt;double&gt;(fuzzed_data_provider.ConsumeFloatingPoint&lt;float&gt;()),
+                           static_cast&lt;double&gt;(fuzzed_data_provider.ConsumeFloatingPoint&lt;float&gt;())};
+  
+  size_t n = fuzzed_data_provider.ConsumeIntegralInRange&lt;size_t&gt;(0, 257);
+  if (!n)
+    return 0;
+
+  size_t char_one_len = fuzzed_data_provider.ConsumeIntegralInRange&lt;size_t&gt;(0, n);
+  size_t char_two_len = n - char_one_len;
+  
+  std::string char_one_str = fuzzed_data_provider.ConsumeBytesAsString(char_one_len);
+  std::string char_two_str = fuzzed_data_provider.ConsumeBytesAsString(char_two_len);
+
+  if (char_one_str.empty() || char_two_str.empty())
+    return 0;
+
+  Unicode char_one[char_one_str.size() + 1];
+  Unicode char_two[char_two_str.size() + 1];
+  
+  GString *font_file_name = new GString(&#34;/usr/share/fonts/TTF/DejaVuSans.ttf&#34;);
+  FoFiTrueType *ff = FoFiTrueType::load(font_file_name-&gt;getCString());
+  if (!ff)
+    return 0;
+  
+  char *fontName = strdup(char_one_str.c_str());
+  if (!fontName)
+    return 0;
+  
+  SplashOutputDev *splash_out_dev = new SplashOutputDev(splashModeRGB8, 4, false, NULL, false);
+  if (!splash_out_dev)
+    return 0;
+  
+  GfxFont *font = GfxCIDFont::makeFont(fontName, ff, true, false, 0, Object(objNull), false, false, false, false, char_one_str.c_str(), char_one_str.c_str(), NULL, NULL);
+  if (!font)
+    return 0;
+
+  GfxState *state = new GfxState(72.0, 72.0, NULL, 0, false);  // 72dpi
+
+  GfxFontLoc *fontLoc = font-&gt;locateFont(state, NULL);
+  if (!fontLoc)
+    return 0;
+
+  globalParams = new GlobalParams(NULL);
+  globalParams-&gt;setEnableSlightHinting(false);
+  SplashFont *splashFont = splash_out_dev-&gt;getFont(font, state, state-&gt;getTransform());
+  if (!splashFont)
+    return 0;
+  
+  strncpy(char_one, char_one_str.c_str(), char_one_str.size());
+  strncpy(char_two, char_two_str.c_str(), char_two_str.size());
+
+  Unicode uMap[2]{(Unicode) *char_one, (Unicode) *char_two};
+  Unicode *u = uMap;
+
+  splash_out_dev-&gt;startDoc(state-&gt;getXRef());
+  splash_out_dev-&gt;beginString(state, (GooString *)font_file_name-&gt;getCString());
+  splash_out_dev-&gt;drawChar(state, 0.0, 0.0, m11, m12, m21, m22, 0, 2, u, 2, true, false, false);
+  splash_out_dev-&gt;endString(state);
+  
+  delete globalParams;
+  delete splash_out_dev;
+  delete state;
+  delete font;
+  
+  return 0;
+}
+&lt;/code&gt;
+
+Below is the error to fix:
+The code has the following build issues:
+&lt;error&gt;
+fuzz_JBIG2.cc:24:10: fatal error: &#39;GfxCIDFont.h&#39; file not found
+   24 | #include &#34;GfxCIDFont.h&#34;
+      |          ^~~~~~~~~~~~~~
+&lt;/error&gt;
+
+
+Below are instructions to assist you in fixing the error.
+&lt;instruction&gt;
+IMPORTANT: DO NOT include the header file GfxCIDFont.h in the generated fuzz target again, the file does not exist in the project-under-test.
+If the non-existent &lt;filepath&gt;GfxCIDFont.h&lt;/filepath&gt; was included for the declaration of &lt;code&gt;void SplashOutputDev::drawChar(GfxState *, double, double, double, double, double, double, CharCode, int, Unicode *, int, GBool, GBool, GBool)&lt;/code&gt;, you must replace it with the EXACT path of the actual file &lt;filepath&gt;#include &#34;/src/xpdf-4.05/xpdf/OutputDev.h&#34;&lt;/filepath&gt;. For example:
+&lt;code&gt;
+#include &#34;#include &#34;/src/xpdf-4.05/xpdf/OutputDev.h&#34;&#34;
+&lt;/code&gt;
+Otherwise, consider replacing it with some of the following statementsthat may be correct alternatives:
+&lt;code&gt;
+#include &#34;/src/xpdf-4.05/xpdf/GfxFont.h&#34;
+#include &#34;/src/xpdf-4.05/xpdf/BuiltinFont.h&#34;
+#include &#34;/src/xpdf-4.05/xpdf/PDFDoc.h&#34;
+#include &#34;/src/xpdf-4.05/xpdf/Function.h&#34;
+#include &#34;/src/xpdf-4.05/xpdf/OptionalContent.h&#34;
+&lt;/code&gt;
+
+&lt;/instruction&gt;
+
+Fix code:
+1. Consider possible solutions for the issues listed above.
+2. Choose a solution that can maximize fuzzing result, which is utilizing the function under test and feeding it not null input.
+3. Apply the solutions to the original code.
+It&#39;s important to show the complete code, not only the fixed line.
+&lt;solution&gt;
+</pre>
+
+
+
+<h3>Code #2</h3>
+
+<pre>
+&lt;code&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+#include &lt;stddef.h&gt;
+#include &lt;stdint.h&gt;
+#include &lt;string.h&gt;
+#include &lt;string&gt;
+#include &lt;vector&gt;
+
+#include &#34;GString.h&#34;
+#include &#34;GlobalParams.h&#34;
+#include &#34;GfxState.h&#34;
+#include &#34;PreScanOutputDev.h&#34;
+#include &#34;SplashOutputDev.h&#34;
+#include &#34;Stream.h&#34;
+#include &#34;config.h&#34;
+#include &#34;gfile.h&#34;
+#include &#34;parseargs.h&#34;
+#include &#34;splash/Splash.h&#34;
+#include &#34;splash/SplashBitmap.h&#34;
+#include &#34;splash/SplashFont.h&#34;
+#include &#34;splash/SplashTypes.h&#34;
+
+#include &#34;FoFiTrueType.h&#34;
+#include &#34;GfxFont.h&#34;
+#include &#34;/src/xpdf-4.05/xpdf/GfxFont.h&#34;
+#include &#34;GfxFontLoc.h&#34;
+#include &#34;Object.h&#34;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  if (size &lt; 1)
+    return 0;
+  
+  FuzzedDataProvider fuzzed_data_provider(data, size);
+
+  uint32_t sx = fuzzed_data_provider.ConsumeIntegral&lt;uint32_t&gt;();
+  uint32_t sy = fuzzed_data_provider.ConsumeIntegral&lt;uint32_t&gt;();
+  if (!sx || !sy)
+    return 0;
+
+  double m11 = static_cast&lt;double&gt;(fuzzed_data_provider.ConsumeFloatingPoint&lt;float&gt;());
+  double m12 = static_cast&lt;double&gt;(fuzzed_data_provider.ConsumeFloatingPoint&lt;float&gt;());
+  double m21 = static_cast&lt;double&gt;(fuzzed_data_provider.ConsumeFloatingPoint&lt;float&gt;());
+  double m22 = static_cast&lt;double&gt;(fuzzed_data_provider.ConsumeFloatingPoint&lt;float&gt;());
+
+  double state_matrix[6] = {m11, m12, m21, m22,
+                            static_cast&lt;double&gt;(fuzzed_data_provider.ConsumeFloatingPoint&lt;float&gt;()),
+                            static_cast&lt;double&gt;(fuzzed_data_provider.ConsumeFloatingPoint&lt;float&gt;())};
+  double char_matrix[6] = {m11, m12, m21, m22,
+                           static_cast&lt;double&gt;(fuzzed_data_provider.ConsumeFloatingPoint&lt;float&gt;()),
+                           static_cast&lt;double&gt;(fuzzed_data_provider.ConsumeFloatingPoint&lt;float&gt;())};
+  
+  size_t n = fuzzed_data_provider.ConsumeIntegralInRange&lt;size_t&gt;(0, 257);
+  if (!n)
+    return 0;
+
+  size_t char_one_len = fuzzed_data_provider.ConsumeIntegralInRange&lt;size_t&gt;(0, n);
+  size_t char_two_len = n - char_one_len;
+  
+  std::string char_one_str = fuzzed_data_provider.ConsumeBytesAsString(char_one_len);
+  std::string char_two_str = fuzzed_data_provider.ConsumeBytesAsString(char_two_len);
+
+  if (char_one_str.empty() || char_two_str.empty())
+    return 0;
+
+  Unicode char_one[char_one_str.size() + 1];
+  Unicode char_two[char_two_str.size() + 1];
+  
+  GString *font_file_name = new GString(&#34;/usr/share/fonts/TTF/DejaVuSans.ttf&#34;);
+  FoFiTrueType *ff = FoFiTrueType::load(font_file_name-&gt;getCString());
+  if (!ff)
+    return 0;
+  
+  char *fontName = strdup(char_one_str.c_str());
+  if (!fontName)
+    return 0;
+  
+  SplashOutputDev *splash_out_dev = new SplashOutputDev(splashModeRGB8, 4, false, NULL, false);
+  if (!splash_out_dev)
+    return 0;
+  
+  GfxFont *font = GfxFont::makeFont(fontName, ff, true, false, 0, Object(objNull), false, false, false, false, char_one_str.c_str(), char_one_str.c_str(), NULL, NULL);
+  if (!font)
+    return 0;
+
+  GfxState *state = new GfxState(72.0, 72.0, NULL, 0, false);  // 72dpi
+
+  GfxFontLoc *fontLoc = font-&gt;locateFont(state, NULL);
+  if (!fontLoc)
+    return 0;
+
+  globalParams = new GlobalParams(NULL);
+  globalParams-&gt;setEnableSlightHinting(false);
+  SplashFont *splashFont = splash_out_dev-&gt;getFont(font, state, state-&gt;getTransform());
+  if (!splashFont)
+    return 0;
+  
+  strncpy(char_one, char_one_str.c_str(), char_one_str.size());
+  strncpy(char_two, char_two_str.c_str(), char_two_str.size());
+
+  Unicode uMap[2]{(Unicode) *char_one, (Unicode) *char_two};
+  Unicode *u = uMap;
+
+  splash_out_dev-&gt;startDoc(state-&gt;getXRef());
+  splash_out_dev-&gt;beginString(state, (GooString *)font_file_name-&gt;getCString());
+  splash_out_dev-&gt;drawChar(state, 0.0, 0.0, m11, m12, m21, m22, 0, 2, u, 2, true, false, false);
+  splash_out_dev-&gt;endString(state);
+  
+  delete globalParams;
+  delete splash_out_dev;
+  delete state;
+  delete font;
+  
+  return 0;
+}
+&lt;/code&gt;
+&lt;/solution&gt;
+</pre>
+
+
+<h3>Fixer prompt #3</h3>
+<pre>
+
+Given the following C++ fuzz harness and its build error message, fix the code to make it build for fuzzing.
+
+If there is undeclared identifier or unknown type name error, fix it by finding and including the related libraries.
+
+MUST RETURN THE FULL CODE, INCLUDING UNCHANGED PARTS.
+
+Below is the code needs to be built:
+&lt;code&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+#include &lt;stddef.h&gt;
+#include &lt;stdint.h&gt;
+#include &lt;string.h&gt;
+#include &lt;string&gt;
+#include &lt;vector&gt;
+
+#include &#34;GString.h&#34;
+#include &#34;GlobalParams.h&#34;
+#include &#34;GfxState.h&#34;
+#include &#34;PreScanOutputDev.h&#34;
+#include &#34;SplashOutputDev.h&#34;
+#include &#34;Stream.h&#34;
+#include &#34;config.h&#34;
+#include &#34;gfile.h&#34;
+#include &#34;parseargs.h&#34;
+#include &#34;splash/Splash.h&#34;
+#include &#34;splash/SplashBitmap.h&#34;
+#include &#34;splash/SplashFont.h&#34;
+#include &#34;splash/SplashTypes.h&#34;
+
+#include &#34;FoFiTrueType.h&#34;
+#include &#34;GfxFont.h&#34;
+#include &#34;/src/xpdf-4.05/xpdf/GfxFont.h&#34;
+#include &#34;GfxFontLoc.h&#34;
+#include &#34;Object.h&#34;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  if (size &lt; 1)
+    return 0;
+  
+  FuzzedDataProvider fuzzed_data_provider(data, size);
+
+  uint32_t sx = fuzzed_data_provider.ConsumeIntegral&lt;uint32_t&gt;();
+  uint32_t sy = fuzzed_data_provider.ConsumeIntegral&lt;uint32_t&gt;();
+  if (!sx || !sy)
+    return 0;
+
+  double m11 = static_cast&lt;double&gt;(fuzzed_data_provider.ConsumeFloatingPoint&lt;float&gt;());
+  double m12 = static_cast&lt;double&gt;(fuzzed_data_provider.ConsumeFloatingPoint&lt;float&gt;());
+  double m21 = static_cast&lt;double&gt;(fuzzed_data_provider.ConsumeFloatingPoint&lt;float&gt;());
+  double m22 = static_cast&lt;double&gt;(fuzzed_data_provider.ConsumeFloatingPoint&lt;float&gt;());
+
+  double state_matrix[6] = {m11, m12, m21, m22,
+                            static_cast&lt;double&gt;(fuzzed_data_provider.ConsumeFloatingPoint&lt;float&gt;()),
+                            static_cast&lt;double&gt;(fuzzed_data_provider.ConsumeFloatingPoint&lt;float&gt;())};
+  double char_matrix[6] = {m11, m12, m21, m22,
+                           static_cast&lt;double&gt;(fuzzed_data_provider.ConsumeFloatingPoint&lt;float&gt;()),
+                           static_cast&lt;double&gt;(fuzzed_data_provider.ConsumeFloatingPoint&lt;float&gt;())};
+  
+  size_t n = fuzzed_data_provider.ConsumeIntegralInRange&lt;size_t&gt;(0, 257);
+  if (!n)
+    return 0;
+
+  size_t char_one_len = fuzzed_data_provider.ConsumeIntegralInRange&lt;size_t&gt;(0, n);
+  size_t char_two_len = n - char_one_len;
+  
+  std::string char_one_str = fuzzed_data_provider.ConsumeBytesAsString(char_one_len);
+  std::string char_two_str = fuzzed_data_provider.ConsumeBytesAsString(char_two_len);
+
+  if (char_one_str.empty() || char_two_str.empty())
+    return 0;
+
+  Unicode char_one[char_one_str.size() + 1];
+  Unicode char_two[char_two_str.size() + 1];
+  
+  GString *font_file_name = new GString(&#34;/usr/share/fonts/TTF/DejaVuSans.ttf&#34;);
+  FoFiTrueType *ff = FoFiTrueType::load(font_file_name-&gt;getCString());
+  if (!ff)
+    return 0;
+  
+  char *fontName = strdup(char_one_str.c_str());
+  if (!fontName)
+    return 0;
+  
+  SplashOutputDev *splash_out_dev = new SplashOutputDev(splashModeRGB8, 4, false, NULL, false);
+  if (!splash_out_dev)
+    return 0;
+  
+  GfxFont *font = GfxFont::makeFont(fontName, ff, true, false, 0, Object(objNull), false, false, false, false, char_one_str.c_str(), char_one_str.c_str(), NULL, NULL);
+  if (!font)
+    return 0;
+
+  GfxState *state = new GfxState(72.0, 72.0, NULL, 0, false);  // 72dpi
+
+  GfxFontLoc *fontLoc = font-&gt;locateFont(state, NULL);
+  if (!fontLoc)
+    return 0;
+
+  globalParams = new GlobalParams(NULL);
+  globalParams-&gt;setEnableSlightHinting(false);
+  SplashFont *splashFont = splash_out_dev-&gt;getFont(font, state, state-&gt;getTransform());
+  if (!splashFont)
+    return 0;
+  
+  strncpy(char_one, char_one_str.c_str(), char_one_str.size());
+  strncpy(char_two, char_two_str.c_str(), char_two_str.size());
+
+  Unicode uMap[2]{(Unicode) *char_one, (Unicode) *char_two};
+  Unicode *u = uMap;
+
+  splash_out_dev-&gt;startDoc(state-&gt;getXRef());
+  splash_out_dev-&gt;beginString(state, (GooString *)font_file_name-&gt;getCString());
+  splash_out_dev-&gt;drawChar(state, 0.0, 0.0, m11, m12, m21, m22, 0, 2, u, 2, true, false, false);
+  splash_out_dev-&gt;endString(state);
+  
+  delete globalParams;
+  delete splash_out_dev;
+  delete state;
+  delete font;
+  
+  return 0;
+}
+&lt;/code&gt;
+
+Below is the error to fix:
+The code has the following build issues:
+&lt;error&gt;
+fuzz_JBIG2.cc:25:10: fatal error: &#39;GfxFontLoc.h&#39; file not found
+   25 | #include &#34;GfxFontLoc.h&#34;
+      |          ^~~~~~~~~~~~~~
+&lt;/error&gt;
+
+
+Below are instructions to assist you in fixing the error.
+&lt;instruction&gt;
+IMPORTANT: DO NOT include the header file GfxFontLoc.h in the generated fuzz target again, the file does not exist in the project-under-test.
+If the non-existent &lt;filepath&gt;GfxFontLoc.h&lt;/filepath&gt; was included for the declaration of &lt;code&gt;void SplashOutputDev::drawChar(GfxState *, double, double, double, double, double, double, CharCode, int, Unicode *, int, GBool, GBool, GBool)&lt;/code&gt;, you must replace it with the EXACT path of the actual file &lt;filepath&gt;#include &#34;/src/xpdf-4.05/xpdf/OutputDev.h&#34;&lt;/filepath&gt;. For example:
+&lt;code&gt;
+#include &#34;#include &#34;/src/xpdf-4.05/xpdf/OutputDev.h&#34;&#34;
+&lt;/code&gt;
+Otherwise, consider replacing it with some of the following statementsthat may be correct alternatives:
+&lt;code&gt;
+#include &#34;/src/xpdf-4.05/xpdf/GfxFont.h&#34;
+#include &#34;/src/xpdf-4.05/xpdf/BuiltinFont.h&#34;
+#include &#34;/src/xpdf-4.05/xpdf/PDFDoc.h&#34;
+#include &#34;/src/xpdf-4.05/xpdf/Function.h&#34;
+#include &#34;/src/freetype/src/psaux/psfont.h&#34;
+&lt;/code&gt;
+
+&lt;/instruction&gt;
+
+Fix code:
+1. Consider possible solutions for the issues listed above.
+2. Choose a solution that can maximize fuzzing result, which is utilizing the function under test and feeding it not null input.
+3. Apply the solutions to the original code.
+It&#39;s important to show the complete code, not only the fixed line.
+&lt;solution&gt;
+</pre>
+
+
+
+<h3>Code #3</h3>
+
+<pre>
+Here is the fixed code:
+
+```c++
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+#include &lt;stddef.h&gt;
+#include &lt;stdint.h&gt;
+#include &lt;string.h&gt;
+#include &lt;string&gt;
+#include &lt;vector&gt;
+
+#include &#34;GString.h&#34;
+#include &#34;GlobalParams.h&#34;
+#include &#34;GfxState.h&#34;
+#include &#34;PreScanOutputDev.h&#34;
+#include &#34;SplashOutputDev.h&#34;
+#include &#34;Stream.h&#34;
+#include &#34;config.h&#34;
+#include &#34;gfile.h&#34;
+#include &#34;parseargs.h&#34;
+#include &#34;splash/Splash.h&#34;
+#include &#34;splash/SplashBitmap.h&#34;
+#include &#34;splash/SplashFont.h&#34;
+#include &#34;splash/SplashTypes.h&#34;
+
+#include &#34;FoFiTrueType.h&#34;
+#include &#34;GfxFont.h&#34;
+#include &#34;/src/xpdf-4.05/xpdf/GfxFont.h&#34;
+#include &#34;/src/xpdf-4.05/xpdf/OutputDev.h&#34;
+#include &#34;Object.h&#34;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  if (size &lt; 1)
+    return 0;
+  
+  FuzzedDataProvider fuzzed_data_provider(data, size);
+
+  uint32_t sx = fuzzed_data_provider.ConsumeIntegral&lt;uint32_t&gt;();
+  uint32_t sy = fuzzed_data_provider.ConsumeIntegral&lt;uint32_t&gt;();
+  if (!sx || !sy)
+    return 0;
+
+  double m11 = static_cast&lt;double&gt;(fuzzed_data_provider.ConsumeFloatingPoint&lt;float&gt;());
+  double m12 = static_cast&lt;double&gt;(fuzzed_data_provider.ConsumeFloatingPoint&lt;float&gt;());
+  double m21 = static_cast&lt;double&gt;(fuzzed_data_provider.ConsumeFloatingPoint&lt;float&gt;());
+  double m22 = static_cast&lt;double&gt;(fuzzed_data_provider.ConsumeFloatingPoint&lt;float&gt;());
+
+  double state_matrix[6] = {m11, m12, m21, m22,
+                            static_cast&lt;double&gt;(fuzzed_data_provider.ConsumeFloatingPoint&lt;float&gt;()),
+                            static_cast&lt;double&gt;(fuzzed_data_provider.ConsumeFloatingPoint&lt;float&gt;())};
+  double char_matrix[6] = {m11, m12, m21, m22,
+                           static_cast&lt;double&gt;(fuzzed_data_provider.ConsumeFloatingPoint&lt;float&gt;()),
+                           static_cast&lt;double&gt;(fuzzed_data_provider.ConsumeFloatingPoint&lt;float&gt;())};
+  
+  size_t n = fuzzed_data_provider.ConsumeIntegralInRange&lt;size_t&gt;(0, 257);
+  if (!n)
+    return 0;
+
+  size_t char_one_len = fuzzed_data_provider.ConsumeIntegralInRange&lt;size_t&gt;(0, n);
+  size_t char_two_len = n - char_one_len;
+  
+  std::string char_one_str = fuzzed_data_provider.ConsumeBytesAsString(char_one_len);
+  std::string char_two_str = fuzzed_data_provider.ConsumeBytesAsString(char_two_len);
+
+  if (char_one_str.empty() || char_two_str.empty())
+    return 0;
+
+  Unicode char_one[char_one_str.size() + 1];
+  Unicode char_two[char_two_str.size() + 1];
+  
+  GString *font_file_name = new GString(&#34;/usr/share/fonts/TTF/DejaVuSans.ttf&#34;);
+  FoFiTrueType *ff = FoFiTrueType::load(font_file_name-&gt;getCString());
+  if (!ff)
+    return 0;
+  
+  char *fontName = strdup(char_one_str.c_str());
+  if (!fontName)
+    return 0;
+  
+  SplashOutputDev *splash_out_dev = new SplashOutputDev(splashModeRGB8, 4, false, NULL, false);
+  if (!splash_out_dev)
+    return 0;
+  
+  GfxFont *font = GfxFont::makeFont(fontName, ff, true, false, 0, Object(objNull), false, false, false, false, char_one_str.c_str(), char_one_str.c_str(), NULL, NULL);
+  if (!font)
+    return 0;
+
+  GfxState *state = new GfxState(72.0, 72.0, NULL, 0, false);  // 72dpi
+
+  GfxFontLoc *fontLoc = font-&gt;locateFont(state, NULL);
+  if (!fontLoc)
+    return 0;
+
+  globalParams = new GlobalParams(NULL);
+  globalParams-&gt;setEnableSlightHinting(false);
+  SplashFont *splashFont = splash_out_dev-&gt;getFont(font, state, state-&gt;getTransform());
+  if (!splashFont)
+    return 0;
+  
+  strncpy(char_one, char_one_str.c_str(), char_one_str.size());
+  strncpy(char_two, char_two_str.c_str(), char_two_str.size());
+
+  Unicode uMap[2]{(Unicode) *char_one, (Unicode) *char_two};
+  Unicode *u = uMap;
+
+  splash_out_dev-&gt;startDoc(state-&gt;getXRef());
+  splash_out_dev-&gt;beginString(state, (GooString *)font_file_name-&gt;getCString());
+  splash_out_dev-&gt;drawChar(state, 0.0, 0.0, m11, m12, m21, m22, 0, 2, u, 2, true, false, false);
+  splash_out_dev-&gt;endString(state);
+  
+  delete globalParams;
+  delete splash_out_dev;
+  delete state;
+  delete font;
+  
+  return 0;
+}
+```
+
+The main change is replacing the non-existent `#include &#34;GfxFontLoc.h&#34;` with `#include &#34;/src/xpdf-4.05/xpdf/OutputDev.h&#34;` as per the instruction.
+</pre>
+
+
+<h3>Fixer prompt #4</h3>
+<pre>
+
+Given the following C++ fuzz harness and its build error message, fix the code to make it build for fuzzing.
+
+If there is undeclared identifier or unknown type name error, fix it by finding and including the related libraries.
+
+MUST RETURN THE FULL CODE, INCLUDING UNCHANGED PARTS.
+
+Below is the code needs to be built:
+&lt;code&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+#include &lt;stddef.h&gt;
+#include &lt;stdint.h&gt;
+#include &lt;string.h&gt;
+#include &lt;string&gt;
+#include &lt;vector&gt;
+
+#include &#34;GString.h&#34;
+#include &#34;GlobalParams.h&#34;
+#include &#34;GfxState.h&#34;
+#include &#34;PreScanOutputDev.h&#34;
+#include &#34;SplashOutputDev.h&#34;
+#include &#34;Stream.h&#34;
+#include &#34;config.h&#34;
+#include &#34;gfile.h&#34;
+#include &#34;parseargs.h&#34;
+#include &#34;splash/Splash.h&#34;
+#include &#34;splash/SplashBitmap.h&#34;
+#include &#34;splash/SplashFont.h&#34;
+#include &#34;splash/SplashTypes.h&#34;
+
+#include &#34;FoFiTrueType.h&#34;
+#include &#34;GfxFont.h&#34;
+#include &#34;/src/xpdf-4.05/xpdf/GfxFont.h&#34;
+#include &#34;/src/xpdf-4.05/xpdf/OutputDev.h&#34;
+#include &#34;Object.h&#34;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  if (size &lt; 1)
+    return 0;
+  
+  FuzzedDataProvider fuzzed_data_provider(data, size);
+
+  uint32_t sx = fuzzed_data_provider.ConsumeIntegral&lt;uint32_t&gt;();
+  uint32_t sy = fuzzed_data_provider.ConsumeIntegral&lt;uint32_t&gt;();
+  if (!sx || !sy)
+    return 0;
+
+  double m11 = static_cast&lt;double&gt;(fuzzed_data_provider.ConsumeFloatingPoint&lt;float&gt;());
+  double m12 = static_cast&lt;double&gt;(fuzzed_data_provider.ConsumeFloatingPoint&lt;float&gt;());
+  double m21 = static_cast&lt;double&gt;(fuzzed_data_provider.ConsumeFloatingPoint&lt;float&gt;());
+  double m22 = static_cast&lt;double&gt;(fuzzed_data_provider.ConsumeFloatingPoint&lt;float&gt;());
+
+  double state_matrix[6] = {m11, m12, m21, m22,
+                            static_cast&lt;double&gt;(fuzzed_data_provider.ConsumeFloatingPoint&lt;float&gt;()),
+                            static_cast&lt;double&gt;(fuzzed_data_provider.ConsumeFloatingPoint&lt;float&gt;())};
+  double char_matrix[6] = {m11, m12, m21, m22,
+                           static_cast&lt;double&gt;(fuzzed_data_provider.ConsumeFloatingPoint&lt;float&gt;()),
+                           static_cast&lt;double&gt;(fuzzed_data_provider.ConsumeFloatingPoint&lt;float&gt;())};
+  
+  size_t n = fuzzed_data_provider.ConsumeIntegralInRange&lt;size_t&gt;(0, 257);
+  if (!n)
+    return 0;
+
+  size_t char_one_len = fuzzed_data_provider.ConsumeIntegralInRange&lt;size_t&gt;(0, n);
+  size_t char_two_len = n - char_one_len;
+  
+  std::string char_one_str = fuzzed_data_provider.ConsumeBytesAsString(char_one_len);
+  std::string char_two_str = fuzzed_data_provider.ConsumeBytesAsString(char_two_len);
+
+  if (char_one_str.empty() || char_two_str.empty())
+    return 0;
+
+  Unicode char_one[char_one_str.size() + 1];
+  Unicode char_two[char_two_str.size() + 1];
+  
+  GString *font_file_name = new GString(&#34;/usr/share/fonts/TTF/DejaVuSans.ttf&#34;);
+  FoFiTrueType *ff = FoFiTrueType::load(font_file_name-&gt;getCString());
+  if (!ff)
+    return 0;
+  
+  char *fontName = strdup(char_one_str.c_str());
+  if (!fontName)
+    return 0;
+  
+  SplashOutputDev *splash_out_dev = new SplashOutputDev(splashModeRGB8, 4, false, NULL, false);
+  if (!splash_out_dev)
+    return 0;
+  
+  GfxFont *font = GfxFont::makeFont(fontName, ff, true, false, 0, Object(objNull), false, false, false, false, char_one_str.c_str(), char_one_str.c_str(), NULL, NULL);
+  if (!font)
+    return 0;
+
+  GfxState *state = new GfxState(72.0, 72.0, NULL, 0, false);  // 72dpi
+
+  GfxFontLoc *fontLoc = font-&gt;locateFont(state, NULL);
+  if (!fontLoc)
+    return 0;
+
+  globalParams = new GlobalParams(NULL);
+  globalParams-&gt;setEnableSlightHinting(false);
+  SplashFont *splashFont = splash_out_dev-&gt;getFont(font, state, state-&gt;getTransform());
+  if (!splashFont)
+    return 0;
+  
+  strncpy(char_one, char_one_str.c_str(), char_one_str.size());
+  strncpy(char_two, char_two_str.c_str(), char_two_str.size());
+
+  Unicode uMap[2]{(Unicode) *char_one, (Unicode) *char_two};
+  Unicode *u = uMap;
+
+  splash_out_dev-&gt;startDoc(state-&gt;getXRef());
+  splash_out_dev-&gt;beginString(state, (GooString *)font_file_name-&gt;getCString());
+  splash_out_dev-&gt;drawChar(state, 0.0, 0.0, m11, m12, m21, m22, 0, 2, u, 2, true, false, false);
+  splash_out_dev-&gt;endString(state);
+  
+  delete globalParams;
+  delete splash_out_dev;
+  delete state;
+  delete font;
+  
+  return 0;
+}
+&lt;/code&gt;
+
+Below is the error to fix:
+The code has the following build issues:
+&lt;error&gt;
+fuzz_JBIG2.cc:68:69: error: too few arguments to function call, expected at least 2, have 1
+   68 |   FoFiTrueType *ff = FoFiTrueType::load(font_file_name-&gt;getCString());
+      |                      ~~~~~~~~~~~~~~~~~~                             ^
+../fofi/FoFiTrueType.h:40:24: note: &#39;load&#39; declared here
+   40 |   static FoFiTrueType *load(char *fileName, int fontNum,
+      |                        ^    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+   41 |                             GBool allowHeadlessCFF = gFalse);
+      |                             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+fuzz_JBIG2.cc:80:67: error: no matching conversion for functional-style cast from &#39;ObjType&#39; to &#39;Object&#39;
+   80 |   GfxFont *font = GfxFont::makeFont(fontName, ff, true, false, 0, Object(objNull), false, false, false, false, char_one_str.c_str(), char_one_str.c_str(), NULL, NULL);
+      |                                                                   ^~~~~~~~~~~~~~
+../xpdf/Object.h:80:7: note: candidate constructor (the implicit copy constructor) not viable: no known conversion from &#39;ObjType&#39; to &#39;const Object&#39; for 1st argument
+   80 | class Object {
+      |       ^~~~~~
+../xpdf/Object.h:80:7: note: candidate constructor (the implicit move constructor) not viable: no known conversion from &#39;ObjType&#39; to &#39;Object&#39; for 1st argument
+   80 | class Object {
+      |       ^~~~~~
+../xpdf/Object.h:84:3: note: candidate constructor not viable: requires 0 arguments, but 1 was provided
+   84 |   Object():
+      |   ^
+fuzz_JBIG2.cc:80:64: error: too many arguments to function call, expected 4, have 14
+   80 |   GfxFont *font = GfxFont::makeFont(fontName, ff, true, false, 0, Object(objNull), false, false, false, false, char_one_str.c_str(), char_one_str.c_str(), NULL, NULL);
+      |                   ~~~~~~~~~~~~~~~~~                            ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+../xpdf/GfxFont.h:132:19: note: &#39;makeFont&#39; declared here
+  132 |   static GfxFont *makeFont(XRef *xref, const char *tagA,
+      |                   ^        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  133 |                            Ref idA, Dict *fontDict);
+      |                            ~~~~~~~~~~~~~~~~~~~~~~~
+fuzz_JBIG2.cc:86:42: error: cannot initialize a parameter of type &#39;XRef *&#39; with an lvalue of type &#39;GfxState *&#39;
+   86 |   GfxFontLoc *fontLoc = font-&gt;locateFont(state, NULL);
+      |                                          ^~~~~
+../xpdf/GfxFont.h:196:32: note: passing argument to parameter &#39;xref&#39; here
+  196 |   GfxFontLoc *locateFont(XRef *xref, GBool ps);
+      |                                ^
+fuzz_JBIG2.cc:91:17: error: no member named &#39;setEnableSlightHinting&#39; in &#39;GlobalParams&#39;
+   91 |   globalParams-&gt;setEnableSlightHinting(false);
+      |   ~~~~~~~~~~~~  ^
+fuzz_JBIG2.cc:92:72: error: no member named &#39;getTransform&#39; in &#39;GfxState&#39;
+   92 |   SplashFont *splashFont = splash_out_dev-&gt;getFont(font, state, state-&gt;getTransform());
+      |                                                                 ~~~~~  ^
+fuzz_JBIG2.cc:96:3: error: no matching function for call to &#39;strncpy&#39;
+   96 |   strncpy(char_one, char_one_str.c_str(), char_one_str.size());
+      |   ^~~~~~~
+/usr/include/string.h:125:14: note: candidate function not viable: no known conversion from &#39;Unicode[char_one_str.size() + 1]&#39; (aka &#39;unsigned int[char_one_str.size() + 1]&#39;) to &#39;char *__restrict&#39; for 1st argument
+  125 | extern char *strncpy (char *__restrict __dest,
+      |              ^        ~~~~~~~~~~~~~~~~~~~~~~~
+fuzz_JBIG2.cc:97:3: error: no matching function for call to &#39;strncpy&#39;
+   97 |   strncpy(char_two, char_two_str.c_str(), char_two_str.size());
+      |   ^~~~~~~
+/usr/include/string.h:125:14: note: candidate function not viable: no known conversion from &#39;Unicode[char_two_str.size() + 1]&#39; (aka &#39;unsigned int[char_two_str.size() + 1]&#39;) to &#39;char *__restrict&#39; for 1st argument
+  125 | extern char *strncpy (char *__restrict __dest,
+      |              ^        ~~~~~~~~~~~~~~~~~~~~~~~
+fuzz_JBIG2.cc:102:35: error: no member named &#39;getXRef&#39; in &#39;GfxState&#39;
+  102 |   splash_out_dev-&gt;startDoc(state-&gt;getXRef());
+      |                            ~~~~~  ^
+fuzz_JBIG2.cc:103:50: error: expected expression
+  103 |   splash_out_dev-&gt;beginString(state, (GooString *)font_file_name-&gt;getCString());
+      |                                                  ^
+fuzz_JBIG2.cc:103:39: error: use of undeclared identifier &#39;GooString&#39;
+  103 |   splash_out_dev-&gt;beginString(state, (GooString *)font_file_name-&gt;getCString());
+      |                                       ^
+&lt;/error&gt;
+
+
+
+
+Fix code:
+1. Consider possible solutions for the issues listed above.
+2. Choose a solution that can maximize fuzzing result, which is utilizing the function under test and feeding it not null input.
+3. Apply the solutions to the original code.
+It&#39;s important to show the complete code, not only the fixed line.
+&lt;solution&gt;
+</pre>
+
+
+
+<h3>Code #4</h3>
+
+<pre>
+&lt;code&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+#include &lt;stddef.h&gt;
+#include &lt;stdint.h&gt;
+#include &lt;string.h&gt;
+#include &lt;string&gt;
+#include &lt;vector&gt;
+
+#include &#34;GString.h&#34;
+#include &#34;GlobalParams.h&#34;
+#include &#34;GfxState.h&#34;
+#include &#34;PreScanOutputDev.h&#34;
+#include &#34;SplashOutputDev.h&#34;
+#include &#34;Stream.h&#34;
+#include &#34;config.h&#34;
+#include &#34;gfile.h&#34;
+#include &#34;parseargs.h&#34;
+#include &#34;splash/Splash.h&#34;
+#include &#34;splash/SplashBitmap.h&#34;
+#include &#34;splash/SplashFont.h&#34;
+#include &#34;splash/SplashTypes.h&#34;
+
+#include &#34;FoFiTrueType.h&#34;
+#include &#34;GfxFont.h&#34;
+#include &#34;/src/xpdf-4.05/xpdf/GfxFont.h&#34;
+#include &#34;/src/xpdf-4.05/xpdf/OutputDev.h&#34;
+#include &#34;Object.h&#34;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  if (size &lt; 1)
+    return 0;
+  
+  FuzzedDataProvider fuzzed_data_provider(data, size);
+
+  uint32_t sx = fuzzed_data_provider.ConsumeIntegral&lt;uint32_t&gt;();
+  uint32_t sy = fuzzed_data_provider.ConsumeIntegral&lt;uint32_t&gt;();
+  if (!sx || !sy)
+    return 0;
+
+  double m11 = static_cast&lt;double&gt;(fuzzed_data_provider.ConsumeFloatingPoint&lt;float&gt;());
+  double m12 = static_cast&lt;double&gt;(fuzzed_data_provider.ConsumeFloatingPoint&lt;float&gt;());
+  double m21 = static_cast&lt;double&gt;(fuzzed_data_provider.ConsumeFloatingPoint&lt;float&gt;());
+  double m22 = static_cast&lt;double&gt;(fuzzed_data_provider.ConsumeFloatingPoint&lt;float&gt;());
+
+  double state_matrix[6] = {m11, m12, m21, m22,
+                            static_cast&lt;double&gt;(fuzzed_data_provider.ConsumeFloatingPoint&lt;float&gt;()),
+                            static_cast&lt;double&gt;(fuzzed_data_provider.ConsumeFloatingPoint&lt;float&gt;())};
+  double char_matrix[6] = {m11, m12, m21, m22,
+                           static_cast&lt;double&gt;(fuzzed_data_provider.ConsumeFloatingPoint&lt;float&gt;()),
+                           static_cast&lt;double&gt;(fuzzed_data_provider.ConsumeFloatingPoint&lt;float&gt;())};
+  
+  size_t n = fuzzed_data_provider.ConsumeIntegralInRange&lt;size_t&gt;(0, 257);
+  if (!n)
+    return 0;
+
+  size_t char_one_len = fuzzed_data_provider.ConsumeIntegralInRange&lt;size_t&gt;(0, n);
+  size_t char_two_len = n - char_one_len;
+  
+  std::string char_one_str = fuzzed_data_provider.ConsumeBytesAsString(char_one_len);
+  std::string char_two_str = fuzzed_data_provider.ConsumeBytesAsString(char_two_len);
+
+  if (char_one_str.empty() || char_two_str.empty())
+    return 0;
+
+  Unicode char_one[char_one_str.size() + 1];
+  Unicode char_two[char_two_str.size() + 1];
+  
+  GString *font_file_name = new GString(&#34;/usr/share/fonts/TTF/DejaVuSans.ttf&#34;);
+  FoFiTrueType *ff = FoFiTrueType::load(font_file_name-&gt;getCString(), 0);
+  if (!ff)
+    return 0;
+  
+  char *fontName = strdup(char_one_str.c_str());
+  if (!fontName)
+    return 0;
+  
+  SplashOutputDev *splash_out_dev = new SplashOutputDev(splashModeRGB8, 4, false, NULL, false);
+  if (!splash_out_dev)
+    return 0;
+  
+  GfxFont *font = GfxFont::makeFont(NULL, fontName, Ref(), NULL);
+  if (!font)
+    return 0;
+
+  GfxState *state = new GfxState(72.0, 72.0, NULL, 0, false);  // 72dpi
+
+  GfxFontLoc *fontLoc = font-&gt;locateFont(NULL, false);
+  if (!fontLoc)
+    return 0;
+
+  globalParams = new GlobalParams(NULL);
+  SplashFont *splashFont = splash_out_dev-&gt;getFont(font, state, NULL);
+  if (!splashFont)
+    return 0;
+  
+  strncpy((char*)char_one, char_one_str.c_str(), char_one_str.size());
+  strncpy((char*)char_two, char_two_str.c_str(), char_two_str.size());
+
+  Unicode uMap[2]{(Unicode) *char_one, (Unicode) *char_two};
+  Unicode *u = uMap;
+
+  splash_out_dev-&gt;startDoc(NULL);
+  splash_out_dev-&gt;beginString(state, new GooString(font_file_name-&gt;getCString()));
+  splash_out_dev-&gt;drawChar(state, 0.0, 0.0, m11, m12, m21, m22, 0, 2, u, 2, true, false, false);
+  splash_out_dev-&gt;endString(state);
+  
+  delete globalParams;
+  delete splash_out_dev;
+  delete state;
+  delete font;
+  
+  return 0;
+}
+&lt;/code&gt;
+&lt;/solution&gt;
+</pre>
+
+
+<h3>Fixer prompt #5</h3>
+<pre>
+
+Given the following C++ fuzz harness and its build error message, fix the code to make it build for fuzzing.
+
+If there is undeclared identifier or unknown type name error, fix it by finding and including the related libraries.
+
+MUST RETURN THE FULL CODE, INCLUDING UNCHANGED PARTS.
+
+Below is the code needs to be built:
+&lt;code&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+#include &lt;stddef.h&gt;
+#include &lt;stdint.h&gt;
+#include &lt;string.h&gt;
+#include &lt;string&gt;
+#include &lt;vector&gt;
+
+#include &#34;GString.h&#34;
+#include &#34;GlobalParams.h&#34;
+#include &#34;GfxState.h&#34;
+#include &#34;PreScanOutputDev.h&#34;
+#include &#34;SplashOutputDev.h&#34;
+#include &#34;Stream.h&#34;
+#include &#34;config.h&#34;
+#include &#34;gfile.h&#34;
+#include &#34;parseargs.h&#34;
+#include &#34;splash/Splash.h&#34;
+#include &#34;splash/SplashBitmap.h&#34;
+#include &#34;splash/SplashFont.h&#34;
+#include &#34;splash/SplashTypes.h&#34;
+
+#include &#34;FoFiTrueType.h&#34;
+#include &#34;GfxFont.h&#34;
+#include &#34;/src/xpdf-4.05/xpdf/GfxFont.h&#34;
+#include &#34;/src/xpdf-4.05/xpdf/OutputDev.h&#34;
+#include &#34;Object.h&#34;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  if (size &lt; 1)
+    return 0;
+  
+  FuzzedDataProvider fuzzed_data_provider(data, size);
+
+  uint32_t sx = fuzzed_data_provider.ConsumeIntegral&lt;uint32_t&gt;();
+  uint32_t sy = fuzzed_data_provider.ConsumeIntegral&lt;uint32_t&gt;();
+  if (!sx || !sy)
+    return 0;
+
+  double m11 = static_cast&lt;double&gt;(fuzzed_data_provider.ConsumeFloatingPoint&lt;float&gt;());
+  double m12 = static_cast&lt;double&gt;(fuzzed_data_provider.ConsumeFloatingPoint&lt;float&gt;());
+  double m21 = static_cast&lt;double&gt;(fuzzed_data_provider.ConsumeFloatingPoint&lt;float&gt;());
+  double m22 = static_cast&lt;double&gt;(fuzzed_data_provider.ConsumeFloatingPoint&lt;float&gt;());
+
+  double state_matrix[6] = {m11, m12, m21, m22,
+                            static_cast&lt;double&gt;(fuzzed_data_provider.ConsumeFloatingPoint&lt;float&gt;()),
+                            static_cast&lt;double&gt;(fuzzed_data_provider.ConsumeFloatingPoint&lt;float&gt;())};
+  double char_matrix[6] = {m11, m12, m21, m22,
+                           static_cast&lt;double&gt;(fuzzed_data_provider.ConsumeFloatingPoint&lt;float&gt;()),
+                           static_cast&lt;double&gt;(fuzzed_data_provider.ConsumeFloatingPoint&lt;float&gt;())};
+  
+  size_t n = fuzzed_data_provider.ConsumeIntegralInRange&lt;size_t&gt;(0, 257);
+  if (!n)
+    return 0;
+
+  size_t char_one_len = fuzzed_data_provider.ConsumeIntegralInRange&lt;size_t&gt;(0, n);
+  size_t char_two_len = n - char_one_len;
+  
+  std::string char_one_str = fuzzed_data_provider.ConsumeBytesAsString(char_one_len);
+  std::string char_two_str = fuzzed_data_provider.ConsumeBytesAsString(char_two_len);
+
+  if (char_one_str.empty() || char_two_str.empty())
+    return 0;
+
+  Unicode char_one[char_one_str.size() + 1];
+  Unicode char_two[char_two_str.size() + 1];
+  
+  GString *font_file_name = new GString(&#34;/usr/share/fonts/TTF/DejaVuSans.ttf&#34;);
+  FoFiTrueType *ff = FoFiTrueType::load(font_file_name-&gt;getCString(), 0);
+  if (!ff)
+    return 0;
+  
+  char *fontName = strdup(char_one_str.c_str());
+  if (!fontName)
+    return 0;
+  
+  SplashOutputDev *splash_out_dev = new SplashOutputDev(splashModeRGB8, 4, false, NULL, false);
+  if (!splash_out_dev)
+    return 0;
+  
+  GfxFont *font = GfxFont::makeFont(NULL, fontName, Ref(), NULL);
+  if (!font)
+    return 0;
+
+  GfxState *state = new GfxState(72.0, 72.0, NULL, 0, false);  // 72dpi
+
+  GfxFontLoc *fontLoc = font-&gt;locateFont(NULL, false);
+  if (!fontLoc)
+    return 0;
+
+  globalParams = new GlobalParams(NULL);
+  SplashFont *splashFont = splash_out_dev-&gt;getFont(font, state, NULL);
+  if (!splashFont)
+    return 0;
+  
+  strncpy((char*)char_one, char_one_str.c_str(), char_one_str.size());
+  strncpy((char*)char_two, char_two_str.c_str(), char_two_str.size());
+
+  Unicode uMap[2]{(Unicode) *char_one, (Unicode) *char_two};
+  Unicode *u = uMap;
+
+  splash_out_dev-&gt;startDoc(NULL);
+  splash_out_dev-&gt;beginString(state, new GooString(font_file_name-&gt;getCString()));
+  splash_out_dev-&gt;drawChar(state, 0.0, 0.0, m11, m12, m21, m22, 0, 2, u, 2, true, false, false);
+  splash_out_dev-&gt;endString(state);
+  
+  delete globalParams;
+  delete splash_out_dev;
+  delete state;
+  delete font;
+  
+  return 0;
+}
+&lt;/code&gt;
+
+Below is the error to fix:
+The code has the following build issues:
+&lt;error&gt;
+fuzz_JBIG2.cc:91:65: error: too many arguments to function call, expected 2, have 3
+   91 |   SplashFont *splashFont = splash_out_dev-&gt;getFont(font, state, NULL);
+      |                            ~~~~~~~~~~~~~~~~~~~~~~~              ^~~~
+/usr/local/lib/clang/18/include/__stddef_null.h:13:14: note: expanded from macro &#39;NULL&#39;
+   13 | #define NULL __null
+      |              ^~~~~~
+../xpdf/SplashOutputDev.h:227:15: note: &#39;getFont&#39; declared here
+  227 |   SplashFont *getFont(GString *name, SplashCoord *textMatA);
+      |               ^       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+fuzz_JBIG2.cc:102:42: error: unknown type name &#39;GooString&#39;; did you mean &#39;GString&#39;?
+  102 |   splash_out_dev-&gt;beginString(state, new GooString(font_file_name-&gt;getCString()));
+      |                                          ^~~~~~~~~
+      |                                          GString
+../fofi/FoFiTrueType.h:17:7: note: &#39;GString&#39; declared here
+   17 | class GString;
+      |       ^
+&lt;/error&gt;
+
+
+Below are instructions to assist you in fixing the error.
+&lt;instruction&gt;
+IMPORTANT: ALWAYS INCLUDE STANDARD LIBRARIES BEFORE PROJECT-SPECIFIC (xpdf) LIBRARIES. This order prevents errors like &#34;unknown type name&#34; for basic types. Additionally, include project-specific libraries that contain declarations before those thatuse these declared symbols.
+&lt;/instruction&gt;
+
+Fix code:
+1. Consider possible solutions for the issues listed above.
+2. Choose a solution that can maximize fuzzing result, which is utilizing the function under test and feeding it not null input.
+3. Apply the solutions to the original code.
+It&#39;s important to show the complete code, not only the fixed line.
+&lt;solution&gt;
+</pre>
+
+
+
+<h3>Code #5</h3>
+
+<pre>
+&lt;code&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+#include &lt;stddef.h&gt;
+#include &lt;stdint.h&gt;
+#include &lt;string.h&gt;
+#include &lt;string&gt;
+#include &lt;vector&gt;
+
+#include &#34;GString.h&#34;
+#include &#34;GlobalParams.h&#34;
+#include &#34;GfxState.h&#34;
+#include &#34;PreScanOutputDev.h&#34;
+#include &#34;SplashOutputDev.h&#34;
+#include &#34;Stream.h&#34;
+#include &#34;config.h&#34;
+#include &#34;gfile.h&#34;
+#include &#34;parseargs.h&#34;
+#include &#34;splash/Splash.h&#34;
+#include &#34;splash/SplashBitmap.h&#34;
+#include &#34;splash/SplashFont.h&#34;
+#include &#34;splash/SplashTypes.h&#34;
+
+#include &#34;FoFiTrueType.h&#34;
+#include &#34;GfxFont.h&#34;
+#include &#34;/src/xpdf-4.05/xpdf/GfxFont.h&#34;
+#include &#34;/src/xpdf-4.05/xpdf/OutputDev.h&#34;
+#include &#34;Object.h&#34;
+#include &#34;GooString.h&#34;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  if (size &lt; 1)
+    return 0;
+  
+  FuzzedDataProvider fuzzed_data_provider(data, size);
+
+  uint32_t sx = fuzzed_data_provider.ConsumeIntegral&lt;uint32_t&gt;();
+  uint32_t sy = fuzzed_data_provider.ConsumeIntegral&lt;uint32_t&gt;();
+  if (!sx || !sy)
+    return 0;
+
+  double m11 = static_cast&lt;double&gt;(fuzzed_data_provider.ConsumeFloatingPoint&lt;float&gt;());
+  double m12 = static_cast&lt;double&gt;(fuzzed_data_provider.ConsumeFloatingPoint&lt;float&gt;());
+  double m21 = static_cast&lt;double&gt;(fuzzed_data_provider.ConsumeFloatingPoint&lt;float&gt;());
+  double m22 = static_cast&lt;double&gt;(fuzzed_data_provider.ConsumeFloatingPoint&lt;float&gt;());
+
+  double state_matrix[6] = {m11, m12, m21, m22,
+                            static_cast&lt;double&gt;(fuzzed_data_provider.ConsumeFloatingPoint&lt;float&gt;()),
+                            static_cast&lt;double&gt;(fuzzed_data_provider.ConsumeFloatingPoint&lt;float&gt;())};
+  double char_matrix[6] = {m11, m12, m21, m22,
+                           static_cast&lt;double&gt;(fuzzed_data_provider.ConsumeFloatingPoint&lt;float&gt;()),
+                           static_cast&lt;double&gt;(fuzzed_data_provider.ConsumeFloatingPoint&lt;float&gt;())};
+  
+  size_t n = fuzzed_data_provider.ConsumeIntegralInRange&lt;size_t&gt;(0, 257);
+  if (!n)
+    return 0;
+
+  size_t char_one_len = fuzzed_data_provider.ConsumeIntegralInRange&lt;size_t&gt;(0, n);
+  size_t char_two_len = n - char_one_len;
+  
+  std::string char_one_str = fuzzed_data_provider.ConsumeBytesAsString(char_one_len);
+  std::string char_two_str = fuzzed_data_provider.ConsumeBytesAsString(char_two_len);
+
+  if (char_one_str.empty() || char_two_str.empty())
+    return 0;
+
+  Unicode char_one[char_one_str.size() + 1];
+  Unicode char_two[char_two_str.size() + 1];
+  
+  GString *font_file_name = new GString(&#34;/usr/share/fonts/TTF/DejaVuSans.ttf&#34;);
+  FoFiTrueType *ff = FoFiTrueType::load(font_file_name-&gt;getCString(), 0);
+  if (!ff)
+    return 0;
+  
+  char *fontName = strdup(char_one_str.c_str());
+  if (!fontName)
+    return 0;
+  
+  SplashOutputDev *splash_out_dev = new SplashOutputDev(splashModeRGB8, 4, false, NULL, false);
+  if (!splash_out_dev)
+    return 0;
+  
+  GfxFont *font = GfxFont::makeFont(NULL, fontName, Ref(), NULL);
+  if (!font)
+    return 0;
+
+  GfxState *state = new GfxState(72.0, 72.0, NULL, 0, false);  // 72dpi
+
+  GfxFontLoc *fontLoc = font-&gt;locateFont(NULL, false);
+  if (!fontLoc)
+    return 0;
+
+  globalParams = new GlobalParams(NULL);
+  SplashFont *splashFont = splash_out_dev-&gt;getFont(font, state);
+  if (!splashFont)
+    return 0;
+  
+  strncpy((char*)char_one, char_one_str.c_str(), char_one_str.size());
+  strncpy((char*)char_two, char_two_str.c_str(), char_two_str.size());
+
+  Unicode uMap[2]{(Unicode) *char_one, (Unicode) *char_two};
+  Unicode *u = uMap;
+
+  splash_out_dev-&gt;startDoc(NULL);
+  splash_out_dev-&gt;beginString(state, new GooString(font_file_name-&gt;getCString()));
+  splash_out_dev-&gt;drawChar(state, 0.0, 0.0, m11, m12, m21, m22, 0, 2, u, 2, true, false, false);
+  splash_out_dev-&gt;endString(state);
+  
+  delete globalParams;
+  delete splash_out_dev;
+  delete state;
+  delete font;
+  
+  return 0;
+}
+&lt;/code&gt;
+&lt;/solution&gt;
+</pre>
+
+
+<h2>Logs</h2>
+<pre>
+Fixing /home/chyun/oss-fuzz-gen/results3/output-xpdf-_zn15splashoutputdev8drawcharep8gfxstateddddddjipjiiii/fixed_targets/01.cc with gpt-4, attempt 1.
+Fixing /home/chyun/oss-fuzz-gen/results3/output-xpdf-_zn15splashoutputdev8drawcharep8gfxstateddddddjipjiiii/fixed_targets/01.cc with gpt-4, attempt 2.
+Fixing /home/chyun/oss-fuzz-gen/results3/output-xpdf-_zn15splashoutputdev8drawcharep8gfxstateddddddjipjiiii/fixed_targets/01.cc with gpt-4, attempt 3.
+Fixing /home/chyun/oss-fuzz-gen/results3/output-xpdf-_zn15splashoutputdev8drawcharep8gfxstateddddddjipjiiii/fixed_targets/01.cc with gpt-4, attempt 4.
+Fixing /home/chyun/oss-fuzz-gen/results3/output-xpdf-_zn15splashoutputdev8drawcharep8gfxstateddddddjipjiiii/fixed_targets/01.cc with gpt-4, attempt 5.
+Failed to build /home/chyun/oss-fuzz-gen/results3/output-xpdf-_zn15splashoutputdev8drawcharep8gfxstateddddddjipjiiii/fixed_targets/01.cc with gpt-4 in 5 iterations of fixing.
+
+</pre>
+
+<h2>Run logs</h2>
+<pre>
+
+</pre>
+
+
+</body>

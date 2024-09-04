@@ -1,0 +1,839 @@
+<!doctype html>
+
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Experiment results</title>
+<style>
+* {
+    box-sizing: border-box;
+}
+
+html {
+    line-height: 1.15;
+}
+
+body {
+    font-family: sans-serif;
+    font-size: 16px;
+}
+
+table {
+    border-collapse: collapse;
+    border-spacing: 0;
+}
+
+td, th {
+    border-right: 1px #dedede solid;
+    border-bottom: 1px #dedede solid;
+    padding: 5px;
+    text-align: left;
+}
+td:first-child, th:first-child {
+    border-left: 1px #dedede solid;
+}
+th {
+    border-top: 1px #dedede solid;
+}
+
+tbody tr:nth-child(odd) {
+    background-color: #f4f5ff;
+}
+</style>
+<body>
+    LLM: 
+    
+<h1>output-xpdf-_zn6pdfdoc12displaypagesep9outputdeviiddiiiipfipves2_ / 01</h1>
+Bug: False
+<br>
+Crash reason: NO_SEMANTIC_ERR
+<br>
+<br>
+
+<h2>Triage</h2>
+<pre>
+
+</pre>
+<br>
+
+
+
+
+
+<h3>Final code</h3>
+
+<pre>
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+#include &lt;iostream&gt;
+#include &lt;string&gt;
+#include &lt;vector&gt;
+
+#include &#34;Object.h&#34;
+#include &#34;PDFDoc.h&#34;
+#include &#34;OutputDev.h&#34;
+#include &#34;GString.h&#34;
+#include &#34;GlobalParams.h&#34;
+#include &#34;/src/xpdf-4.05/xpdf/GfxState.h&#34;
+#include &#34;/src/xpdf-4.05/splash/SplashPath.h&#34;
+
+class FuzzOutputDev : public OutputDev {
+  public:
+    FuzzOutputDev() {}
+    virtual ~FuzzOutputDev() {}
+    virtual void saveState(GfxState *) {}
+    virtual void restoreState(GfxState *) {}
+    virtual void updateFillColor() {}
+    virtual void eoFill() {}
+    virtual void updateStrokeColor() {}
+    virtual void stroke(SplashPath *) {}
+    virtual void moveTo(double, double) {}
+    virtual void lineTo(double, double) {}
+    virtual GBool upsideDown() {return gTrue;}
+    virtual GBool useDrawChar() {return gTrue;}
+    virtual GBool interpretType3Chars() {return gTrue;}
+};
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  int first_page, last_page, rotate;
+  double h_dpi, v_dpi;
+  bool use_media_box, crop, printing;
+  std::string user_passwd, owner_passwd;
+
+  FuzzedDataProvider fuzzed_data_provider(data, size);
+  auto payload = fuzzed_data_provider.ConsumeRemainingBytes&lt;char&gt;();
+  if (payload.empty()) {
+    return 0;
+  }
+
+  Object hint;
+  GString *fileName = new GString(payload.data(), payload.size());
+  globalParams = new GlobalParams(&#34;&#34;);
+  PDFDoc *doc = new PDFDoc(fileName);
+
+  if (!doc-&gt;isOk()) {
+    delete doc;
+    delete globalParams;
+    return 0;
+  }
+
+  FuzzOutputDev dev;
+  doc-&gt;displayPages(&amp;dev, first_page, last_page, h_dpi, v_dpi, rotate, use_media_box, crop, printing);
+  
+  delete doc;
+  delete globalParams;
+
+  return 0;
+}
+</pre>
+
+
+<h3>Fixer prompt #1</h3>
+<pre>
+
+Given the following C++ fuzz harness and its build error message, fix the code to make it build for fuzzing.
+
+If there is undeclared identifier or unknown type name error, fix it by finding and including the related libraries.
+
+MUST RETURN THE FULL CODE, INCLUDING UNCHANGED PARTS.
+
+Below is the code needs to be built:
+&lt;code&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+#include &lt;iostream&gt;
+#include &lt;string&gt;
+#include &lt;vector&gt;
+
+#include &#34;Object.h&#34;
+#include &#34;PDFDoc.h&#34;
+#include &#34;OutputDev.h&#34;
+#include &#34;GString.h&#34;
+#include &#34;GlobalParams.h&#34;
+
+class FuzzOutputDev : public OutputDev {
+  public:
+    FuzzOutputDev() {}
+    virtual ~FuzzOutputDev() {}
+    virtual void saveState(State *) {}
+    virtual void restoreState(State *) {}
+    virtual void updateFillColor() {}
+    virtual void eoFill() {}
+    virtual void updateStrokeColor() {}
+    virtual void stroke(GfxPath *) {}
+    virtual void moveTo(double, double) {}
+    virtual void lineTo(double, double) {}
+};
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  int first_page, last_page, rotate;
+  double h_dpi, v_dpi;
+  bool use_media_box, crop, printing;
+  std::string user_passwd, owner_passwd;
+
+  FuzzedDataProvider fuzzed_data_provider(data, size);
+  auto payload = fuzzed_data_provider.ConsumeRemainingBytes&lt;char&gt;();
+  if (payload.empty()) {
+    return 0;
+  }
+
+  Object hint;
+  GString *fileName = new GString(payload.data(), payload.size());
+  globalParams = new GlobalParams();
+  PDFDoc *doc = new PDFDoc(fileName);
+
+  if (!doc-&gt;isOk()) {
+    delete doc;
+    delete globalParams;
+    return 0;
+  }
+
+  FuzzOutputDev dev;
+  doc-&gt;displayPages(&amp;dev, first_page, last_page, h_dpi, v_dpi, rotate, use_media_box, crop, printing);
+  
+  delete doc;
+  delete globalParams;
+
+  return 0;
+}
+&lt;/code&gt;
+
+Below is the error to fix:
+The code has the following build issues:
+&lt;error&gt;
+fuzz_JBIG2.cc:17:28: error: unknown type name &#39;State&#39;
+   17 |     virtual void saveState(State *) {}
+      |                            ^
+fuzz_JBIG2.cc:18:31: error: unknown type name &#39;State&#39;
+   18 |     virtual void restoreState(State *) {}
+      |                               ^
+fuzz_JBIG2.cc:22:25: error: unknown type name &#39;GfxPath&#39;
+   22 |     virtual void stroke(GfxPath *) {}
+      |                         ^
+fuzz_JBIG2.cc:41:22: error: no matching constructor for initialization of &#39;GlobalParams&#39;
+   41 |   globalParams = new GlobalParams();
+      |                      ^
+../xpdf/GlobalParams.h:236:3: note: candidate constructor not viable: requires single argument &#39;cfgFileName&#39;, but no arguments were provided
+  236 |   GlobalParams(const char *cfgFileName);
+      |   ^            ~~~~~~~~~~~~~~~~~~~~~~~
+../xpdf/GlobalParams.h:231:7: note: candidate constructor (the implicit copy constructor) not viable: requires 1 argument, but 0 were provided
+  231 | class GlobalParams {
+      |       ^~~~~~~~~~~~
+fuzz_JBIG2.cc:50:17: error: variable type &#39;FuzzOutputDev&#39; is an abstract class
+   50 |   FuzzOutputDev dev;
+      |                 ^
+../xpdf/OutputDev.h:48:17: note: unimplemented pure virtual method &#39;upsideDown&#39; in &#39;FuzzOutputDev&#39;
+   48 |   virtual GBool upsideDown() = 0;
+      |                 ^
+../xpdf/OutputDev.h:51:17: note: unimplemented pure virtual method &#39;useDrawChar&#39; in &#39;FuzzOutputDev&#39;
+   51 |   virtual GBool useDrawChar() = 0;
+      |                 ^
+../xpdf/OutputDev.h:64:17: note: unimplemented pure virtual method &#39;interpretType3Chars&#39; in &#39;FuzzOutputDev&#39;
+   64 |   virtual GBool interpretType3Chars() = 0;
+      |                 ^
+&lt;/error&gt;
+
+
+Below are instructions to assist you in fixing the error.
+&lt;instruction&gt;
+IMPORTANT: ALWAYS INCLUDE STANDARD LIBRARIES BEFORE PROJECT-SPECIFIC (xpdf) LIBRARIES. This order prevents errors like &#34;unknown type name&#34; for basic types. Additionally, include project-specific libraries that contain declarations before those thatuse these declared symbols.
+&lt;/instruction&gt;
+
+Fix code:
+1. Consider possible solutions for the issues listed above.
+2. Choose a solution that can maximize fuzzing result, which is utilizing the function under test and feeding it not null input.
+3. Apply the solutions to the original code.
+It&#39;s important to show the complete code, not only the fixed line.
+&lt;solution&gt;
+</pre>
+
+
+
+<h3>Code #1</h3>
+
+<pre>
+Here is the fixed code:
+
+```cpp
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+#include &lt;iostream&gt;
+#include &lt;string&gt;
+#include &lt;vector&gt;
+
+#include &#34;Object.h&#34;
+#include &#34;PDFDoc.h&#34;
+#include &#34;OutputDev.h&#34;
+#include &#34;GString.h&#34;
+#include &#34;GlobalParams.h&#34;
+#include &#34;State.h&#34;
+#include &#34;GfxPath.h&#34;
+
+class FuzzOutputDev : public OutputDev {
+  public:
+    FuzzOutputDev() {}
+    virtual ~FuzzOutputDev() {}
+    virtual void saveState(State *) {}
+    virtual void restoreState(State *) {}
+    virtual void updateFillColor() {}
+    virtual void eoFill() {}
+    virtual void updateStrokeColor() {}
+    virtual void stroke(GfxPath *) {}
+    virtual void moveTo(double, double) {}
+    virtual void lineTo(double, double) {}
+    virtual GBool upsideDown() {return gTrue;}
+    virtual GBool useDrawChar() {return gTrue;}
+    virtual GBool interpretType3Chars() {return gTrue;}
+};
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  int first_page, last_page, rotate;
+  double h_dpi, v_dpi;
+  bool use_media_box, crop, printing;
+  std::string user_passwd, owner_passwd;
+
+  FuzzedDataProvider fuzzed_data_provider(data, size);
+  auto payload = fuzzed_data_provider.ConsumeRemainingBytes&lt;char&gt;();
+  if (payload.empty()) {
+    return 0;
+  }
+
+  Object hint;
+  GString *fileName = new GString(payload.data(), payload.size());
+  globalParams = new GlobalParams(&#34;&#34;);
+  PDFDoc *doc = new PDFDoc(fileName);
+
+  if (!doc-&gt;isOk()) {
+    delete doc;
+    delete globalParams;
+    return 0;
+  }
+
+  FuzzOutputDev dev;
+  doc-&gt;displayPages(&amp;dev, first_page, last_page, h_dpi, v_dpi, rotate, use_media_box, crop, printing);
+  
+  delete doc;
+  delete globalParams;
+
+  return 0;
+}
+```
+
+The changes made are:
+1. Included the &#34;State.h&#34; and &#34;GfxPath.h&#34; libraries to solve the unknown type name errors for &#39;State&#39; and &#39;GfxPath&#39;.
+2. Passed an empty string as argument in the constructor of &#39;GlobalParams&#39; to match the constructor definition.
+3. Implemented the pure virtual functions &#39;upsideDown&#39;, &#39;useDrawChar&#39;, and &#39;interpretType3Chars&#39; in &#39;FuzzOutputDev&#39; class to solve the abstract class error.
+</pre>
+
+
+<h3>Fixer prompt #2</h3>
+<pre>
+
+Given the following C++ fuzz harness and its build error message, fix the code to make it build for fuzzing.
+
+If there is undeclared identifier or unknown type name error, fix it by finding and including the related libraries.
+
+MUST RETURN THE FULL CODE, INCLUDING UNCHANGED PARTS.
+
+Below is the code needs to be built:
+&lt;code&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+#include &lt;iostream&gt;
+#include &lt;string&gt;
+#include &lt;vector&gt;
+
+#include &#34;Object.h&#34;
+#include &#34;PDFDoc.h&#34;
+#include &#34;OutputDev.h&#34;
+#include &#34;GString.h&#34;
+#include &#34;GlobalParams.h&#34;
+#include &#34;State.h&#34;
+#include &#34;GfxPath.h&#34;
+
+class FuzzOutputDev : public OutputDev {
+  public:
+    FuzzOutputDev() {}
+    virtual ~FuzzOutputDev() {}
+    virtual void saveState(State *) {}
+    virtual void restoreState(State *) {}
+    virtual void updateFillColor() {}
+    virtual void eoFill() {}
+    virtual void updateStrokeColor() {}
+    virtual void stroke(GfxPath *) {}
+    virtual void moveTo(double, double) {}
+    virtual void lineTo(double, double) {}
+    virtual GBool upsideDown() {return gTrue;}
+    virtual GBool useDrawChar() {return gTrue;}
+    virtual GBool interpretType3Chars() {return gTrue;}
+};
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  int first_page, last_page, rotate;
+  double h_dpi, v_dpi;
+  bool use_media_box, crop, printing;
+  std::string user_passwd, owner_passwd;
+
+  FuzzedDataProvider fuzzed_data_provider(data, size);
+  auto payload = fuzzed_data_provider.ConsumeRemainingBytes&lt;char&gt;();
+  if (payload.empty()) {
+    return 0;
+  }
+
+  Object hint;
+  GString *fileName = new GString(payload.data(), payload.size());
+  globalParams = new GlobalParams(&#34;&#34;);
+  PDFDoc *doc = new PDFDoc(fileName);
+
+  if (!doc-&gt;isOk()) {
+    delete doc;
+    delete globalParams;
+    return 0;
+  }
+
+  FuzzOutputDev dev;
+  doc-&gt;displayPages(&amp;dev, first_page, last_page, h_dpi, v_dpi, rotate, use_media_box, crop, printing);
+  
+  delete doc;
+  delete globalParams;
+
+  return 0;
+}
+&lt;/code&gt;
+
+Below is the error to fix:
+The code has the following build issues:
+&lt;error&gt;
+fuzz_JBIG2.cc:12:10: fatal error: &#39;State.h&#39; file not found
+   12 | #include &#34;State.h&#34;
+      |          ^~~~~~~~~
+&lt;/error&gt;
+
+
+Below are instructions to assist you in fixing the error.
+&lt;instruction&gt;
+IMPORTANT: DO NOT include the header file State.h in the generated fuzz target again, the file does not exist in the project-under-test.
+If the non-existent &lt;filepath&gt;State.h&lt;/filepath&gt; was included for the declaration of &lt;code&gt;void PDFDoc::displayPages(OutputDev *, int, int, double, double, int, GBool, GBool, GBool, DW_TAG_subroutine_typeInfinite loop *, void *)&lt;/code&gt;, you must replace it with the EXACT path of the actual file &lt;filepath&gt;#include &#34;/src/xpdf-4.05/xpdf/PDFDoc.h&#34;&lt;/filepath&gt;. For example:
+&lt;code&gt;
+#include &#34;#include &#34;/src/xpdf-4.05/xpdf/PDFDoc.h&#34;&#34;
+&lt;/code&gt;
+Otherwise, consider replacing it with some of the following statementsthat may be correct alternatives:
+&lt;code&gt;
+#include &#34;/src/xpdf-4.05/xpdf/GfxState.h&#34;
+#include &#34;/src/xpdf-4.05/splash/SplashState.h&#34;
+#include &#34;/src/freetype/src/gzip/inflate.h&#34;
+#include &#34;/src/freetype/src/psaux/pstypes.h&#34;
+#include &#34;/src/freetype/src/autofit/afblue.h&#34;
+&lt;/code&gt;
+
+&lt;/instruction&gt;
+
+Fix code:
+1. Consider possible solutions for the issues listed above.
+2. Choose a solution that can maximize fuzzing result, which is utilizing the function under test and feeding it not null input.
+3. Apply the solutions to the original code.
+It&#39;s important to show the complete code, not only the fixed line.
+&lt;solution&gt;
+</pre>
+
+
+
+<h3>Code #2</h3>
+
+<pre>
+&lt;code&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+#include &lt;iostream&gt;
+#include &lt;string&gt;
+#include &lt;vector&gt;
+
+#include &#34;Object.h&#34;
+#include &#34;PDFDoc.h&#34;
+#include &#34;OutputDev.h&#34;
+#include &#34;GString.h&#34;
+#include &#34;GlobalParams.h&#34;
+#include &#34;/src/xpdf-4.05/xpdf/GfxState.h&#34;
+#include &#34;GfxPath.h&#34;
+
+class FuzzOutputDev : public OutputDev {
+  public:
+    FuzzOutputDev() {}
+    virtual ~FuzzOutputDev() {}
+    virtual void saveState(GfxState *) {}
+    virtual void restoreState(GfxState *) {}
+    virtual void updateFillColor() {}
+    virtual void eoFill() {}
+    virtual void updateStrokeColor() {}
+    virtual void stroke(GfxPath *) {}
+    virtual void moveTo(double, double) {}
+    virtual void lineTo(double, double) {}
+    virtual GBool upsideDown() {return gTrue;}
+    virtual GBool useDrawChar() {return gTrue;}
+    virtual GBool interpretType3Chars() {return gTrue;}
+};
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  int first_page, last_page, rotate;
+  double h_dpi, v_dpi;
+  bool use_media_box, crop, printing;
+  std::string user_passwd, owner_passwd;
+
+  FuzzedDataProvider fuzzed_data_provider(data, size);
+  auto payload = fuzzed_data_provider.ConsumeRemainingBytes&lt;char&gt;();
+  if (payload.empty()) {
+    return 0;
+  }
+
+  Object hint;
+  GString *fileName = new GString(payload.data(), payload.size());
+  globalParams = new GlobalParams(&#34;&#34;);
+  PDFDoc *doc = new PDFDoc(fileName);
+
+  if (!doc-&gt;isOk()) {
+    delete doc;
+    delete globalParams;
+    return 0;
+  }
+
+  FuzzOutputDev dev;
+  doc-&gt;displayPages(&amp;dev, first_page, last_page, h_dpi, v_dpi, rotate, use_media_box, crop, printing);
+  
+  delete doc;
+  delete globalParams;
+
+  return 0;
+}
+&lt;/code&gt;
+In this solution, I replaced the non-existent &#34;State.h&#34; with &#34;/src/xpdf-4.05/xpdf/GfxState.h&#34; which seems to be the most relevant alternative. Also, I updated the saveState and restoreState methods to take GfxState pointers as parameters.
+</pre>
+
+
+<h3>Fixer prompt #3</h3>
+<pre>
+
+Given the following C++ fuzz harness and its build error message, fix the code to make it build for fuzzing.
+
+If there is undeclared identifier or unknown type name error, fix it by finding and including the related libraries.
+
+MUST RETURN THE FULL CODE, INCLUDING UNCHANGED PARTS.
+
+Below is the code needs to be built:
+&lt;code&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+#include &lt;iostream&gt;
+#include &lt;string&gt;
+#include &lt;vector&gt;
+
+#include &#34;Object.h&#34;
+#include &#34;PDFDoc.h&#34;
+#include &#34;OutputDev.h&#34;
+#include &#34;GString.h&#34;
+#include &#34;GlobalParams.h&#34;
+#include &#34;/src/xpdf-4.05/xpdf/GfxState.h&#34;
+#include &#34;GfxPath.h&#34;
+
+class FuzzOutputDev : public OutputDev {
+  public:
+    FuzzOutputDev() {}
+    virtual ~FuzzOutputDev() {}
+    virtual void saveState(GfxState *) {}
+    virtual void restoreState(GfxState *) {}
+    virtual void updateFillColor() {}
+    virtual void eoFill() {}
+    virtual void updateStrokeColor() {}
+    virtual void stroke(GfxPath *) {}
+    virtual void moveTo(double, double) {}
+    virtual void lineTo(double, double) {}
+    virtual GBool upsideDown() {return gTrue;}
+    virtual GBool useDrawChar() {return gTrue;}
+    virtual GBool interpretType3Chars() {return gTrue;}
+};
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  int first_page, last_page, rotate;
+  double h_dpi, v_dpi;
+  bool use_media_box, crop, printing;
+  std::string user_passwd, owner_passwd;
+
+  FuzzedDataProvider fuzzed_data_provider(data, size);
+  auto payload = fuzzed_data_provider.ConsumeRemainingBytes&lt;char&gt;();
+  if (payload.empty()) {
+    return 0;
+  }
+
+  Object hint;
+  GString *fileName = new GString(payload.data(), payload.size());
+  globalParams = new GlobalParams(&#34;&#34;);
+  PDFDoc *doc = new PDFDoc(fileName);
+
+  if (!doc-&gt;isOk()) {
+    delete doc;
+    delete globalParams;
+    return 0;
+  }
+
+  FuzzOutputDev dev;
+  doc-&gt;displayPages(&amp;dev, first_page, last_page, h_dpi, v_dpi, rotate, use_media_box, crop, printing);
+  
+  delete doc;
+  delete globalParams;
+
+  return 0;
+}
+&lt;/code&gt;
+
+Below is the error to fix:
+The code has the following build issues:
+&lt;error&gt;
+fuzz_JBIG2.cc:13:10: fatal error: &#39;GfxPath.h&#39; file not found
+   13 | #include &#34;GfxPath.h&#34;
+      |          ^~~~~~~~~~~
+&lt;/error&gt;
+
+
+Below are instructions to assist you in fixing the error.
+&lt;instruction&gt;
+IMPORTANT: DO NOT include the header file GfxPath.h in the generated fuzz target again, the file does not exist in the project-under-test.
+If the non-existent &lt;filepath&gt;GfxPath.h&lt;/filepath&gt; was included for the declaration of &lt;code&gt;void PDFDoc::displayPages(OutputDev *, int, int, double, double, int, GBool, GBool, GBool, DW_TAG_subroutine_typeInfinite loop *, void *)&lt;/code&gt;, you must replace it with the EXACT path of the actual file &lt;filepath&gt;#include &#34;/src/xpdf-4.05/xpdf/PDFDoc.h&#34;&lt;/filepath&gt;. For example:
+&lt;code&gt;
+#include &#34;#include &#34;/src/xpdf-4.05/xpdf/PDFDoc.h&#34;&#34;
+&lt;/code&gt;
+Otherwise, consider replacing it with some of the following statementsthat may be correct alternatives:
+&lt;code&gt;
+#include &#34;/src/xpdf-4.05/splash/SplashPath.h&#34;
+#include &#34;/src/xpdf-4.05/splash/SplashXPath.h&#34;
+#include &#34;/src/xpdf-4.05/xpdf/GfxState.h&#34;
+#include &#34;/src/xpdf-4.05/goo/GHash.h&#34;
+#include &#34;/src/xpdf-4.05/xpdf/Page.h&#34;
+&lt;/code&gt;
+
+&lt;/instruction&gt;
+
+Fix code:
+1. Consider possible solutions for the issues listed above.
+2. Choose a solution that can maximize fuzzing result, which is utilizing the function under test and feeding it not null input.
+3. Apply the solutions to the original code.
+It&#39;s important to show the complete code, not only the fixed line.
+&lt;solution&gt;
+</pre>
+
+
+
+<h3>Code #3</h3>
+
+<pre>
+&lt;code&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+#include &lt;iostream&gt;
+#include &lt;string&gt;
+#include &lt;vector&gt;
+
+#include &#34;Object.h&#34;
+#include &#34;PDFDoc.h&#34;
+#include &#34;OutputDev.h&#34;
+#include &#34;GString.h&#34;
+#include &#34;GlobalParams.h&#34;
+#include &#34;/src/xpdf-4.05/xpdf/GfxState.h&#34;
+#include &#34;/src/xpdf-4.05/splash/SplashPath.h&#34;
+
+class FuzzOutputDev : public OutputDev {
+  public:
+    FuzzOutputDev() {}
+    virtual ~FuzzOutputDev() {}
+    virtual void saveState(GfxState *) {}
+    virtual void restoreState(GfxState *) {}
+    virtual void updateFillColor() {}
+    virtual void eoFill() {}
+    virtual void updateStrokeColor() {}
+    virtual void stroke(SplashPath *) {}
+    virtual void moveTo(double, double) {}
+    virtual void lineTo(double, double) {}
+    virtual GBool upsideDown() {return gTrue;}
+    virtual GBool useDrawChar() {return gTrue;}
+    virtual GBool interpretType3Chars() {return gTrue;}
+};
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  int first_page, last_page, rotate;
+  double h_dpi, v_dpi;
+  bool use_media_box, crop, printing;
+  std::string user_passwd, owner_passwd;
+
+  FuzzedDataProvider fuzzed_data_provider(data, size);
+  auto payload = fuzzed_data_provider.ConsumeRemainingBytes&lt;char&gt;();
+  if (payload.empty()) {
+    return 0;
+  }
+
+  Object hint;
+  GString *fileName = new GString(payload.data(), payload.size());
+  globalParams = new GlobalParams(&#34;&#34;);
+  PDFDoc *doc = new PDFDoc(fileName);
+
+  if (!doc-&gt;isOk()) {
+    delete doc;
+    delete globalParams;
+    return 0;
+  }
+
+  FuzzOutputDev dev;
+  doc-&gt;displayPages(&amp;dev, first_page, last_page, h_dpi, v_dpi, rotate, use_media_box, crop, printing);
+  
+  delete doc;
+  delete globalParams;
+
+  return 0;
+}
+&lt;/code&gt;
+&lt;/solution&gt;
+</pre>
+
+
+<h2>Logs</h2>
+<pre>
+Fixing /home/chyun/oss-fuzz-gen/results7/output-xpdf-_zn6pdfdoc12displaypagesep9outputdeviiddiiiipfipves2_/fixed_targets/01.cc with gpt-4, attempt 1.
+Fixing /home/chyun/oss-fuzz-gen/results7/output-xpdf-_zn6pdfdoc12displaypagesep9outputdeviiddiiiipfipves2_/fixed_targets/01.cc with gpt-4, attempt 2.
+Fixing /home/chyun/oss-fuzz-gen/results7/output-xpdf-_zn6pdfdoc12displaypagesep9outputdeviiddiiiipfipves2_/fixed_targets/01.cc with gpt-4, attempt 3.
+Successfully built /home/chyun/oss-fuzz-gen/results7/output-xpdf-_zn6pdfdoc12displaypagesep9outputdeviiddiiiipfipves2_/fixed_targets/01.cc with gpt-4 in 3 iterations of fixing.
+Triaging the crash related to /home/chyun/oss-fuzz-gen/results7/output-xpdf-_zn6pdfdoc12displaypagesep9outputdeviiddiiiipfipves2_/fixed_targets/01.cc with gpt-4.
+Warning: no crash info in xpdf-zn6pdfdoc12displaypagesep9outputdeviiddiiiipfipves2-01.
+Result for xpdf-zn6pdfdoc12displaypagesep9outputdeviiddiiiipfipves2-01: crashes=False, coverage=0.011181458032507682 (302/27009), coverage diff=0.00047301793459524896 (59/124731)
+
+</pre>
+
+<h2>Run logs</h2>
+<pre>
+INFO:__main__:Running: docker run --privileged --shm-size=2g --platform linux/amd64 --rm -e FUZZING_ENGINE=libfuzzer -e SANITIZER=address -e RUN_FUZZER_MODE=interactive -e HELPER=True -v /home/chyun/oss-fuzz-gen/results7/output-xpdf-_zn6pdfdoc12displaypagesep9outputdeviiddiiiipfipves2_/corpora/01.cc:/tmp/fuzz_JBIG2_corpus -v /tmp/tmp9jg1ed21/build/out/xpdf-zn6pdfdoc12displaypagesep9outputdeviiddiiiipfipves2-01:/out -t gcr.io/oss-fuzz-base/base-runner run_fuzzer fuzz_JBIG2 -print_final_stats=1 -max_total_time=30 -len_control=0 -timeout=30.
+vm.mmap_rnd_bits = 28
+rm: cannot remove &#39;/tmp/fuzz_JBIG2_corpus&#39;: Device or resource busy
+/out/fuzz_JBIG2 -rss_limit_mb=2560 -timeout=25 -print_final_stats=1 -max_total_time=30 -len_control=0 -timeout=30 /tmp/fuzz_JBIG2_corpus -detect_leaks=0 &lt; /dev/null
+INFO: Running with entropic power schedule (0xFF, 100).
+INFO: Seed: 1446563026
+INFO: Loaded 1 modules   (27009 inline 8-bit counters): 27009 [0x55978a33b498, 0x55978a341e19), 
+INFO: Loaded 1 PC tables (27009 PCs): 27009 [0x55978a341e20,0x55978a3ab630), 
+INFO:        0 files found in /tmp/fuzz_JBIG2_corpus
+INFO: -max_len is not provided; libFuzzer will not generate inputs larger than 4096 bytes
+INFO: A corpus is not provided, starting from an empty corpus
+I/O Error: Couldn&#39;t open file &#39;&lt;0a&gt;&#39;
+#2	INITED cov: 296 ft: 297 corp: 1/1b exec/s: 0 rss: 37Mb
+I/O Error: Couldn&#39;t open file &#39;&lt;1a&gt;&#39;
+#3	NEW    cov: 296 ft: 300 corp: 2/2b lim: 4096 exec/s: 0 rss: 39Mb L: 1/1 MS: 1 ChangeBit-
+I/O Error: Couldn&#39;t open file &#39;&lt;01&gt;&#39;
+I/O Error: Couldn&#39;t open file &#39;&lt;01&gt;&lt;01&gt;&#39;
+#5	NEW    cov: 298 ft: 332 corp: 3/4b lim: 4096 exec/s: 0 rss: 41Mb L: 2/2 MS: 2 ChangeBinInt-CopyPart-
+I/O Error: Couldn&#39;t open file &#39;&lt;02&gt;&#39;
+I/O Error: Couldn&#39;t open file &#39;&lt;02&gt;&#39;
+I/O Error: Couldn&#39;t open file &#39;&lt;02&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&#39;
+#8	NEW    cov: 298 ft: 369 corp: 4/16b lim: 4096 exec/s: 0 rss: 44Mb L: 12/12 MS: 3 ChangeBit-ShuffleBytes-InsertRepeatedBytes-
+I/O Error: Couldn&#39;t open file &#39;&lt;0a&gt;&#39;
+I/O Error: Couldn&#39;t open file &#39;&lt;ff&gt;&#39;
+I/O Error: Couldn&#39;t open file &#39;&lt;7f&gt;&#39;
+#11	NEW    cov: 299 ft: 370 corp: 5/17b lim: 4096 exec/s: 0 rss: 47Mb L: 1/12 MS: 3 CopyPart-ChangeByte-ChangeBit-
+I/O Error: Couldn&#39;t open file &#39;&lt;01&gt;&#39;
+I/O Error: Couldn&#39;t open file &#39;&lt;11&gt;&#39;
+I/O Error: Couldn&#39;t open file &#39;@&#39;
+#14	NEW    cov: 299 ft: 385 corp: 6/18b lim: 4096 exec/s: 0 rss: 50Mb L: 1/12 MS: 3 EraseBytes-ChangeBit-ChangeByte-
+I/O Error: Couldn&#39;t open file &#39;&lt;01&gt;&#39;
+I/O Error: Couldn&#39;t open file &#39;&lt;01&gt;&lt;0a&gt;&#39;
+I/O Error: Couldn&#39;t open file &#39;=&lt;01&gt;&lt;0a&gt;&#39;
+#17	NEW    cov: 299 ft: 389 corp: 7/21b lim: 4096 exec/s: 0 rss: 52Mb L: 3/12 MS: 3 ChangeBinInt-CrossOver-InsertByte-
+I/O Error: Couldn&#39;t open file &#39;&lt;0a&gt;&lt;8a&gt;&#39;
+#18	NEW    cov: 299 ft: 391 corp: 8/23b lim: 4096 exec/s: 0 rss: 52Mb L: 2/12 MS: 1 InsertByte-
+I/O Error: Couldn&#39;t open file &#39;&lt;02&gt;&lt;06&gt;&lt;00&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&#39;
+#19	NEW    cov: 300 ft: 394 corp: 9/35b lim: 4096 exec/s: 0 rss: 52Mb L: 12/12 MS: 1 CMP- DE: &#34;\006\000&#34;-
+I/O Error: Couldn&#39;t open file &#39;&lt;0b&gt;&lt;8a&gt;&#39;
+I/O Error: Couldn&#39;t open file &#39;&lt;0b&gt;&lt;8a&gt;&#39;
+I/O Error: Couldn&#39;t open file &#39;&lt;0b&gt;&lt;8a&gt;&lt;02&gt;&lt;06&gt;&lt;00&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&#39;
+#22	NEW    cov: 300 ft: 398 corp: 10/49b lim: 4096 exec/s: 0 rss: 53Mb L: 14/14 MS: 3 ChangeBit-CopyPart-CrossOver-
+I/O Error: Couldn&#39;t open file &#39;&lt;02&gt;&lt;06&gt;&lt;00&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&#39;
+#23	NEW    cov: 300 ft: 436 corp: 11/84b lim: 4096 exec/s: 0 rss: 53Mb L: 35/35 MS: 1 InsertRepeatedBytes-
+I/O Error: Couldn&#39;t open file &#39;&lt;02&gt;&lt;06&gt;&lt;00&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ef&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&#39;
+I/O Error: Couldn&#39;t open file &#39;&lt;02&gt;&lt;06&gt;&lt;00&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ef&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;d1&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&#39;
+I/O Error: Couldn&#39;t open file &#39;&lt;02&gt;&lt;06&gt;&lt;00&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ef&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;d1&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ab&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&#39;
+I/O Error: Couldn&#39;t open file &#39;&lt;02&gt;&lt;06&gt;&lt;00&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ef&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;02&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ab&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&#39;
+#27	NEW    cov: 300 ft: 439 corp: 12/119b lim: 4096 exec/s: 0 rss: 53Mb L: 35/35 MS: 4 ChangeBit-ChangeByte-ChangeByte-CMP- DE: &#34;\000\000\000\000\000\000\000\002&#34;-
+I/O Error: Couldn&#39;t open file &#39;&lt;02&gt;&lt;06&gt;&lt;00&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&#39;
+#28	NEW    cov: 300 ft: 442 corp: 13/158b lim: 4096 exec/s: 0 rss: 53Mb L: 39/39 MS: 1 CrossOver-
+I/O Error: Couldn&#39;t open file &#39;&lt;1a&gt;&#39;
+I/O Error: Couldn&#39;t open file &#39;&lt;1a&gt;&#39;
+I/O Error: Couldn&#39;t open file &#39;&lt;1a&gt;&#39;
+I/O Error: Couldn&#39;t open file &#39;&lt;1a&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&#39;
+#32	NEW    cov: 300 ft: 451 corp: 14/244b lim: 4096 exec/s: 0 rss: 53Mb L: 86/86 MS: 4 CopyPart-ShuffleBytes-ShuffleBytes-InsertRepeatedBytes-
+I/O Error: Couldn&#39;t open file &#39;&lt;11&gt;&#39;
+I/O Error: Couldn&#39;t open file &#39;1&#39;
+I/O Error: Couldn&#39;t open file &#39;11&#39;
+I/O Error: Couldn&#39;t open file &#39;&lt;11&gt;1&#39;
+I/O Error: Couldn&#39;t open file &#39;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;11&gt;1&#39;
+#37	NEW    cov: 300 ft: 456 corp: 15/308b lim: 4096 exec/s: 0 rss: 53Mb L: 64/86 MS: 5 ChangeBinInt-ChangeBit-CopyPart-ChangeBit-InsertRepeatedBytes-
+I/O Error: Couldn&#39;t open file &#39;&lt;11&gt;&lt;11&gt;&lt;11&gt;&lt;11&gt;&lt;11&gt;&lt;11&gt;&lt;11&gt;&lt;11&gt;&lt;11&gt;&lt;11&gt;&lt;11&gt;&lt;11&gt;&lt;11&gt;&lt;11&gt;&lt;1a&gt;&#39;
+#38	NEW    cov: 300 ft: 467 corp: 16/323b lim: 4096 exec/s: 0 rss: 53Mb L: 15/86 MS: 1 InsertRepeatedBytes-
+I/O Error: Couldn&#39;t open file &#39;&lt;0b&gt;&lt;8a&gt;&lt;02&gt;&lt;06&gt;&lt;01&gt;&lt;00&gt;&lt;00&gt;&lt;02&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&#39;
+#39	NEW    cov: 300 ft: 468 corp: 17/337b lim: 4096 exec/s: 0 rss: 54Mb L: 14/86 MS: 1 ChangeBinInt-
+I/O Error: Couldn&#39;t open file &#39;&lt;02&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&#39;
+#40	NEW    cov: 300 ft: 472 corp: 18/345b lim: 4096 exec/s: 0 rss: 54Mb L: 8/86 MS: 1 EraseBytes-
+I/O Error: Couldn&#39;t open file &#39;&lt;02&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&#39;
+I/O Error: Couldn&#39;t open file &#39;&lt;02&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;15&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&#39;
+I/O Error: Couldn&#39;t open file &#39;&lt;02&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;15&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&#39;
+I/O Error: Couldn&#39;t open file &#39;&lt;02&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;15&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&#39;
+#44	NEW    cov: 300 ft: 477 corp: 19/429b lim: 4096 exec/s: 0 rss: 54Mb L: 84/86 MS: 4 CopyPart-InsertByte-CopyPart-InsertRepeatedBytes-
+I/O Error: Couldn&#39;t open file &#39;&lt;0a&gt;&lt;0a&gt;&#39;
+I/O Error: Couldn&#39;t open file &#39;&lt;0a&gt;&#39;
+I/O Error: Couldn&#39;t open file &#39;&lt;0a&gt;&lt;0a&gt;&#39;
+I/O Error: Couldn&#39;t open file &#39;&lt;0a&gt;&lt;0a&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&#39;
+I/O Error: Couldn&#39;t open file &#39;&lt;0a&gt;&lt;0a&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;GGGGGGGGGGGGGGGGGGGGGGG&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&#39;
+#49	NEW    cov: 302 ft: 482 corp: 20/462b lim: 4096 exec/s: 0 rss: 54Mb L: 33/86 MS: 5 CopyPart-EraseBytes-CopyPart-CMP-InsertRepeatedBytes- DE: &#34;\377\377\377\377\377\377\377\377&#34;-
+I/O Error: Couldn&#39;t open file &#39;&lt;06&gt;&lt;00&gt;&#39;
+I/O Error: Couldn&#39;t open file &#39;&lt;06&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;00&gt;&#39;
+#51	NEW    cov: 302 ft: 495 corp: 21/483b lim: 4096 exec/s: 0 rss: 54Mb L: 21/86 MS: 2 PersAutoDict-CrossOver- DE: &#34;\006\000&#34;-
+I/O Error: Couldn&#39;t open file &#39;&lt;0b&gt;&lt;8a&gt;&lt;02&gt;&lt;06&gt;&lt;01&gt;&lt;00&gt;&lt;00&gt;&lt;02&gt;F&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&#39;
+#52	NEW    cov: 302 ft: 497 corp: 22/498b lim: 4096 exec/s: 0 rss: 54Mb L: 15/86 MS: 1 InsertByte-
+I/O Error: Couldn&#39;t open file &#39;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;
+...truncated...
+c0&gt;&lt;c0&gt;&lt;c0&gt;&lt;c0&gt;&lt;c0&gt;&lt;c0&gt;&lt;0b&gt;&lt;8a&gt;&lt;c0&gt;eemfinal&lt;00&gt;&lt;00&gt;&lt;02&gt;F&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&#39;
+I/O Error: Couldn&#39;t open file &#39;&lt;c0&gt;uld&lt;c0&gt;&lt;c0&gt;&lt;c0&gt;_&lt;c0&gt;&lt;c0&gt;&lt;c0&gt;&lt;c0&gt;&lt;c0&gt;&lt;c0&gt;&lt;c0&gt;&lt;c0&gt;&lt;c0&gt;&lt;c0&gt;&lt;c0&gt;_&lt;c0&gt;&lt;c0&gt;&lt;c0&gt;&lt;c0&gt;&lt;c0&gt;&lt;c0&gt;Eshal&lt;00&gt;&lt;00&gt;&lt;02&gt;&lt;8a&gt;&lt;c0&gt;&lt;02&gt;)&lt;95&gt;&lt;06&gt;&lt;c0&gt;&lt;c0&gt;&lt;c0&gt;&lt;c0&gt;&lt;c0&gt;&lt;c0&gt;&lt;c0&gt;&lt;c0&gt;&lt;c0&gt;&lt;c0&gt;&lt;c0&gt;&lt;0b&gt;&lt;8a&gt;&lt;c0&gt;eemfinal&lt;00&gt;&lt;00&gt;&lt;02&gt;F&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&#39;
+I/O Error: Couldn&#39;t open file &#39;,vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv/vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv&lt;1a&gt;@&#39;
+I/O Error: Couldn&#39;t open file &#39;,vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv&lt;8a&gt;&lt;8a&gt;vvvvvvvvvvvvvvvvvvvv/vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv&lt;1a&gt;@&#39;
+I/O Error: Couldn&#39;t open file &#39;,vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv&lt;8a&gt;&lt;8a&gt;vvvvvvvvvvvvvvvvvvvv/vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv&lt;8a&gt;&lt;8a&gt;vvvvvvvvvvvvvvvvvvvv/vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv&lt;1a&gt;@&#39;
+I/O Error: Couldn&#39;t open file &#39;,vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv&lt;8a&gt;&lt;8a&gt;vvvvvvvvvvvvvvvvvvvv/vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv&lt;8a&gt;&lt;8a&gt;vvvvvvvvvvvvvvvvvvv&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;v/vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv&lt;1a&gt;@&#39;
+I/O Error: Couldn&#39;t open file &#39;,vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv&lt;8a&gt;&lt;8a&gt;vvvvvvvvvvvvvvvvvvvv/vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv&lt;8a&gt;&lt;8a&gt;vvvvvvvvvvvvvvvvvvv&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;v/vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv&lt;1a&gt;@&#39;
+I/O Error: Couldn&#39;t open file &#39;&lt;02&gt;&lt;06&gt;&lt;16&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;ff&gt;&lt;ff&gt;uld&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;[&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;+++++++++++++++++++++++++++++++++++++++&lt;02&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;fd&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;+++++++++++++++++++++++++++++++++++&#39;+#+++++++++++++&lt;00&gt;&lt;00&gt;++++++++++++&lt;00&gt;&lt;00&gt;&lt;ff&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;v&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;11&gt;1&lt;ff&gt;&lt;15&gt;&lt;fe&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&#39;
+I/O Error: Couldn&#39;t open file &#39;&lt;02&gt;&lt;06&gt;&lt;16&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;ff&gt;&lt;ff&gt;uld&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;[&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;+++++++++++++++++++++++++++++++++++++++&lt;02&gt;&lt;ff&gt;&lt;f7&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;fd&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;+++++++++++++++++++++++++++++++++++&#39;+#+++++++++++++&lt;00&gt;&lt;00&gt;++++++++++++&lt;00&gt;&lt;00&gt;&lt;ff&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;v&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;11&gt;1&lt;ff&gt;&lt;15&gt;&lt;fe&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&#39;
+I/O Error: Couldn&#39;t open file &#39;&lt;02&gt;&lt;06&gt;&lt;16&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;ff&gt;&lt;ff&gt;uld&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;[&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;+++++++++++++++++++++++++++++!+++++++++&lt;02&gt;&lt;ff&gt;&lt;f7&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;fd&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;+++++++++++++++++++++++++++++++++++&#39;+#+++++++++++++&lt;00&gt;&lt;00&gt;++++++++++++&lt;00&gt;&lt;00&gt;&lt;ff&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;v&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;11&gt;1&lt;ff&gt;&lt;15&gt;&lt;fe&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&#39;
+I/O Error: Couldn&#39;t open file &#39;&lt;02&gt;&lt;06&gt;&lt;16&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;ff&gt;&lt;ff&gt;uld&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;[&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;+++++++++++++++++++++++++++++!+++++++++&lt;02&gt;&lt;ff&gt;&lt;f7&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;db&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;fd&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;+++++++++++++++++++++++++++++++++++&#39;+#+++++++++++++&lt;00&gt;&lt;00&gt;++++++++++++&lt;00&gt;&lt;00&gt;&lt;ff&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;v&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;11&gt;1&lt;ff&gt;&lt;15&gt;&lt;fe&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&#39;
+I/O Error: Couldn&#39;t open file &#39;&lt;02&gt;&lt;06&gt;&lt;16&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;ff&gt;&lt;ff&gt;uld&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;[&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;fd&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;+++++++++++++++++++++++++++++!+++++++++&lt;02&gt;&lt;ff&gt;&lt;f7&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;db&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;fd&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;+++++++++++++++++++++++++++++++++++&#39;+#+++++++++++++&lt;00&gt;&lt;00&gt;++++++++++++&lt;00&gt;&lt;00&gt;&lt;ff&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;00&gt;v&lt;00&gt;&lt;00&gt;&lt;00&gt;&lt;11&gt;1&lt;ff&gt;&lt;15&gt;&lt;fe&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&lt;ff&gt;&#39;
+#4905	DONE   cov: 302 ft: 694 corp: 88/11737b lim: 4096 exec/s: 158 rss: 56Mb
+###### Recommended dictionary. ######
+&#34;\006\000&#34; # Uses: 23
+&#34;\000\000\000\000\000\000\000\002&#34; # Uses: 29
+&#34;\377\377\377\377\377\377\377\377&#34; # Uses: 21
+&#34;t}&#34; # Uses: 22
+&#34;\200\000&#34; # Uses: 32
+&#34;\036\000\000\000\000\000\000\000&#34; # Uses: 29
+&#34;\026\000\000\000\000\000\000\000&#34; # Uses: 19
+&#34;uld&#34; # Uses: 24
+&#34;(\000&#34; # Uses: 26
+&#34;\003\000\000\000&#34; # Uses: 21
+&#34;\377\377\377\377\377\377\377\035&#34; # Uses: 16
+&#34;meemfinal&#34; # Uses: 15
+&#34;wring&#34; # Uses: 28
+&#34;\377\177&#34; # Uses: 18
+&#34;t}&#39;&#34; # Uses: 23
+&#34;\377\377\017\000&#34; # Uses: 25
+&#34;ulo&#34; # Uses: 27
+&#34;\027\000\000\000\000\000\000\000&#34; # Uses: 18
+&#34;Esh&#34; # Uses: 9
+&#34;\001\001\000\000&#34; # Uses: 1
+###### End of recommended dictionary. ######
+Done 4905 runs in 31 second(s)
+stat::number_of_executed_units: 4905
+stat::average_exec_per_sec:     158
+stat::new_units_added:          117
+stat::slowest_unit_time_sec:    0
+stat::peak_rss_mb:              56
+
+</pre>
+
+
+</body>

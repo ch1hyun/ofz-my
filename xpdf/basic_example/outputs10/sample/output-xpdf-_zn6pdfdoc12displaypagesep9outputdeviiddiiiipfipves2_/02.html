@@ -1,0 +1,496 @@
+<!doctype html>
+
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Experiment results</title>
+<style>
+* {
+    box-sizing: border-box;
+}
+
+html {
+    line-height: 1.15;
+}
+
+body {
+    font-family: sans-serif;
+    font-size: 16px;
+}
+
+table {
+    border-collapse: collapse;
+    border-spacing: 0;
+}
+
+td, th {
+    border-right: 1px #dedede solid;
+    border-bottom: 1px #dedede solid;
+    padding: 5px;
+    text-align: left;
+}
+td:first-child, th:first-child {
+    border-left: 1px #dedede solid;
+}
+th {
+    border-top: 1px #dedede solid;
+}
+
+tbody tr:nth-child(odd) {
+    background-color: #f4f5ff;
+}
+</style>
+<body>
+    LLM: 
+    
+<h1>output-xpdf-_zn6pdfdoc12displaypagesep9outputdeviiddiiiipfipves2_ / 02</h1>
+Bug: True
+<br>
+Crash reason: NO_SEMANTIC_ERR
+<br>
+<br>
+
+<h2>Triage</h2>
+<pre>
+The crash is caused by a bug in the fuzz driver.
+
+The crash report indicates that the crash is caused by attempting to free memory which was not allocated with malloc. The memory in question is the &#39;filename_copy&#39; variable in the fuzz driver code. This variable is created by making a copy of the &#39;filename&#39; variable, which itself is created from a std::string. The &#39;filename_copy&#39; is then used to create a &#39;PDFDoc&#39; object, and when the &#39;PDFDoc&#39; object is destroyed (at the end of the &#39;LLVMFuzzerTestOneInput&#39; function), it attempts to free the &#39;filename_copy&#39; variable, causing the crash. The bug in the fuzz driver is that it is creating a &#39;GString&#39; object from a copy of another &#39;GString&#39; object, but both are trying to free the same memory when they are destroyed.
+</pre>
+<br>
+
+
+
+
+
+<h3>Final code</h3>
+
+<pre>
+// 
+// you may not use this file except in compliance with the License.
+// 
+// distributed under the License is distributed on an &#34;AS IS&#34; BASIS,
+// See the License for the specific language governing permissions and
+// 
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+#include &lt;cstddef&gt;
+#include &lt;cstdint&gt;
+#include &lt;cstdlib&gt;
+
+#include &#34;PDFDoc.h&#34;
+#include &#34;GString.h&#34;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
+  if (size &lt; 20)
+    return 0;
+
+  FuzzedDataProvider fdp(data, size);
+  double hDPI = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  double vDPI = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  int rotate = fdp.ConsumeIntegral&lt;int&gt;();
+  GBool useMediaBox = static_cast&lt;GBool&gt;(fdp.ConsumeIntegral&lt;int&gt;());
+  GBool crop = static_cast&lt;GBool&gt;(fdp.ConsumeIntegral&lt;int&gt;());
+
+  // We need a buffer that&#39;s large enough to hold at least a minimal PDF.
+  if (fdp.remaining_bytes() &lt; 20) {
+    return 0;
+  }
+
+  std::string filename_str = fdp.ConsumeRemainingBytesAsString();
+  GString filename(filename_str.c_str());
+
+  // Create PDFDoc using a copy of the filename to avoid memory issues
+  GString filename_copy = filename.copy();
+  PDFDoc doc(&amp;filename_copy);
+
+  if (!doc.isOk())
+    return 0;
+
+  if (doc.getNumPages() &gt; 0) {
+    doc.displayPages(NULL, 1, doc.getNumPages(), hDPI, vDPI, rotate, useMediaBox, crop, gFalse, NULL, NULL);
+  }
+  
+  return 0;
+}
+</pre>
+
+
+<h3>Fixer prompt #1</h3>
+<pre>
+
+Given the following C++ fuzz harness and its build error message, fix the code to make it build for fuzzing.
+
+If there is undeclared identifier or unknown type name error, fix it by finding and including the related libraries.
+
+MUST RETURN THE FULL CODE, INCLUDING UNCHANGED PARTS.
+
+Below is the code needs to be built:
+&lt;code&gt;
+// 
+// you may not use this file except in compliance with the License.
+// 
+// distributed under the License is distributed on an &#34;AS IS&#34; BASIS,
+// See the License for the specific language governing permissions and
+// 
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+#include &lt;cstddef&gt;
+#include &lt;cstdint&gt;
+#include &lt;cstdlib&gt;
+
+#include &#34;PDFDoc.h&#34;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
+  if (size &lt; 20)
+    return 0;
+
+  FuzzedDataProvider fdp(data, size);
+  double hDPI = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  double vDPI = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  int rotate = fdp.ConsumeIntegral&lt;int&gt;();
+  GBool useMediaBox = static_cast&lt;GBool&gt;(fdp.ConsumeIntegral&lt;int&gt;());
+  GBool crop = static_cast&lt;GBool&gt;(fdp.ConsumeIntegral&lt;int&gt;());
+
+  // We need a buffer that&#39;s large enough to hold at least a minimal PDF.
+  if (fdp.remaining_bytes() &lt; 20) {
+    return 0;
+  }
+
+  std::string filename_str = fdp.ConsumeRemainingBytesAsString();
+  const char *filename = filename_str.c_str();
+
+  PDFDoc doc(filename);
+
+  if (!doc.isOk())
+    return 0;
+
+  if (doc.getNumPages() &gt; 0) {
+    doc.displayPages(NULL, 1, doc.getNumPages(), hDPI, vDPI, rotate, useMediaBox, crop, gFalse, NULL, NULL, NULL);
+  }
+  
+  return 0;
+}
+&lt;/code&gt;
+
+Below is the error to fix:
+The code has the following build issues:
+&lt;error&gt;
+fuzz_JBIG2.cc:34:10: error: no matching constructor for initialization of &#39;PDFDoc&#39;
+   34 |   PDFDoc doc(filename);
+      |          ^   ~~~~~~~~
+../xpdf/PDFDoc.h:35:7: note: candidate constructor (the implicit copy constructor) not viable: no known conversion from &#39;const char *&#39; to &#39;const PDFDoc&#39; for 1st argument
+   35 | class PDFDoc {
+      |       ^~~~~~
+../xpdf/PDFDoc.h:38:3: note: candidate constructor not viable: no known conversion from &#39;const char *&#39; to &#39;GString *&#39; for 1st argument
+   38 |   PDFDoc(GString *fileNameA, GString *ownerPassword = NULL,
+      |   ^      ~~~~~~~~~~~~~~~~~~
+../xpdf/PDFDoc.h:48:3: note: candidate constructor not viable: 1st argument (&#39;const char *&#39;) would lose const qualifier
+   48 |   PDFDoc(char *fileNameA, GString *ownerPassword = NULL,
+      |   ^      ~~~~~~~~~~~~~~~
+../xpdf/PDFDoc.h:51:3: note: candidate constructor not viable: no known conversion from &#39;const char *&#39; to &#39;BaseStream *&#39; for 1st argument
+   51 |   PDFDoc(BaseStream *strA, GString *ownerPassword = NULL,
+      |   ^      ~~~~~~~~~~~~~~~~
+fuzz_JBIG2.cc:40:109: error: too many arguments to function call, expected at most 11, have 12
+   40 |     doc.displayPages(NULL, 1, doc.getNumPages(), hDPI, vDPI, rotate, useMediaBox, crop, gFalse, NULL, NULL, NULL);
+      |     ~~~~~~~~~~~~~~~~                                                                                        ^~~~
+/usr/local/lib/clang/18/include/__stddef_null.h:13:14: note: expanded from macro &#39;NULL&#39;
+   13 | #define NULL __null
+      |              ^~~~~~
+../xpdf/PDFDoc.h:110:8: note: &#39;displayPages&#39; declared here
+  110 |   void displayPages(OutputDev *out, int firstPage, int lastPage,
+      |        ^            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  111 |                     double hDPI, double vDPI, int rotate,
+      |                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  112 |                     GBool useMediaBox, GBool crop, GBool printing,
+      |                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  113 |                     GBool (*abortCheckCbk)(void *data) = NULL,
+      |                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  114 |                     void *abortCheckCbkData = NULL);
+      |                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+&lt;/error&gt;
+
+
+
+
+Fix code:
+1. Consider possible solutions for the issues listed above.
+2. Choose a solution that can maximize fuzzing result, which is utilizing the function under test and feeding it not null input.
+3. Apply the solutions to the original code.
+It&#39;s important to show the complete code, not only the fixed line.
+&lt;solution&gt;
+</pre>
+
+
+
+<h3>Code #1</h3>
+
+<pre>
+Here is the corrected code:
+
+```cpp
+// 
+// you may not use this file except in compliance with the License.
+// 
+// distributed under the License is distributed on an &#34;AS IS&#34; BASIS,
+// See the License for the specific language governing permissions and
+// 
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+#include &lt;cstddef&gt;
+#include &lt;cstdint&gt;
+#include &lt;cstdlib&gt;
+
+#include &#34;PDFDoc.h&#34;
+#include &#34;GString.h&#34;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
+  if (size &lt; 20)
+    return 0;
+
+  FuzzedDataProvider fdp(data, size);
+  double hDPI = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  double vDPI = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  int rotate = fdp.ConsumeIntegral&lt;int&gt;();
+  GBool useMediaBox = static_cast&lt;GBool&gt;(fdp.ConsumeIntegral&lt;int&gt;());
+  GBool crop = static_cast&lt;GBool&gt;(fdp.ConsumeIntegral&lt;int&gt;());
+
+  // We need a buffer that&#39;s large enough to hold at least a minimal PDF.
+  if (fdp.remaining_bytes() &lt; 20) {
+    return 0;
+  }
+
+  std::string filename_str = fdp.ConsumeRemainingBytesAsString();
+  GString filename(filename_str.c_str());
+
+  PDFDoc doc(&amp;filename);
+
+  if (!doc.isOk())
+    return 0;
+
+  if (doc.getNumPages() &gt; 0) {
+    doc.displayPages(NULL, 1, doc.getNumPages(), hDPI, vDPI, rotate, useMediaBox, crop, gFalse, NULL, NULL);
+  }
+  
+  return 0;
+}
+```
+
+The changes made are:
+
+1. Included the &#34;GString.h&#34; to use the GString class.
+2. Changed the `filename` from `const char*` to `GString`.
+3. Changed the `PDFDoc` constructor to accept a pointer to `GString` instead of `const char*`.
+4. Removed the extra NULL argument from the `doc.displayPages()` function call.
+</pre>
+
+
+<h3>Fixer prompt #2</h3>
+<pre>
+
+Given the following C++ fuzz harness and its build error message, fix the code to make it build for fuzzing.
+
+If there is undeclared identifier or unknown type name error, fix it by finding and including the related libraries.
+
+MUST RETURN THE FULL CODE, INCLUDING UNCHANGED PARTS.
+
+Below is the code needs to be built:
+&lt;code&gt;
+// 
+// you may not use this file except in compliance with the License.
+// 
+// distributed under the License is distributed on an &#34;AS IS&#34; BASIS,
+// See the License for the specific language governing permissions and
+// 
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+#include &lt;cstddef&gt;
+#include &lt;cstdint&gt;
+#include &lt;cstdlib&gt;
+
+#include &#34;PDFDoc.h&#34;
+#include &#34;GString.h&#34;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
+  if (size &lt; 20)
+    return 0;
+
+  FuzzedDataProvider fdp(data, size);
+  double hDPI = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  double vDPI = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  int rotate = fdp.ConsumeIntegral&lt;int&gt;();
+  GBool useMediaBox = static_cast&lt;GBool&gt;(fdp.ConsumeIntegral&lt;int&gt;());
+  GBool crop = static_cast&lt;GBool&gt;(fdp.ConsumeIntegral&lt;int&gt;());
+
+  // We need a buffer that&#39;s large enough to hold at least a minimal PDF.
+  if (fdp.remaining_bytes() &lt; 20) {
+    return 0;
+  }
+
+  std::string filename_str = fdp.ConsumeRemainingBytesAsString();
+  GString filename(filename_str.c_str());
+
+  PDFDoc doc(&amp;filename);
+
+  if (!doc.isOk())
+    return 0;
+
+  if (doc.getNumPages() &gt; 0) {
+    doc.displayPages(NULL, 1, doc.getNumPages(), hDPI, vDPI, rotate, useMediaBox, crop, gFalse, NULL, NULL);
+  }
+  
+  return 0;
+}
+&lt;/code&gt;
+
+Below is the error to fix:
+The code can build successfully but has a runtime issue: Fuzzing crashed immediately at runtime (ASAN-ERROR: AddressSanitizer: attempting free on address which was not malloc()-ed: 0x7f9fc1e70860 in thread T0), indicating fuzz target code for invoking the function under test is incorrect or unrobust.
+&lt;error&gt;
+Crash stacks:
+Stack 0:
+#0 0x556c8f9f518d in operator delete(void*) /src/llvm-project/compiler-rt/lib/asan/asan_new_delete.cpp:152:3
+#1 0x556c8f9f7630 in LLVMFuzzerTestOneInput /src/xpdf-4.05/build/fuzz_JBIG2.cc:45:1
+#2 0x556c8f8a9600 in fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:614:13
+#3 0x556c8f8a8e25 in fuzzer::Fuzzer::RunOne(unsigned char const*, unsigned long, bool, fuzzer::InputInfo*, bool, bool*) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:516:7
+#4 0x556c8f8aa5f5 in fuzzer::Fuzzer::MutateAndTestOne() /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:760:19
+#5 0x556c8f8ab3e5 in fuzzer::Fuzzer::Loop(std::__Fuzzer::vector&lt;fuzzer::SizedFile, std::__Fuzzer::allocator&lt;fuzzer::SizedFile&gt;&gt;&amp;) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:905:5
+#6 0x556c8f8996f6 in fuzzer::FuzzerDriver(int*, char***, int (*)(unsigned char const*, unsigned long)) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:914:6
+#7 0x556c8f8c5c22 in main /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMain.cpp:20:10
+#8 0x7f9fc268b082 in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x24082) (BuildId: 0702430aef5fa3dda43986563e9ffcc47efbd75e)
+#9 0x556c8f88a86d in _start (/out/fuzz_JBIG2+0x1c986d)
+&lt;/error&gt;
+
+
+
+
+Fix code:
+1. Consider possible solutions for the issues listed above.
+2. Choose a solution that can maximize fuzzing result, which is utilizing the function under test and feeding it not null input.
+3. Apply the solutions to the original code.
+It&#39;s important to show the complete code, not only the fixed line.
+&lt;solution&gt;
+</pre>
+
+
+
+<h3>Code #2</h3>
+
+<pre>
+// 
+// you may not use this file except in compliance with the License.
+// 
+// distributed under the License is distributed on an &#34;AS IS&#34; BASIS,
+// See the License for the specific language governing permissions and
+// 
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+#include &lt;cstddef&gt;
+#include &lt;cstdint&gt;
+#include &lt;cstdlib&gt;
+
+#include &#34;PDFDoc.h&#34;
+#include &#34;GString.h&#34;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
+  if (size &lt; 20)
+    return 0;
+
+  FuzzedDataProvider fdp(data, size);
+  double hDPI = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  double vDPI = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  int rotate = fdp.ConsumeIntegral&lt;int&gt;();
+  GBool useMediaBox = static_cast&lt;GBool&gt;(fdp.ConsumeIntegral&lt;int&gt;());
+  GBool crop = static_cast&lt;GBool&gt;(fdp.ConsumeIntegral&lt;int&gt;());
+
+  // We need a buffer that&#39;s large enough to hold at least a minimal PDF.
+  if (fdp.remaining_bytes() &lt; 20) {
+    return 0;
+  }
+
+  std::string filename_str = fdp.ConsumeRemainingBytesAsString();
+  GString filename(filename_str.c_str());
+
+  // Create PDFDoc using a copy of the filename to avoid memory issues
+  GString filename_copy = filename.copy();
+  PDFDoc doc(&amp;filename_copy);
+
+  if (!doc.isOk())
+    return 0;
+
+  if (doc.getNumPages() &gt; 0) {
+    doc.displayPages(NULL, 1, doc.getNumPages(), hDPI, vDPI, rotate, useMediaBox, crop, gFalse, NULL, NULL);
+  }
+  
+  return 0;
+}
+</pre>
+
+
+<h2>Logs</h2>
+<pre>
+Fixing /home/chyun/oss-fuzz-gen1/results7/output-xpdf-_zn6pdfdoc12displaypagesep9outputdeviiddiiiipfipves2_/fixed_targets/02.cc with gpt-4, attempt 1.
+Fixing /home/chyun/oss-fuzz-gen1/results7/output-xpdf-_zn6pdfdoc12displaypagesep9outputdeviiddiiiipfipves2_/fixed_targets/02.cc with gpt-4, attempt 2.
+Successfully built /home/chyun/oss-fuzz-gen1/results7/output-xpdf-_zn6pdfdoc12displaypagesep9outputdeviiddiiiipfipves2_/fixed_targets/02.cc with gpt-4 in 2 iterations of fixing.
+Triaging the crash related to /home/chyun/oss-fuzz-gen1/results7/output-xpdf-_zn6pdfdoc12displaypagesep9outputdeviiddiiiipfipves2_/fixed_targets/02.cc with gpt-4.
+Result for xpdf-zn6pdfdoc12displaypagesep9outputdeviiddiiiipfipves2-02: crashes=True, coverage=0.0007814825841024114 (21/26872), coverage diff=0.0 (0/124731)
+
+</pre>
+
+<h2>Run logs</h2>
+<pre>
+INFO:__main__:Running: docker run --privileged --shm-size=2g --platform linux/amd64 --rm -e FUZZING_ENGINE=libfuzzer -e SANITIZER=address -e RUN_FUZZER_MODE=interactive -e HELPER=True -v /home/chyun/oss-fuzz-gen1/results7/output-xpdf-_zn6pdfdoc12displaypagesep9outputdeviiddiiiipfipves2_/corpora/02.cc:/tmp/fuzz_JBIG2_corpus -v /tmp/tmpkg8klrqi/build/out/xpdf-zn6pdfdoc12displaypagesep9outputdeviiddiiiipfipves2-02:/out -t gcr.io/oss-fuzz-base/base-runner run_fuzzer fuzz_JBIG2 -print_final_stats=1 -max_total_time=30 -len_control=0 -timeout=30.
+vm.mmap_rnd_bits = 28
+rm: cannot remove &#39;/tmp/fuzz_JBIG2_corpus&#39;: Device or resource busy
+/out/fuzz_JBIG2 -rss_limit_mb=2560 -timeout=25 -print_final_stats=1 -max_total_time=30 -len_control=0 -timeout=30 /tmp/fuzz_JBIG2_corpus -detect_leaks=0 &lt; /dev/null
+INFO: Running with entropic power schedule (0xFF, 100).
+INFO: Seed: 3403884971
+INFO: Loaded 1 modules   (26872 inline 8-bit counters): 26872 [0x557fbfd9e458, 0x557fbfda4d50), 
+INFO: Loaded 1 PC tables (26872 PCs): 26872 [0x557fbfda4d50,0x557fbfe0dcd0), 
+INFO:        0 files found in /tmp/fuzz_JBIG2_corpus
+INFO: -max_len is not provided; libFuzzer will not generate inputs larger than 4096 bytes
+INFO: A corpus is not provided, starting from an empty corpus
+#2	INITED cov: 2 ft: 2 corp: 1/1b exec/s: 0 rss: 33Mb
+#14	NEW    cov: 21 ft: 21 corp: 2/21b lim: 4096 exec/s: 0 rss: 34Mb L: 20/20 MS: 2 ChangeBinInt-InsertRepeatedBytes-
+#16	NEW    cov: 21 ft: 23 corp: 3/42b lim: 4096 exec/s: 0 rss: 34Mb L: 21/21 MS: 2 CrossOver-InsertByte-
+I/O Error: Couldn&#39;t open file &#39;&#39;
+=================================================================
+[1m[31m==15==ERROR: AddressSanitizer: attempting free on address which was not malloc()-ed: 0x7f3c70b81880 in thread T0
+[1m[0mSCARINESS: 40 (bad-free)
+    #0 0x557fbf98518d in operator delete(void*) /src/llvm-project/compiler-rt/lib/asan/asan_new_delete.cpp:152:3
+    #1 0x557fbf98768d in LLVMFuzzerTestOneInput /src/xpdf-4.05/build/fuzz_JBIG2.cc:47:1
+    #2 0x557fbf839600 in fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:614:13
+    #3 0x557fbf838e25 in fuzzer::Fuzzer::RunOne(unsigned char const*, unsigned long, bool, fuzzer::InputInfo*, bool, bool*) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:516:7
+    #4 0x557fbf83a5f5 in fuzzer::Fuzzer::MutateAndTestOne() /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:760:19
+    #5 0x557fbf83b3e5 in fuzzer::Fuzzer::Loop(std::__Fuzzer::vector&lt;fuzzer::SizedFile, std::__Fuzzer::allocator&lt;fuzzer::SizedFile&gt;&gt;&amp;) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:905:5
+    #6 0x557fbf8296f6 in fuzzer::FuzzerDriver(int*, char***, int (*)(unsigned char const*, unsigned long)) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:914:6
+    #7 0x557fbf855c22 in main /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMain.cpp:20:10
+    #8 0x7f3c71387082 in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x24082) (BuildId: 0702430aef5fa3dda43986563e9ffcc47efbd75e)
+    #9 0x557fbf81a86d in _start (/out/fuzz_JBIG2+0x1c986d)
+
+DEDUP_TOKEN: operator delete(void*)--LLVMFuzzerTestOneInput--fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long)
+[1m[32mAddress 0x7f3c70b81880 is located in stack of thread T0 at offset 128 in frame[1m[0m
+[1m[0m    #0 0x557fbf986c1f in LLVMFuzzerTestOneInput /src/xpdf-4.05/build/fuzz_JBIG2.cc:16
+
+DEDUP_TOKEN: LLVMFuzzerTestOneInput
+  This frame has 4 object(s):
+    [32, 56) &#39;filename_str&#39; (line 32)
+    [96, 112) &#39;filename&#39; (line 33)
+    [128, 144) &#39;filename_copy&#39; (line 36)[1m[32m &lt;== Memory access at offset 128 is inside this variable[1m[0m
+    [160, 248) &#39;doc&#39; (line 37)
+HINT: this may be a false positive if your program uses some custom stack unwind mechanism, swapcontext or vfork
+      (longjmp and C++ exceptions *are* supported)
+SUMMARY: AddressSanitizer: bad-free /src/llvm-project/compiler-rt/lib/asan/asan_new_delete.cpp:152:3 in operator delete(void*)
+==15==ABORTING
+MS: 1 InsertRepeatedBytes-; base unit: 6768033e216468247bd031a0a2d9876d79818f8f
+0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,
+\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000
+artifact_prefix=&#39;./&#39;; Test unit written to ./crash-9f9719e06258c2440ba70f37e55bb54440bb12b5
+Base64: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==
+stat::number_of_executed_units: 17
+stat::average_exec_per_sec:     0
+stat::new_units_added:          2
+stat::slowest_unit_time_sec:    0
+stat::peak_rss_mb:              35
+
+</pre>
+
+
+</body>

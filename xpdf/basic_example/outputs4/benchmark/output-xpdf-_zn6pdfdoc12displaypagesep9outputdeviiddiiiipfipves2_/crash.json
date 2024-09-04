@@ -1,0 +1,43 @@
+{
+    "samples": [
+
+    {
+        "benchmark": "output-xpdf-_zn6pdfdoc12displaypagesep9outputdeviiddiiiipfipves2_",
+        "sample": "01",
+        "status": "Done",
+        "compiles": "True",
+        "crashes": "False",
+        "crash_reason": "NO_SEMANTIC_ERR",
+        "bug": "True",
+        "coverage": "0.73",
+        "coverage_diff": "0.0013789675381420817",
+        "coverage_report": "#",
+        "stacktrace": "/stacktrace",
+        "target_binary": "/target_binary",
+        "reproducer": "/artifacts",
+        "run_log": "run.log",
+        "source_code": "#include <fuzzer/FuzzedDataProvider.h>\\n\\n#include <stddef.h>\\n#include <stdint.h>\\n#include <stdlib.h>\\n#include <string.h>\\n\\n#include \"PDFDoc.h\"\\n#include \"SplashOutputDev.h\"\\n#include \"parseargs.h\"\\n#include \"/src/xpdf-4.05/goo/GString.h\"\\n#include \"/src/xpdf-4.05/goo/gmem.h\"\\n#include \"GlobalParams.h\"\\n#include \"Object.h\"\\n#include \"XRef.h\"\\n\\nextern \"C\" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {\\n  FuzzedDataProvider fdp(data, size);\\n  double hdpi = fdp.ConsumeFloatingPoint<double>();\\n  double vdpi = fdp.ConsumeFloatingPoint<double>();\\n  int rotate = fdp.ConsumeIntegral<int>();\\n  bool useMediaBox = fdp.ConsumeBool();\\n  bool crop = fdp.ConsumeBool();\\n  bool printing = fdp.ConsumeBool();\\n  std::vector<char> fileNameVec = fdp.ConsumeBytes<char>(fdp.remaining_bytes()/2);\\n  size_t fileNameLen = fileNameVec.size();\\n  char *fileName = (char *)gmallocn(fileNameLen + 1, sizeof(char));\\n  memcpy(fileName, fileNameVec.data(), fileNameLen);\\n  fileName[fileNameLen] = '\\0';\\n\\n  std::vector<char> passwordVec = fdp.ConsumeRemainingBytes<char>();\\n  size_t passwordLen = passwordVec.size();\\n  char *password = (char *)gmallocn(passwordLen + 1, sizeof(char));\\n  memcpy(password, passwordVec.data(), passwordLen);\\n  password[passwordLen] = '\\0';\\n\\n  globalParams = new GlobalParams(NULL);\\n  globalParams->setupBaseFonts(NULL);\\n  globalParams->setTextEncoding(\"UTF-8\");\\n\\n  PDFDoc *doc;\\n  GString *fileNameA = new GString(fileName);\\n  GString *passwordA = new GString(password);\\n\\n  doc = new PDFDoc(fileNameA, passwordA, passwordA);\\n  if (doc->isOk()) {\\n    SplashColor paperColor = {0xff, 0xff, 0xff};\\n    SplashOutputDev splashOut(splashModeRGB8, 4, gFalse, paperColor);\\n    splashOut.startDoc(doc->getXRef());\\n    doc->displayPages(&splashOut, 1, 1, hdpi, vdpi, rotate, useMediaBox, crop, printing, NULL, NULL);\\n  }\\n  delete doc;\\n\\n  delete globalParams;\\n  delete passwordA;\\n  gfree(password);\\n  gfree(fileName);\\n\\n  return 0;\\n}",
+        "model": ""
+    },
+
+    {
+        "benchmark": "output-xpdf-_zn6pdfdoc12displaypagesep9outputdeviiddiiiipfipves2_",
+        "sample": "02",
+        "status": "Done",
+        "compiles": "True",
+        "crashes": "True",
+        "crash_reason": "FP_NEAR_INIT_CRASH",
+        "bug": "False",
+        "coverage": "0.00",
+        "coverage_diff": "0.0",
+        "coverage_report": "#",
+        "stacktrace": "/stacktrace",
+        "target_binary": "/target_binary",
+        "reproducer": "/artifacts",
+        "run_log": "run.log",
+        "source_code": "#include <fuzzer/FuzzedDataProvider.h>\\n\\n#include <aconf.h>\\n#include <config.h>\\n#include <png.h>\\n#include <stddef.h>\\n#include <stdint.h>\\n#include <stdio.h>\\n#include <stdlib.h>\\n#include <string.h>\\n\\n#include \"GString.h\"\\n#include \"GlobalParams.h\"\\n#include \"JBIG2Stream.h\"\\n#include \"Object.h\"\\n#include \"PDFDoc.h\"\\n#include \"Splash.h\"\\n#include \"SplashBitmap.h\"\\n#include \"SplashOutputDev.h\"\\n#include \"Stream.h\"\\n#include \"gfile.h\"\\n#include \"gmem.h\"\\n#include \"gmempp.h\"\\n#include \"parseargs.h\"\\n\\nextern \"C\" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {\\n  FuzzedDataProvider fdp(data, size);\\n\\n  // Required parameters for the call to PDFDoc::displayPages\\n  double hDPI = fdp.ConsumeFloatingPoint<double>();\\n  double vDPI = fdp.ConsumeFloatingPoint<double>();\\n  int rotation = fdp.ConsumeIntegral<int>();\\n  bool useMediaBox = fdp.ConsumeBool();\\n  bool crop = fdp.ConsumeBool();\\n  bool printing = fdp.ConsumeBool();\\n\\n  std::vector<char> payload = fdp.ConsumeRemainingBytes<char>();\\n\\n  Object obj;\\n  obj.initNull();\\n  MemStream str(reinterpret_cast<char *>(payload.data()), 0, payload.size(), &obj);\\n\\n  GString enc(\"none\");\\n  GlobalParams gp(enc.getCString());\\n\\n  Object xpdf_obj;\\n  xpdf_obj.initNull();\\n  \\n  // Initialize the GlobalParams object before using it\\n  // Fix: Pass a valid argument to the GlobalParams constructor\\n  globalParams = new GlobalParams(enc.getCString());\\n\\n  // Create PDFDoc object on heap to avoid deletion at the end of the scope\\n  PDFDoc *doc = new PDFDoc(&str, NULL, NULL, NULL);\\n\\n  SplashColor paperColor = {0xff, 0xff, 0xff};\\n  SplashOutputDev splash(splashModeRGB8, 4, gFalse, paperColor);\\n  splash.startDoc(doc->getXRef());\\n\\n  // Check if there is enough data to display pages\\n  if (payload.size() > 0) {\\n    doc->displayPages(&splash, 1, 1, hDPI, vDPI, rotation, useMediaBox, crop, printing, NULL, NULL);\\n  }\\n\\n  // Clean up the GlobalParams object\\n  delete globalParams;\\n  globalParams = NULL;\\n\\n  // Delete the PDFDoc object\\n  delete doc;\\n\\n  return 0;\\n}",
+        "model": ""
+    }
+
+    ]
+}

@@ -1,0 +1,43 @@
+{
+    "samples": [
+
+    {
+        "benchmark": "output-xpdf-_zn6pdfdoc12displaypagesep9outputdeviiddiiiipfipves2_",
+        "sample": "01",
+        "status": "Done",
+        "compiles": "True",
+        "crashes": "True",
+        "crash_reason": "FP_NEAR_INIT_CRASH",
+        "bug": "False",
+        "coverage": "0.00",
+        "coverage_diff": "0.0",
+        "coverage_report": "#",
+        "stacktrace": "/stacktrace",
+        "target_binary": "/target_binary",
+        "reproducer": "/artifacts",
+        "run_log": "run.log",
+        "source_code": "#include <aconf.h>\\n#include <stdarg.h>\\n#include <stddef.h>\\n#include <stdint.h>\\n#include <stdio.h>\\n#include <stdlib.h>\\n\\n#include \"fuzzer/FuzzedDataProvider.h\"\\n#include \"gmem.h\"\\n#include \"parseargs.h\"\\n#include \"GlobalParams.h\"\\n#include \"Object.h\"\\n#include \"PDFDoc.h\"\\n#include \"OutputDev.h\"\\n\\n#define MAX_OUTLINE_DEPTH 50\\n\\nstatic void printOutline(Object* outlineObjRef, int depth) {\\n  Object outlineObj, firstObj, lastObj, origOutlineObj;\\n\\n  origOutlineObj = *outlineObjRef;\\n  XRef* xref = nullptr;\\n  Object obj1;\\n  outlineObj = *(outlineObjRef->fetch(xref, &obj1, 0));\\n  if (!outlineObj.isDict()) {\\n    outlineObj = origOutlineObj;\\n  }\\n  Object obj2, obj3;\\n  firstObj = *(outlineObj.getDict()->lookup(\"First\", &obj2));\\n  lastObj = *(outlineObj.getDict()->lookup(\"Last\", &obj3));\\n\\n  lastObj.free();\\n  firstObj.free();\\n  outlineObj.free();\\n}\\n\\nextern \"C\" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {\\n  if (!size)\\n    return 0;\\n\\n  FuzzedDataProvider stream(data, size);\\n\\n  globalParams->setupBaseFonts(\"/usr/share/fonts/truetype/msttcorefonts/\");\\n\\n  // Open PDF file\\n  std::unique_ptr<GString> fileName(\\n        new GString(reinterpret_cast<const char*>(data), size));\\n  std::unique_ptr<PDFDoc> doc(new PDFDoc(fileName.get(), nullptr, nullptr, nullptr));\\n\\n  // Create a dummy OutputDev to pass to displayPages\\n  OutputDev *out = nullptr;\\n\\n  // Call the target function\\n  doc->displayPages(out, 1, 1, 72, 72, 0, true, true, true);\\n\\n  return 0;\\n}",
+        "model": ""
+    },
+
+    {
+        "benchmark": "output-xpdf-_zn6pdfdoc12displaypagesep9outputdeviiddiiiipfipves2_",
+        "sample": "02",
+        "status": "Done",
+        "compiles": "True",
+        "crashes": "True",
+        "crash_reason": "NO_SEMANTIC_ERR",
+        "bug": "True",
+        "coverage": "0.08",
+        "coverage_diff": "0.0",
+        "coverage_report": "#",
+        "stacktrace": "/stacktrace",
+        "target_binary": "/target_binary",
+        "reproducer": "/artifacts",
+        "run_log": "run.log",
+        "source_code": "// \\n// you may not use this file except in compliance with the License.\\n// \\n// distributed under the License is distributed on an \"AS IS\" BASIS,\\n// See the License for the specific language governing permissions and\\n// \\n#include <fuzzer/FuzzedDataProvider.h>\\n\\n#include <cstddef>\\n#include <cstdint>\\n#include <cstdlib>\\n\\n#include \"PDFDoc.h\"\\n#include \"GString.h\"\\n\\nextern \"C\" int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {\\n  if (size < 20)\\n    return 0;\\n\\n  FuzzedDataProvider fdp(data, size);\\n  double hDPI = fdp.ConsumeFloatingPoint<double>();\\n  double vDPI = fdp.ConsumeFloatingPoint<double>();\\n  int rotate = fdp.ConsumeIntegral<int>();\\n  GBool useMediaBox = static_cast<GBool>(fdp.ConsumeIntegral<int>());\\n  GBool crop = static_cast<GBool>(fdp.ConsumeIntegral<int>());\\n\\n  // We need a buffer that's large enough to hold at least a minimal PDF.\\n  if (fdp.remaining_bytes() < 20) {\\n    return 0;\\n  }\\n\\n  std::string filename_str = fdp.ConsumeRemainingBytesAsString();\\n  GString filename(filename_str.c_str());\\n\\n  // Create PDFDoc using a copy of the filename to avoid memory issues\\n  GString filename_copy = filename.copy();\\n  PDFDoc doc(&filename_copy);\\n\\n  if (!doc.isOk())\\n    return 0;\\n\\n  if (doc.getNumPages() > 0) {\\n    doc.displayPages(NULL, 1, doc.getNumPages(), hDPI, vDPI, rotate, useMediaBox, crop, gFalse, NULL, NULL);\\n  }\\n  \\n  return 0;\\n}",
+        "model": ""
+    }
+
+    ]
+}

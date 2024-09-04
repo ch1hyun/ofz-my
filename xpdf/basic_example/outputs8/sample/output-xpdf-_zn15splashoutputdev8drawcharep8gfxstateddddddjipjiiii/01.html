@@ -1,0 +1,1741 @@
+<!doctype html>
+
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Experiment results</title>
+<style>
+* {
+    box-sizing: border-box;
+}
+
+html {
+    line-height: 1.15;
+}
+
+body {
+    font-family: sans-serif;
+    font-size: 16px;
+}
+
+table {
+    border-collapse: collapse;
+    border-spacing: 0;
+}
+
+td, th {
+    border-right: 1px #dedede solid;
+    border-bottom: 1px #dedede solid;
+    padding: 5px;
+    text-align: left;
+}
+td:first-child, th:first-child {
+    border-left: 1px #dedede solid;
+}
+th {
+    border-top: 1px #dedede solid;
+}
+
+tbody tr:nth-child(odd) {
+    background-color: #f4f5ff;
+}
+</style>
+<body>
+    LLM: 
+    
+<h1>output-xpdf-_zn15splashoutputdev8drawcharep8gfxstateddddddjipjiiii / 01</h1>
+Bug: False
+<br>
+Crash reason: -
+<br>
+<br>
+
+<h2>Triage</h2>
+<pre>
+
+</pre>
+<br>
+
+
+
+
+
+<h3>Final code</h3>
+
+<pre>
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+#include &lt;cstddef&gt;
+#include &lt;cstdint&gt;
+#include &lt;cstdlib&gt;
+
+#include &#34;Object.h&#34;
+#include &#34;/src/xpdf-4.05/xpdf/XRef.h&#34;
+#include &#34;Dict.h&#34;
+#include &#34;Splash.h&#34;
+#include &#34;SplashBitmap.h&#34;
+#include &#34;SplashFont.h&#34;
+#include &#34;SplashOutputDev.h&#34;
+#include &#34;GfxState.h&#34;
+#include &#34;/src/xpdf-4.05/xpdf/OutputDev.h&#34;
+
+struct ScopeSplashBitmap {
+  SplashBitmap *s;
+
+  ScopeSplashBitmap(SplashBitmap *sIn):s(sIn) {}
+  ~ScopeSplashBitmap() {delete s;}
+};
+
+struct ScopeSplash {
+  Splash *s;
+
+  ScopeSplash(Splash *sIn):s(sIn) {}
+  ~ScopeSplash() {delete s;}
+};
+
+struct ScopeGfxState {
+  GfxState *s;
+
+  ScopeGfxState(GfxState *sIn):s(sIn) {}
+  ~ScopeGfxState() {delete s;}
+};
+
+struct ScopeSplashOutputDev {
+  SplashOutputDev *s;
+
+  ScopeSplashOutputDev(SplashOutputDev *sIn):s(sIn) {}
+  ~ScopeSplashOutputDev() {delete s;}
+};
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  FuzzedDataProvider dataProvider(data, size);
+
+  const int32_t width = dataProvider.ConsumeIntegralInRange(100, 1000);
+  const int32_t height = dataProvider.ConsumeIntegralInRange(100, 1000);
+
+  if (!width || !height || width &gt; 10000 || height &gt; 10000)
+    return 0;
+
+  ScopeSplashBitmap bmp(new SplashBitmap(width, height, 1, splashModeRGB8, false, false, NULL));
+  ScopeSplash splash(new Splash(bmp.s, false, NULL));
+  ScopeSplashOutputDev splashOut(new SplashOutputDev(splashModeRGB8, 4, false, NULL, true));
+
+  double x = dataProvider.ConsumeFloatingPoint&lt;double&gt;();
+  double y = dataProvider.ConsumeFloatingPoint&lt;double&gt;();
+  double dx = dataProvider.ConsumeFloatingPoint&lt;double&gt;();
+  double dy = dataProvider.ConsumeFloatingPoint&lt;double&gt;();
+  double originX = dataProvider.ConsumeFloatingPoint&lt;double&gt;();
+  double originY = dataProvider.ConsumeFloatingPoint&lt;double&gt;();
+  CharCode code = dataProvider.ConsumeIntegral&lt;CharCode&gt;();
+  std::string str = dataProvider.ConsumeRandomLengthString(10);
+  Unicode *u = NULL;
+  if (str.size() != 0){
+    u = new Unicode[str[0]];
+    for(size_t i=1;i&lt;str.size();i++){
+      u[i]=str[i];
+    }
+  }
+  GBool invisible = dataProvider.ConsumeBool();
+  GBool fill = dataProvider.ConsumeBool();
+  GBool stroke = dataProvider.ConsumeBool();
+
+  SplashFont* font = splashOut.s-&gt;getCurrentFont();
+  double* mat = font-&gt;getMatrix();
+  ScopeGfxState state(new GfxState(72.0, 72.0, nullptr, 0, gTrue));
+
+  splashOut.s-&gt;drawChar(state.s, x, y, dx, dy,
+               originX, originY,
+               code, str.size(), u, 1,
+               invisible, fill,
+               stroke);
+  splashOut.s-&gt;drawChar(state.s, x, y, dx, dy,
+               originX, originY,
+               code, str.size(), u, 1,
+               invisible, stroke,
+               fill);
+  splashOut.s-&gt;drawChar(state.s, x, y, dx, dy,
+               originX, originY,
+               code, 1+2*str.size(), u, 1,
+               fill, stroke,
+               invisible);
+
+  if (u){
+    delete[] u;
+  }
+
+  return 0;
+}
+</pre>
+
+
+<h3>Fixer prompt #1</h3>
+<pre>
+
+Given the following C++ fuzz harness and its build error message, fix the code to make it build for fuzzing.
+
+If there is undeclared identifier or unknown type name error, fix it by finding and including the related libraries.
+
+MUST RETURN THE FULL CODE, INCLUDING UNCHANGED PARTS.
+
+Below is the code needs to be built:
+&lt;code&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+#include &lt;cstddef&gt;
+#include &lt;cstdint&gt;
+#include &lt;cstdlib&gt;
+
+#include &#34;Splash.h&#34;
+#include &#34;SplashOutputDev.h&#34;
+
+struct ScopeSplashBitmap {
+  SplashBitmap *s;
+
+  ScopeSplashBitmap(SplashBitmap *sIn):s(sIn) {}
+  ~ScopeSplashBitmap() {delete s;}
+};
+
+struct ScopeSplash {
+  Splash *s;
+
+  ScopeSplash(Splash *sIn):s(sIn) {}
+  ~ScopeSplash() {delete s;}
+};
+
+struct ScopeGfxState {
+  GfxState *s;
+
+  ScopeGfxState(GfxState *sIn):s(sIn) {}
+  ~ScopeGfxState() {delete s;}
+};
+
+struct ScopeSplashOutputDev {
+  SplashOutputDev *s;
+
+  ScopeSplashOutputDev(SplashOutputDev *sIn):s(sIn) {}
+  ~ScopeSplashOutputDev() {delete s;}
+};
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  FuzzedDataProvider dataProvider(data, size);
+
+  const int32_t width = dataProvider.ConsumeIntegralInRange(100, 1000);
+  const int32_t height = dataProvider.ConsumeIntegralInRange(100, 1000);
+
+  if (!width || !height || width &gt; 10000 || height &gt; 10000)
+    return 0;
+
+  ScopeSplashBitmap bmp(new SplashBitmap(width, height, 1, splashModeRGB8, false, false));
+  ScopeSplash splash(new Splash(bmp.s, false));
+  ScopeSplashOutputDev splashOut(new SplashOutputDev(splash.s));
+
+  splashOut.s-&gt;setFont(new SplashFont(NULL, NULL, gFalse, 0, gTrue));
+
+  double x = dataProvider.ConsumeFloatingPoint&lt;double&gt;();
+  double y = dataProvider.ConsumeFloatingPoint&lt;double&gt;();
+  double dx = dataProvider.ConsumeFloatingPoint&lt;double&gt;();
+  double dy = dataProvider.ConsumeFloatingPoint&lt;double&gt;();
+  double originX = dataProvider.ConsumeFloatingPoint&lt;double&gt;();
+  double originY = dataProvider.ConsumeFloatingPoint&lt;double&gt;();
+  CharCode code = dataProvider.ConsumeIntegral&lt;CharCode&gt;();
+  std::string str = dataProvider.ConsumeRandomLengthString(10);
+  Unicode *u = NULL;
+  if (str.size() != 0){
+    u = new Unicode[str[0]];
+    for(size_t i=1;i&lt;str.size();i++){
+      u[i]=str[i];
+    }
+  }
+  GBool invisible = dataProvider.ConsumeBool();
+  GBool fill = dataProvider.ConsumeBool();
+  GBool stroke = dataProvider.ConsumeBool();
+
+  SplashFont* font = splashOut.s-&gt;getCurrentFont();
+  double* mat = splashOut.s-&gt;getFont()-&gt;getMat();
+  double fsz = splashOut.s-&gt;getFont()-&gt;getSize();
+  ScopeGfxState state(new GfxState(72.0, 72.0, nullptr, font, fsz, mat, mat));
+
+  splashOut.s-&gt;drawChar(state.s, x, y, dx, dy,
+               originX, originY,
+               code, str.size(), u, 1,
+               invisible, fill,
+               stroke);
+  splashOut.s-&gt;drawChar(state.s, x, y, dx, dy,
+               originX, originY,
+               code, str.size(), u, 1,
+               invisible, stroke,
+               fill);
+  splashOut.s-&gt;drawChar(state.s, x, y, dx, dy,
+               originX, originY,
+               code, 1+2*str.size(), u, 1,
+               fill, stroke,
+               invisible);
+
+  if (u){
+    delete[] u;
+  }
+
+  return 0;
+}
+&lt;/code&gt;
+
+Below is the error to fix:
+The code has the following build issues:
+&lt;error&gt;
+In file included from fuzz_JBIG2.cc:8:
+In file included from ../xpdf/SplashOutputDev.h:17:
+../xpdf/OutputDev.h:99:28: error: unknown type name &#39;Ref&#39;
+   99 |   virtual void startStream(Ref streamRef, GfxState *state) {}
+      |                            ^
+../xpdf/OutputDev.h:100:26: error: unknown type name &#39;Ref&#39;
+  100 |   virtual void endStream(Ref streamRef) {}
+      |                          ^
+../xpdf/OutputDev.h:156:61: error: unknown type name &#39;Object&#39;
+  156 |   virtual void tilingPatternFill(GfxState *state, Gfx *gfx, Object *strRef,
+      |                                                             ^
+../xpdf/OutputDev.h:157:37: error: unknown type name &#39;Dict&#39;
+  157 |                                  int paintType, int tilingType, Dict *resDict,
+      |                                                                 ^
+../xpdf/OutputDev.h:198:47: error: unknown type name &#39;Object&#39;
+  198 |   virtual void drawImageMask(GfxState *state, Object *ref, Stream *str,
+      |                                               ^
+../xpdf/OutputDev.h:202:6: error: unknown type name &#39;Object&#39;
+  202 |                                         Object *ref, Stream *str,
+      |                                         ^
+../xpdf/OutputDev.h:205:43: error: unknown type name &#39;Object&#39;
+  205 |   virtual void drawImage(GfxState *state, Object *ref, Stream *str,
+      |                                           ^
+../xpdf/OutputDev.h:208:49: error: unknown type name &#39;Object&#39;
+  208 |   virtual void drawMaskedImage(GfxState *state, Object *ref, Stream *str,
+      |                                                 ^
+../xpdf/OutputDev.h:211:11: error: unknown type name &#39;Object&#39;
+  211 |                                Object *maskRef, Stream *maskStr,
+      |                                ^
+../xpdf/OutputDev.h:214:53: error: unknown type name &#39;Object&#39;
+  214 |   virtual void drawSoftMaskedImage(GfxState *state, Object *ref, Stream *str,
+      |                                                     ^
+../xpdf/OutputDev.h:217:8: error: unknown type name &#39;Object&#39;
+  217 |                                    Object *maskRef, Stream *maskStr,
+      |                                    ^
+../xpdf/OutputDev.h:224:42: error: unknown type name &#39;Dict&#39;
+  224 |   virtual void opiBegin(GfxState *state, Dict *opiDict);
+      |                                          ^
+../xpdf/OutputDev.h:225:40: error: unknown type name &#39;Dict&#39;
+  225 |   virtual void opiEnd(GfxState *state, Dict *opiDict);
+      |                                        ^
+../xpdf/OutputDev.h:234:25: error: unknown type name &#39;Ref&#39;
+  234 |   virtual void drawForm(Ref id) {}
+      |                         ^
+../xpdf/OutputDev.h:254:62: error: unknown type name &#39;Dict&#39;
+  254 |   virtual void beginStructureItem(const char *tag, int mcid, Dict *dict) {}
+      |                                                              ^
+fuzz_JBIG2.cc:14:25: warning: deleting pointer to incomplete type &#39;SplashBitmap&#39; may cause undefined behavior [-Wdelete-incomplete]
+   14 |   ~ScopeSplashBitmap() {delete s;}
+      |                         ^      ~
+../splash/SplashClip.h:20:7: note: forward declaration of &#39;SplashBitmap&#39;
+   20 | class SplashBitmap;
+      |       ^
+fuzz_JBIG2.cc:47:29: error: allocation of incomplete type &#39;SplashBitmap&#39;
+   47 |   ScopeSplashBitmap bmp(new SplashBitmap(width, height, 1, splashModeRGB8, false, false));
+      |                             ^~~~~~~~~~~~
+../splash/SplashClip.h:20:7: note: forward declaration of &#39;SplashBitmap&#39;
+   20 | class SplashBitmap;
+      |       ^
+fuzz_JBIG2.cc:48:26: error: no matching constructor for initialization of &#39;Splash&#39;
+   48 |   ScopeSplash splash(new Splash(bmp.s, false));
+      |                          ^      ~~~~~~~~~~~~
+../splash/Splash.h:120:7: note: candidate constructor (the implicit copy constructor) not viable: requires 1 argument, but 2 were provided
+  120 | class Splash {
+      |       ^~~~~~
+../splash/Splash.h:124:3: note: candidate constructor not viable: requires at least 3 arguments, but 2 were provided
+  124 |   Splash(SplashBitmap *bitmapA, GBool vectorAntialiasA,
+      |   ^      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  125 |          SplashImageCache *imageCacheA,
+      |          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  126 |          SplashScreenParams *screenParams = NULL);
+      |          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+../splash/Splash.h:127:3: note: candidate constructor not viable: requires 4 arguments, but 2 were provided
+  127 |   Splash(SplashBitmap *bitmapA, GBool vectorAntialiasA,
+      |   ^      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  128 |          SplashImageCache *imageCacheA, SplashScreen *screenA);
+      |          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+fuzz_JBIG2.cc:49:38: error: no matching constructor for initialization of &#39;SplashOutputDev&#39;
+   49 |   ScopeSplashOutputDev splashOut(new SplashOutputDev(splash.s));
+      |                                      ^               ~~~~~~~~
+../xpdf/SplashOutputDev.h:41:7: note: candidate constructor (the implicit copy constructor) not viable: no known conversion from &#39;Splash *&#39; to &#39;const SplashOutputDev&#39; for 1st argument
+   41 | class SplashOutputDev: public OutputDev {
+      |       ^~~~~~~~~~~~~~~
+../xpdf/SplashOutputDev.h:45:3: note: candidate constructor not viable: requires at least 4 arguments, but 1 was provided
+   45 |   SplashOutputDev(SplashColorMode colorModeA, int bitmapRowPadA,
+      |   ^               ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+   46 |                   GBool reverseVideoA, SplashColorPtr paperColorA,
+      |                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+   47 |                   GBool bitmapTopDownA = gTrue,
+      |                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+   48 |                   GBool allowAntialiasA = gTrue);
+      |                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+fuzz_JBIG2.cc:51:28: error: allocation of incomplete type &#39;SplashFont&#39;
+   51 |   splashOut.s-&gt;setFont(new SplashFont(NULL, NULL, gFalse, 0, gTrue));
+      |                            ^~~~~~~~~~
+../splash/Splash.h:26:7: note: forward declaration of &#39;SplashFont&#39;
+   26 | class SplashFont;
+      |       ^
+fatal error: too many errors emitted, stopping now [-ferror-limit=]
+&lt;/error&gt;
+
+
+Below are instructions to assist you in fixing the error.
+&lt;instruction&gt;
+IMPORTANT: ALWAYS INCLUDE STANDARD LIBRARIES BEFORE PROJECT-SPECIFIC (xpdf) LIBRARIES. This order prevents errors like &#34;unknown type name&#34; for basic types. Additionally, include project-specific libraries that contain declarations before those thatuse these declared symbols.
+&lt;/instruction&gt;
+
+Fix code:
+1. Consider possible solutions for the issues listed above.
+2. Choose a solution that can maximize fuzzing result, which is utilizing the function under test and feeding it not null input.
+3. Apply the solutions to the original code.
+It&#39;s important to show the complete code, not only the fixed line.
+&lt;solution&gt;
+</pre>
+
+
+
+<h3>Code #1</h3>
+
+<pre>
+&lt;code&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+#include &lt;cstddef&gt;
+#include &lt;cstdint&gt;
+#include &lt;cstdlib&gt;
+
+#include &#34;Object.h&#34;
+#include &#34;Ref.h&#34;
+#include &#34;Dict.h&#34;
+#include &#34;Splash.h&#34;
+#include &#34;SplashBitmap.h&#34;
+#include &#34;SplashFont.h&#34;
+#include &#34;SplashOutputDev.h&#34;
+#include &#34;GfxState.h&#34;
+
+struct ScopeSplashBitmap {
+  SplashBitmap *s;
+
+  ScopeSplashBitmap(SplashBitmap *sIn):s(sIn) {}
+  ~ScopeSplashBitmap() {delete s;}
+};
+
+struct ScopeSplash {
+  Splash *s;
+
+  ScopeSplash(Splash *sIn):s(sIn) {}
+  ~ScopeSplash() {delete s;}
+};
+
+struct ScopeGfxState {
+  GfxState *s;
+
+  ScopeGfxState(GfxState *sIn):s(sIn) {}
+  ~ScopeGfxState() {delete s;}
+};
+
+struct ScopeSplashOutputDev {
+  SplashOutputDev *s;
+
+  ScopeSplashOutputDev(SplashOutputDev *sIn):s(sIn) {}
+  ~ScopeSplashOutputDev() {delete s;}
+};
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  FuzzedDataProvider dataProvider(data, size);
+
+  const int32_t width = dataProvider.ConsumeIntegralInRange(100, 1000);
+  const int32_t height = dataProvider.ConsumeIntegralInRange(100, 1000);
+
+  if (!width || !height || width &gt; 10000 || height &gt; 10000)
+    return 0;
+
+  ScopeSplashBitmap bmp(new SplashBitmap(width, height, 1, splashModeRGB8, false, false));
+  ScopeSplash splash(new Splash(bmp.s, false));
+  ScopeSplashOutputDev splashOut(new SplashOutputDev(splash.s, colorModeRGB8, 4, false, NULL, true));
+
+  splashOut.s-&gt;setFont(new SplashFont(NULL, NULL, gFalse, 0, gTrue));
+
+  double x = dataProvider.ConsumeFloatingPoint&lt;double&gt;();
+  double y = dataProvider.ConsumeFloatingPoint&lt;double&gt;();
+  double dx = dataProvider.ConsumeFloatingPoint&lt;double&gt;();
+  double dy = dataProvider.ConsumeFloatingPoint&lt;double&gt;();
+  double originX = dataProvider.ConsumeFloatingPoint&lt;double&gt;();
+  double originY = dataProvider.ConsumeFloatingPoint&lt;double&gt;();
+  CharCode code = dataProvider.ConsumeIntegral&lt;CharCode&gt;();
+  std::string str = dataProvider.ConsumeRandomLengthString(10);
+  Unicode *u = NULL;
+  if (str.size() != 0){
+    u = new Unicode[str[0]];
+    for(size_t i=1;i&lt;str.size();i++){
+      u[i]=str[i];
+    }
+  }
+  GBool invisible = dataProvider.ConsumeBool();
+  GBool fill = dataProvider.ConsumeBool();
+  GBool stroke = dataProvider.ConsumeBool();
+
+  SplashFont* font = splashOut.s-&gt;getCurrentFont();
+  double* mat = splashOut.s-&gt;getFont()-&gt;getMat();
+  double fsz = splashOut.s-&gt;getFont()-&gt;getSize();
+  ScopeGfxState state(new GfxState(72.0, 72.0, nullptr, font, fsz, mat, mat));
+
+  splashOut.s-&gt;drawChar(state.s, x, y, dx, dy,
+               originX, originY,
+               code, str.size(), u, 1,
+               invisible, fill,
+               stroke);
+  splashOut.s-&gt;drawChar(state.s, x, y, dx, dy,
+               originX, originY,
+               code, str.size(), u, 1,
+               invisible, stroke,
+               fill);
+  splashOut.s-&gt;drawChar(state.s, x, y, dx, dy,
+               originX, originY,
+               code, 1+2*str.size(), u, 1,
+               fill, stroke,
+               invisible);
+
+  if (u){
+    delete[] u;
+  }
+
+  return 0;
+}
+&lt;/code&gt;
+
+</pre>
+
+
+<h3>Fixer prompt #2</h3>
+<pre>
+
+Given the following C++ fuzz harness and its build error message, fix the code to make it build for fuzzing.
+
+If there is undeclared identifier or unknown type name error, fix it by finding and including the related libraries.
+
+MUST RETURN THE FULL CODE, INCLUDING UNCHANGED PARTS.
+
+Below is the code needs to be built:
+&lt;code&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+#include &lt;cstddef&gt;
+#include &lt;cstdint&gt;
+#include &lt;cstdlib&gt;
+
+#include &#34;Object.h&#34;
+#include &#34;Ref.h&#34;
+#include &#34;Dict.h&#34;
+#include &#34;Splash.h&#34;
+#include &#34;SplashBitmap.h&#34;
+#include &#34;SplashFont.h&#34;
+#include &#34;SplashOutputDev.h&#34;
+#include &#34;GfxState.h&#34;
+
+struct ScopeSplashBitmap {
+  SplashBitmap *s;
+
+  ScopeSplashBitmap(SplashBitmap *sIn):s(sIn) {}
+  ~ScopeSplashBitmap() {delete s;}
+};
+
+struct ScopeSplash {
+  Splash *s;
+
+  ScopeSplash(Splash *sIn):s(sIn) {}
+  ~ScopeSplash() {delete s;}
+};
+
+struct ScopeGfxState {
+  GfxState *s;
+
+  ScopeGfxState(GfxState *sIn):s(sIn) {}
+  ~ScopeGfxState() {delete s;}
+};
+
+struct ScopeSplashOutputDev {
+  SplashOutputDev *s;
+
+  ScopeSplashOutputDev(SplashOutputDev *sIn):s(sIn) {}
+  ~ScopeSplashOutputDev() {delete s;}
+};
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  FuzzedDataProvider dataProvider(data, size);
+
+  const int32_t width = dataProvider.ConsumeIntegralInRange(100, 1000);
+  const int32_t height = dataProvider.ConsumeIntegralInRange(100, 1000);
+
+  if (!width || !height || width &gt; 10000 || height &gt; 10000)
+    return 0;
+
+  ScopeSplashBitmap bmp(new SplashBitmap(width, height, 1, splashModeRGB8, false, false));
+  ScopeSplash splash(new Splash(bmp.s, false));
+  ScopeSplashOutputDev splashOut(new SplashOutputDev(splash.s, colorModeRGB8, 4, false, NULL, true));
+
+  splashOut.s-&gt;setFont(new SplashFont(NULL, NULL, gFalse, 0, gTrue));
+
+  double x = dataProvider.ConsumeFloatingPoint&lt;double&gt;();
+  double y = dataProvider.ConsumeFloatingPoint&lt;double&gt;();
+  double dx = dataProvider.ConsumeFloatingPoint&lt;double&gt;();
+  double dy = dataProvider.ConsumeFloatingPoint&lt;double&gt;();
+  double originX = dataProvider.ConsumeFloatingPoint&lt;double&gt;();
+  double originY = dataProvider.ConsumeFloatingPoint&lt;double&gt;();
+  CharCode code = dataProvider.ConsumeIntegral&lt;CharCode&gt;();
+  std::string str = dataProvider.ConsumeRandomLengthString(10);
+  Unicode *u = NULL;
+  if (str.size() != 0){
+    u = new Unicode[str[0]];
+    for(size_t i=1;i&lt;str.size();i++){
+      u[i]=str[i];
+    }
+  }
+  GBool invisible = dataProvider.ConsumeBool();
+  GBool fill = dataProvider.ConsumeBool();
+  GBool stroke = dataProvider.ConsumeBool();
+
+  SplashFont* font = splashOut.s-&gt;getCurrentFont();
+  double* mat = splashOut.s-&gt;getFont()-&gt;getMat();
+  double fsz = splashOut.s-&gt;getFont()-&gt;getSize();
+  ScopeGfxState state(new GfxState(72.0, 72.0, nullptr, font, fsz, mat, mat));
+
+  splashOut.s-&gt;drawChar(state.s, x, y, dx, dy,
+               originX, originY,
+               code, str.size(), u, 1,
+               invisible, fill,
+               stroke);
+  splashOut.s-&gt;drawChar(state.s, x, y, dx, dy,
+               originX, originY,
+               code, str.size(), u, 1,
+               invisible, stroke,
+               fill);
+  splashOut.s-&gt;drawChar(state.s, x, y, dx, dy,
+               originX, originY,
+               code, 1+2*str.size(), u, 1,
+               fill, stroke,
+               invisible);
+
+  if (u){
+    delete[] u;
+  }
+
+  return 0;
+}
+&lt;/code&gt;
+
+Below is the error to fix:
+The code has the following build issues:
+&lt;error&gt;
+fuzz_JBIG2.cc:8:10: fatal error: &#39;Ref.h&#39; file not found
+    8 | #include &#34;Ref.h&#34;
+      |          ^~~~~~~
+&lt;/error&gt;
+
+
+Below are instructions to assist you in fixing the error.
+&lt;instruction&gt;
+IMPORTANT: DO NOT include the header file Ref.h in the generated fuzz target again, the file does not exist in the project-under-test.
+If the non-existent &lt;filepath&gt;Ref.h&lt;/filepath&gt; was included for the declaration of &lt;code&gt;void SplashOutputDev::drawChar(GfxState *, double, double, double, double, double, double, CharCode, int, Unicode *, int, GBool, GBool, GBool)&lt;/code&gt;, you must replace it with the EXACT path of the actual file &lt;filepath&gt;#include &#34;/src/xpdf-4.05/xpdf/OutputDev.h&#34;&lt;/filepath&gt;. For example:
+&lt;code&gt;
+#include &#34;#include &#34;/src/xpdf-4.05/xpdf/OutputDev.h&#34;&#34;
+&lt;/code&gt;
+Otherwise, consider replacing it with some of the following statementsthat may be correct alternatives:
+&lt;code&gt;
+#include &#34;/src/xpdf-4.05/xpdf/XRef.h&#34;
+#include &#34;/src/freetype/src/bdf/bdf.h&#34;
+#include &#34;/src/freetype/src/pcf/pcf.h&#34;
+#include &#34;/src/freetype/src/sdf/ftsdf.h&#34;
+#include &#34;/src/freetype/src/psaux/psft.h&#34;
+&lt;/code&gt;
+
+&lt;/instruction&gt;
+
+Fix code:
+1. Consider possible solutions for the issues listed above.
+2. Choose a solution that can maximize fuzzing result, which is utilizing the function under test and feeding it not null input.
+3. Apply the solutions to the original code.
+It&#39;s important to show the complete code, not only the fixed line.
+&lt;solution&gt;
+</pre>
+
+
+
+<h3>Code #2</h3>
+
+<pre>
+&lt;code&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+#include &lt;cstddef&gt;
+#include &lt;cstdint&gt;
+#include &lt;cstdlib&gt;
+
+#include &#34;Object.h&#34;
+#include &#34;/src/xpdf-4.05/xpdf/XRef.h&#34;
+#include &#34;Dict.h&#34;
+#include &#34;Splash.h&#34;
+#include &#34;SplashBitmap.h&#34;
+#include &#34;SplashFont.h&#34;
+#include &#34;SplashOutputDev.h&#34;
+#include &#34;GfxState.h&#34;
+
+struct ScopeSplashBitmap {
+  SplashBitmap *s;
+
+  ScopeSplashBitmap(SplashBitmap *sIn):s(sIn) {}
+  ~ScopeSplashBitmap() {delete s;}
+};
+
+struct ScopeSplash {
+  Splash *s;
+
+  ScopeSplash(Splash *sIn):s(sIn) {}
+  ~ScopeSplash() {delete s;}
+};
+
+struct ScopeGfxState {
+  GfxState *s;
+
+  ScopeGfxState(GfxState *sIn):s(sIn) {}
+  ~ScopeGfxState() {delete s;}
+};
+
+struct ScopeSplashOutputDev {
+  SplashOutputDev *s;
+
+  ScopeSplashOutputDev(SplashOutputDev *sIn):s(sIn) {}
+  ~ScopeSplashOutputDev() {delete s;}
+};
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  FuzzedDataProvider dataProvider(data, size);
+
+  const int32_t width = dataProvider.ConsumeIntegralInRange(100, 1000);
+  const int32_t height = dataProvider.ConsumeIntegralInRange(100, 1000);
+
+  if (!width || !height || width &gt; 10000 || height &gt; 10000)
+    return 0;
+
+  ScopeSplashBitmap bmp(new SplashBitmap(width, height, 1, splashModeRGB8, false, false));
+  ScopeSplash splash(new Splash(bmp.s, false));
+  ScopeSplashOutputDev splashOut(new SplashOutputDev(splash.s, colorModeRGB8, 4, false, NULL, true));
+
+  splashOut.s-&gt;setFont(new SplashFont(NULL, NULL, gFalse, 0, gTrue));
+
+  double x = dataProvider.ConsumeFloatingPoint&lt;double&gt;();
+  double y = dataProvider.ConsumeFloatingPoint&lt;double&gt;();
+  double dx = dataProvider.ConsumeFloatingPoint&lt;double&gt;();
+  double dy = dataProvider.ConsumeFloatingPoint&lt;double&gt;();
+  double originX = dataProvider.ConsumeFloatingPoint&lt;double&gt;();
+  double originY = dataProvider.ConsumeFloatingPoint&lt;double&gt;();
+  CharCode code = dataProvider.ConsumeIntegral&lt;CharCode&gt;();
+  std::string str = dataProvider.ConsumeRandomLengthString(10);
+  Unicode *u = NULL;
+  if (str.size() != 0){
+    u = new Unicode[str[0]];
+    for(size_t i=1;i&lt;str.size();i++){
+      u[i]=str[i];
+    }
+  }
+  GBool invisible = dataProvider.ConsumeBool();
+  GBool fill = dataProvider.ConsumeBool();
+  GBool stroke = dataProvider.ConsumeBool();
+
+  SplashFont* font = splashOut.s-&gt;getCurrentFont();
+  double* mat = splashOut.s-&gt;getFont()-&gt;getMat();
+  double fsz = splashOut.s-&gt;getFont()-&gt;getSize();
+  ScopeGfxState state(new GfxState(72.0, 72.0, nullptr, font, fsz, mat, mat));
+
+  splashOut.s-&gt;drawChar(state.s, x, y, dx, dy,
+               originX, originY,
+               code, str.size(), u, 1,
+               invisible, fill,
+               stroke);
+  splashOut.s-&gt;drawChar(state.s, x, y, dx, dy,
+               originX, originY,
+               code, str.size(), u, 1,
+               invisible, stroke,
+               fill);
+  splashOut.s-&gt;drawChar(state.s, x, y, dx, dy,
+               originX, originY,
+               code, 1+2*str.size(), u, 1,
+               fill, stroke,
+               invisible);
+
+  if (u){
+    delete[] u;
+  }
+
+  return 0;
+}
+&lt;/code&gt;
+&lt;/solution&gt;
+</pre>
+
+
+<h3>Fixer prompt #3</h3>
+<pre>
+
+Given the following C++ fuzz harness and its build error message, fix the code to make it build for fuzzing.
+
+If there is undeclared identifier or unknown type name error, fix it by finding and including the related libraries.
+
+MUST RETURN THE FULL CODE, INCLUDING UNCHANGED PARTS.
+
+Below is the code needs to be built:
+&lt;code&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+#include &lt;cstddef&gt;
+#include &lt;cstdint&gt;
+#include &lt;cstdlib&gt;
+
+#include &#34;Object.h&#34;
+#include &#34;/src/xpdf-4.05/xpdf/XRef.h&#34;
+#include &#34;Dict.h&#34;
+#include &#34;Splash.h&#34;
+#include &#34;SplashBitmap.h&#34;
+#include &#34;SplashFont.h&#34;
+#include &#34;SplashOutputDev.h&#34;
+#include &#34;GfxState.h&#34;
+
+struct ScopeSplashBitmap {
+  SplashBitmap *s;
+
+  ScopeSplashBitmap(SplashBitmap *sIn):s(sIn) {}
+  ~ScopeSplashBitmap() {delete s;}
+};
+
+struct ScopeSplash {
+  Splash *s;
+
+  ScopeSplash(Splash *sIn):s(sIn) {}
+  ~ScopeSplash() {delete s;}
+};
+
+struct ScopeGfxState {
+  GfxState *s;
+
+  ScopeGfxState(GfxState *sIn):s(sIn) {}
+  ~ScopeGfxState() {delete s;}
+};
+
+struct ScopeSplashOutputDev {
+  SplashOutputDev *s;
+
+  ScopeSplashOutputDev(SplashOutputDev *sIn):s(sIn) {}
+  ~ScopeSplashOutputDev() {delete s;}
+};
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  FuzzedDataProvider dataProvider(data, size);
+
+  const int32_t width = dataProvider.ConsumeIntegralInRange(100, 1000);
+  const int32_t height = dataProvider.ConsumeIntegralInRange(100, 1000);
+
+  if (!width || !height || width &gt; 10000 || height &gt; 10000)
+    return 0;
+
+  ScopeSplashBitmap bmp(new SplashBitmap(width, height, 1, splashModeRGB8, false, false));
+  ScopeSplash splash(new Splash(bmp.s, false));
+  ScopeSplashOutputDev splashOut(new SplashOutputDev(splash.s, colorModeRGB8, 4, false, NULL, true));
+
+  splashOut.s-&gt;setFont(new SplashFont(NULL, NULL, gFalse, 0, gTrue));
+
+  double x = dataProvider.ConsumeFloatingPoint&lt;double&gt;();
+  double y = dataProvider.ConsumeFloatingPoint&lt;double&gt;();
+  double dx = dataProvider.ConsumeFloatingPoint&lt;double&gt;();
+  double dy = dataProvider.ConsumeFloatingPoint&lt;double&gt;();
+  double originX = dataProvider.ConsumeFloatingPoint&lt;double&gt;();
+  double originY = dataProvider.ConsumeFloatingPoint&lt;double&gt;();
+  CharCode code = dataProvider.ConsumeIntegral&lt;CharCode&gt;();
+  std::string str = dataProvider.ConsumeRandomLengthString(10);
+  Unicode *u = NULL;
+  if (str.size() != 0){
+    u = new Unicode[str[0]];
+    for(size_t i=1;i&lt;str.size();i++){
+      u[i]=str[i];
+    }
+  }
+  GBool invisible = dataProvider.ConsumeBool();
+  GBool fill = dataProvider.ConsumeBool();
+  GBool stroke = dataProvider.ConsumeBool();
+
+  SplashFont* font = splashOut.s-&gt;getCurrentFont();
+  double* mat = splashOut.s-&gt;getFont()-&gt;getMat();
+  double fsz = splashOut.s-&gt;getFont()-&gt;getSize();
+  ScopeGfxState state(new GfxState(72.0, 72.0, nullptr, font, fsz, mat, mat));
+
+  splashOut.s-&gt;drawChar(state.s, x, y, dx, dy,
+               originX, originY,
+               code, str.size(), u, 1,
+               invisible, fill,
+               stroke);
+  splashOut.s-&gt;drawChar(state.s, x, y, dx, dy,
+               originX, originY,
+               code, str.size(), u, 1,
+               invisible, stroke,
+               fill);
+  splashOut.s-&gt;drawChar(state.s, x, y, dx, dy,
+               originX, originY,
+               code, 1+2*str.size(), u, 1,
+               fill, stroke,
+               invisible);
+
+  if (u){
+    delete[] u;
+  }
+
+  return 0;
+}
+&lt;/code&gt;
+
+Below is the error to fix:
+The code has the following build issues:
+&lt;error&gt;
+fuzz_JBIG2.cc:53:29: error: no matching constructor for initialization of &#39;SplashBitmap&#39;
+   53 |   ScopeSplashBitmap bmp(new SplashBitmap(width, height, 1, splashModeRGB8, false, false));
+      |                             ^            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+../splash/SplashBitmap.h:45:3: note: candidate constructor not viable: requires 7 arguments, but 6 were provided
+   45 |   SplashBitmap(int widthA, int heightA, int rowPad,
+      |   ^            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+   46 |                SplashColorMode modeA, GBool alphaA,
+      |                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+   47 |                GBool topDown, SplashBitmap *parentA);
+      |                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+../splash/SplashBitmap.h:38:7: note: candidate constructor (the implicit copy constructor) not viable: requires 1 argument, but 6 were provided
+   38 | class SplashBitmap {
+      |       ^~~~~~~~~~~~
+fuzz_JBIG2.cc:54:26: error: no matching constructor for initialization of &#39;Splash&#39;
+   54 |   ScopeSplash splash(new Splash(bmp.s, false));
+      |                          ^      ~~~~~~~~~~~~
+../splash/Splash.h:120:7: note: candidate constructor (the implicit copy constructor) not viable: requires 1 argument, but 2 were provided
+  120 | class Splash {
+      |       ^~~~~~
+../splash/Splash.h:124:3: note: candidate constructor not viable: requires at least 3 arguments, but 2 were provided
+  124 |   Splash(SplashBitmap *bitmapA, GBool vectorAntialiasA,
+      |   ^      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  125 |          SplashImageCache *imageCacheA,
+      |          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  126 |          SplashScreenParams *screenParams = NULL);
+      |          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+../splash/Splash.h:127:3: note: candidate constructor not viable: requires 4 arguments, but 2 were provided
+  127 |   Splash(SplashBitmap *bitmapA, GBool vectorAntialiasA,
+      |   ^      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  128 |          SplashImageCache *imageCacheA, SplashScreen *screenA);
+      |          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+fuzz_JBIG2.cc:55:64: error: use of undeclared identifier &#39;colorModeRGB8&#39;
+   55 |   ScopeSplashOutputDev splashOut(new SplashOutputDev(splash.s, colorModeRGB8, 4, false, NULL, true));
+      |                                                                ^
+fuzz_JBIG2.cc:57:28: error: allocating an object of abstract class type &#39;SplashFont&#39;
+   57 |   splashOut.s-&gt;setFont(new SplashFont(NULL, NULL, gFalse, 0, gTrue));
+      |                            ^
+../splash/SplashFont.h:76:17: note: unimplemented pure virtual method &#39;makeGlyph&#39; in &#39;SplashFont&#39;
+   76 |   virtual GBool makeGlyph(int c, int xFrac, int yFrac,
+      |                 ^
+../splash/SplashFont.h:80:23: note: unimplemented pure virtual method &#39;getGlyphPath&#39; in &#39;SplashFont&#39;
+   80 |   virtual SplashPath *getGlyphPath(int c) = 0;
+      |                       ^
+fuzz_JBIG2.cc:57:16: error: no member named &#39;setFont&#39; in &#39;SplashOutputDev&#39;; did you mean &#39;getFont&#39;?
+   57 |   splashOut.s-&gt;setFont(new SplashFont(NULL, NULL, gFalse, 0, gTrue));
+      |                ^~~~~~~
+      |                getFont
+../xpdf/SplashOutputDev.h:227:15: note: &#39;getFont&#39; declared here
+  227 |   SplashFont *getFont(GString *name, SplashCoord *textMatA);
+      |               ^
+fuzz_JBIG2.cc:79:38: error: too few arguments to function call, expected 2, have 0
+   79 |   double* mat = splashOut.s-&gt;getFont()-&gt;getMat();
+      |                 ~~~~~~~~~~~~~~~~~~~~ ^
+../xpdf/SplashOutputDev.h:227:15: note: &#39;getFont&#39; declared here
+  227 |   SplashFont *getFont(GString *name, SplashCoord *textMatA);
+      |               ^       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+fuzz_JBIG2.cc:79:41: error: no member named &#39;getMat&#39; in &#39;SplashFont&#39;
+   79 |   double* mat = splashOut.s-&gt;getFont()-&gt;getMat();
+      |                 ~~~~~~~~~~~~~~~~~~~~~~  ^
+fuzz_JBIG2.cc:80:37: error: too few arguments to function call, expected 2, have 0
+   80 |   double fsz = splashOut.s-&gt;getFont()-&gt;getSize();
+      |                ~~~~~~~~~~~~~~~~~~~~ ^
+../xpdf/SplashOutputDev.h:227:15: note: &#39;getFont&#39; declared here
+  227 |   SplashFont *getFont(GString *name, SplashCoord *textMatA);
+      |               ^       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+fuzz_JBIG2.cc:80:40: error: no member named &#39;getSize&#39; in &#39;SplashFont&#39;
+   80 |   double fsz = splashOut.s-&gt;getFont()-&gt;getSize();
+      |                ~~~~~~~~~~~~~~~~~~~~~~  ^
+fuzz_JBIG2.cc:81:27: error: no matching constructor for initialization of &#39;GfxState&#39;
+   81 |   ScopeGfxState state(new GfxState(72.0, 72.0, nullptr, font, fsz, mat, mat));
+      |                           ^        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+../xpdf/GfxState.h:1131:3: note: candidate constructor not viable: requires 5 arguments, but 7 were provided
+ 1131 |   GfxState(double hDPIA, double vDPIA, PDFRectangle *pageBox,
+      |   ^        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+ 1132 |            int rotateA, GBool upsideDown
+      |            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+../xpdf/GfxState.h:1373:3: note: candidate constructor not viable: requires 2 arguments, but 7 were provided
+ 1373 |   GfxState(GfxState *state, GBool copyPath);
+      |   ^        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+../xpdf/GfxState.h:1125:7: note: candidate constructor (the implicit copy constructor) not viable: requires 1 argument, but 7 were provided
+ 1125 | class GfxState {
+      |       ^~~~~~~~
+&lt;/error&gt;
+
+
+
+
+Fix code:
+1. Consider possible solutions for the issues listed above.
+2. Choose a solution that can maximize fuzzing result, which is utilizing the function under test and feeding it not null input.
+3. Apply the solutions to the original code.
+It&#39;s important to show the complete code, not only the fixed line.
+&lt;solution&gt;
+</pre>
+
+
+
+<h3>Code #3</h3>
+
+<pre>
+The fixed code is as follows:
+
+```cpp
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+#include &lt;cstddef&gt;
+#include &lt;cstdint&gt;
+#include &lt;cstdlib&gt;
+
+#include &#34;Object.h&#34;
+#include &#34;/src/xpdf-4.05/xpdf/XRef.h&#34;
+#include &#34;Dict.h&#34;
+#include &#34;Splash.h&#34;
+#include &#34;SplashBitmap.h&#34;
+#include &#34;SplashFont.h&#34;
+#include &#34;SplashOutputDev.h&#34;
+#include &#34;GfxState.h&#34;
+
+struct ScopeSplashBitmap {
+  SplashBitmap *s;
+
+  ScopeSplashBitmap(SplashBitmap *sIn):s(sIn) {}
+  ~ScopeSplashBitmap() {delete s;}
+};
+
+struct ScopeSplash {
+  Splash *s;
+
+  ScopeSplash(Splash *sIn):s(sIn) {}
+  ~ScopeSplash() {delete s;}
+};
+
+struct ScopeGfxState {
+  GfxState *s;
+
+  ScopeGfxState(GfxState *sIn):s(sIn) {}
+  ~ScopeGfxState() {delete s;}
+};
+
+struct ScopeSplashOutputDev {
+  SplashOutputDev *s;
+
+  ScopeSplashOutputDev(SplashOutputDev *sIn):s(sIn) {}
+  ~ScopeSplashOutputDev() {delete s;}
+};
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  FuzzedDataProvider dataProvider(data, size);
+
+  const int32_t width = dataProvider.ConsumeIntegralInRange(100, 1000);
+  const int32_t height = dataProvider.ConsumeIntegralInRange(100, 1000);
+
+  if (!width || !height || width &gt; 10000 || height &gt; 10000)
+    return 0;
+
+  ScopeSplashBitmap bmp(new SplashBitmap(width, height, 1, splashModeRGB8, false, false, NULL));
+  ScopeSplash splash(new Splash(bmp.s, false, NULL));
+  ScopeSplashOutputDev splashOut(new SplashOutputDev(splashModeRGB8, 4, false, NULL, true));
+
+  double x = dataProvider.ConsumeFloatingPoint&lt;double&gt;();
+  double y = dataProvider.ConsumeFloatingPoint&lt;double&gt;();
+  double dx = dataProvider.ConsumeFloatingPoint&lt;double&gt;();
+  double dy = dataProvider.ConsumeFloatingPoint&lt;double&gt;();
+  double originX = dataProvider.ConsumeFloatingPoint&lt;double&gt;();
+  double originY = dataProvider.ConsumeFloatingPoint&lt;double&gt;();
+  CharCode code = dataProvider.ConsumeIntegral&lt;CharCode&gt;();
+  std::string str = dataProvider.ConsumeRandomLengthString(10);
+  Unicode *u = NULL;
+  if (str.size() != 0){
+    u = new Unicode[str[0]];
+    for(size_t i=1;i&lt;str.size();i++){
+      u[i]=str[i];
+    }
+  }
+  GBool invisible = dataProvider.ConsumeBool();
+  GBool fill = dataProvider.ConsumeBool();
+  GBool stroke = dataProvider.ConsumeBool();
+
+  SplashFont* font = splashOut.s-&gt;getCurrentFont();
+  double* mat = font-&gt;getMatrix();
+  double fsz = font-&gt;getSize();
+  ScopeGfxState state(new GfxState(72.0, 72.0, nullptr, font, fsz));
+
+  splashOut.s-&gt;drawChar(state.s, x, y, dx, dy,
+               originX, originY,
+               code, str.size(), u, 1,
+               invisible, fill,
+               stroke);
+  splashOut.s-&gt;drawChar(state.s, x, y, dx, dy,
+               originX, originY,
+               code, str.size(), u, 1,
+               invisible, stroke,
+               fill);
+  splashOut.s-&gt;drawChar(state.s, x, y, dx, dy,
+               originX, originY,
+               code, 1+2*str.size(), u, 1,
+               fill, stroke,
+               invisible);
+
+  if (u){
+    delete[] u;
+  }
+
+  return 0;
+}
+```
+Please note that the code above is just an example and may not work as expected because the original code and the error messages provided do not provide enough context to understand the complete functionality of the code. Some of the methods and classes used are not standard and seem to be part of a larger codebase. The corrections were made based on the error messages and some assumptions about the code functionality.
+</pre>
+
+
+<h3>Fixer prompt #4</h3>
+<pre>
+
+Given the following C++ fuzz harness and its build error message, fix the code to make it build for fuzzing.
+
+If there is undeclared identifier or unknown type name error, fix it by finding and including the related libraries.
+
+MUST RETURN THE FULL CODE, INCLUDING UNCHANGED PARTS.
+
+Below is the code needs to be built:
+&lt;code&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+#include &lt;cstddef&gt;
+#include &lt;cstdint&gt;
+#include &lt;cstdlib&gt;
+
+#include &#34;Object.h&#34;
+#include &#34;/src/xpdf-4.05/xpdf/XRef.h&#34;
+#include &#34;Dict.h&#34;
+#include &#34;Splash.h&#34;
+#include &#34;SplashBitmap.h&#34;
+#include &#34;SplashFont.h&#34;
+#include &#34;SplashOutputDev.h&#34;
+#include &#34;GfxState.h&#34;
+
+struct ScopeSplashBitmap {
+  SplashBitmap *s;
+
+  ScopeSplashBitmap(SplashBitmap *sIn):s(sIn) {}
+  ~ScopeSplashBitmap() {delete s;}
+};
+
+struct ScopeSplash {
+  Splash *s;
+
+  ScopeSplash(Splash *sIn):s(sIn) {}
+  ~ScopeSplash() {delete s;}
+};
+
+struct ScopeGfxState {
+  GfxState *s;
+
+  ScopeGfxState(GfxState *sIn):s(sIn) {}
+  ~ScopeGfxState() {delete s;}
+};
+
+struct ScopeSplashOutputDev {
+  SplashOutputDev *s;
+
+  ScopeSplashOutputDev(SplashOutputDev *sIn):s(sIn) {}
+  ~ScopeSplashOutputDev() {delete s;}
+};
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  FuzzedDataProvider dataProvider(data, size);
+
+  const int32_t width = dataProvider.ConsumeIntegralInRange(100, 1000);
+  const int32_t height = dataProvider.ConsumeIntegralInRange(100, 1000);
+
+  if (!width || !height || width &gt; 10000 || height &gt; 10000)
+    return 0;
+
+  ScopeSplashBitmap bmp(new SplashBitmap(width, height, 1, splashModeRGB8, false, false, NULL));
+  ScopeSplash splash(new Splash(bmp.s, false, NULL));
+  ScopeSplashOutputDev splashOut(new SplashOutputDev(splashModeRGB8, 4, false, NULL, true));
+
+  double x = dataProvider.ConsumeFloatingPoint&lt;double&gt;();
+  double y = dataProvider.ConsumeFloatingPoint&lt;double&gt;();
+  double dx = dataProvider.ConsumeFloatingPoint&lt;double&gt;();
+  double dy = dataProvider.ConsumeFloatingPoint&lt;double&gt;();
+  double originX = dataProvider.ConsumeFloatingPoint&lt;double&gt;();
+  double originY = dataProvider.ConsumeFloatingPoint&lt;double&gt;();
+  CharCode code = dataProvider.ConsumeIntegral&lt;CharCode&gt;();
+  std::string str = dataProvider.ConsumeRandomLengthString(10);
+  Unicode *u = NULL;
+  if (str.size() != 0){
+    u = new Unicode[str[0]];
+    for(size_t i=1;i&lt;str.size();i++){
+      u[i]=str[i];
+    }
+  }
+  GBool invisible = dataProvider.ConsumeBool();
+  GBool fill = dataProvider.ConsumeBool();
+  GBool stroke = dataProvider.ConsumeBool();
+
+  SplashFont* font = splashOut.s-&gt;getCurrentFont();
+  double* mat = font-&gt;getMatrix();
+  double fsz = font-&gt;getSize();
+  ScopeGfxState state(new GfxState(72.0, 72.0, nullptr, font, fsz));
+
+  splashOut.s-&gt;drawChar(state.s, x, y, dx, dy,
+               originX, originY,
+               code, str.size(), u, 1,
+               invisible, fill,
+               stroke);
+  splashOut.s-&gt;drawChar(state.s, x, y, dx, dy,
+               originX, originY,
+               code, str.size(), u, 1,
+               invisible, stroke,
+               fill);
+  splashOut.s-&gt;drawChar(state.s, x, y, dx, dy,
+               originX, originY,
+               code, 1+2*str.size(), u, 1,
+               fill, stroke,
+               invisible);
+
+  if (u){
+    delete[] u;
+  }
+
+  return 0;
+}
+&lt;/code&gt;
+
+Below is the error to fix:
+The code has the following build issues:
+&lt;error&gt;
+fuzz_JBIG2.cc:78:22: error: no member named &#39;getSize&#39; in &#39;SplashFont&#39;
+   78 |   double fsz = font-&gt;getSize();
+      |                ~~~~  ^
+fuzz_JBIG2.cc:79:27: error: no matching constructor for initialization of &#39;GfxState&#39;
+   79 |   ScopeGfxState state(new GfxState(72.0, 72.0, nullptr, font, fsz));
+      |                           ^        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+../xpdf/GfxState.h:1131:3: note: candidate constructor not viable: no known conversion from &#39;SplashFont *&#39; to &#39;int&#39; for 4th argument
+ 1131 |   GfxState(double hDPIA, double vDPIA, PDFRectangle *pageBox,
+      |   ^
+ 1132 |            int rotateA, GBool upsideDown
+      |            ~~~~~~~~~~~
+../xpdf/GfxState.h:1373:3: note: candidate constructor not viable: requires 2 arguments, but 5 were provided
+ 1373 |   GfxState(GfxState *state, GBool copyPath);
+      |   ^        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+../xpdf/GfxState.h:1125:7: note: candidate constructor (the implicit copy constructor) not viable: requires 1 argument, but 5 were provided
+ 1125 | class GfxState {
+      |       ^~~~~~~~
+&lt;/error&gt;
+
+
+
+
+Fix code:
+1. Consider possible solutions for the issues listed above.
+2. Choose a solution that can maximize fuzzing result, which is utilizing the function under test and feeding it not null input.
+3. Apply the solutions to the original code.
+It&#39;s important to show the complete code, not only the fixed line.
+&lt;solution&gt;
+</pre>
+
+
+
+<h3>Code #4</h3>
+
+<pre>
+&lt;code&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+#include &lt;cstddef&gt;
+#include &lt;cstdint&gt;
+#include &lt;cstdlib&gt;
+
+#include &#34;Object.h&#34;
+#include &#34;/src/xpdf-4.05/xpdf/XRef.h&#34;
+#include &#34;Dict.h&#34;
+#include &#34;Splash.h&#34;
+#include &#34;SplashBitmap.h&#34;
+#include &#34;SplashFont.h&#34;
+#include &#34;SplashOutputDev.h&#34;
+#include &#34;GfxState.h&#34;
+
+struct ScopeSplashBitmap {
+  SplashBitmap *s;
+
+  ScopeSplashBitmap(SplashBitmap *sIn):s(sIn) {}
+  ~ScopeSplashBitmap() {delete s;}
+};
+
+struct ScopeSplash {
+  Splash *s;
+
+  ScopeSplash(Splash *sIn):s(sIn) {}
+  ~ScopeSplash() {delete s;}
+};
+
+struct ScopeGfxState {
+  GfxState *s;
+
+  ScopeGfxState(GfxState *sIn):s(sIn) {}
+  ~ScopeGfxState() {delete s;}
+};
+
+struct ScopeSplashOutputDev {
+  SplashOutputDev *s;
+
+  ScopeSplashOutputDev(SplashOutputDev *sIn):s(sIn) {}
+  ~ScopeSplashOutputDev() {delete s;}
+};
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  FuzzedDataProvider dataProvider(data, size);
+
+  const int32_t width = dataProvider.ConsumeIntegralInRange(100, 1000);
+  const int32_t height = dataProvider.ConsumeIntegralInRange(100, 1000);
+
+  if (!width || !height || width &gt; 10000 || height &gt; 10000)
+    return 0;
+
+  ScopeSplashBitmap bmp(new SplashBitmap(width, height, 1, splashModeRGB8, false, false, NULL));
+  ScopeSplash splash(new Splash(bmp.s, false, NULL));
+  ScopeSplashOutputDev splashOut(new SplashOutputDev(splashModeRGB8, 4, false, NULL, true));
+
+  double x = dataProvider.ConsumeFloatingPoint&lt;double&gt;();
+  double y = dataProvider.ConsumeFloatingPoint&lt;double&gt;();
+  double dx = dataProvider.ConsumeFloatingPoint&lt;double&gt;();
+  double dy = dataProvider.ConsumeFloatingPoint&lt;double&gt;();
+  double originX = dataProvider.ConsumeFloatingPoint&lt;double&gt;();
+  double originY = dataProvider.ConsumeFloatingPoint&lt;double&gt;();
+  CharCode code = dataProvider.ConsumeIntegral&lt;CharCode&gt;();
+  std::string str = dataProvider.ConsumeRandomLengthString(10);
+  Unicode *u = NULL;
+  if (str.size() != 0){
+    u = new Unicode[str[0]];
+    for(size_t i=1;i&lt;str.size();i++){
+      u[i]=str[i];
+    }
+  }
+  GBool invisible = dataProvider.ConsumeBool();
+  GBool fill = dataProvider.ConsumeBool();
+  GBool stroke = dataProvider.ConsumeBool();
+
+  SplashFont* font = splashOut.s-&gt;getCurrentFont();
+  double* mat = font-&gt;getMatrix();
+  ScopeGfxState state(new GfxState(72.0, 72.0, nullptr, 0, gTrue)); // Changed here
+
+  splashOut.s-&gt;drawChar(state.s, x, y, dx, dy,
+               originX, originY,
+               code, str.size(), u, 1,
+               invisible, fill,
+               stroke);
+  splashOut.s-&gt;drawChar(state.s, x, y, dx, dy,
+               originX, originY,
+               code, str.size(), u, 1,
+               invisible, stroke,
+               fill);
+  splashOut.s-&gt;drawChar(state.s, x, y, dx, dy,
+               originX, originY,
+               code, 1+2*str.size(), u, 1,
+               fill, stroke,
+               invisible);
+
+  if (u){
+    delete[] u;
+  }
+
+  return 0;
+}
+&lt;/code&gt;
+&lt;/solution&gt;
+</pre>
+
+
+<h3>Fixer prompt #5</h3>
+<pre>
+
+Given the following C++ fuzz harness and its build error message, fix the code to make it build for fuzzing.
+
+If there is undeclared identifier or unknown type name error, fix it by finding and including the related libraries.
+
+MUST RETURN THE FULL CODE, INCLUDING UNCHANGED PARTS.
+
+Below is the code needs to be built:
+&lt;code&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+#include &lt;cstddef&gt;
+#include &lt;cstdint&gt;
+#include &lt;cstdlib&gt;
+
+#include &#34;Object.h&#34;
+#include &#34;/src/xpdf-4.05/xpdf/XRef.h&#34;
+#include &#34;Dict.h&#34;
+#include &#34;Splash.h&#34;
+#include &#34;SplashBitmap.h&#34;
+#include &#34;SplashFont.h&#34;
+#include &#34;SplashOutputDev.h&#34;
+#include &#34;GfxState.h&#34;
+
+struct ScopeSplashBitmap {
+  SplashBitmap *s;
+
+  ScopeSplashBitmap(SplashBitmap *sIn):s(sIn) {}
+  ~ScopeSplashBitmap() {delete s;}
+};
+
+struct ScopeSplash {
+  Splash *s;
+
+  ScopeSplash(Splash *sIn):s(sIn) {}
+  ~ScopeSplash() {delete s;}
+};
+
+struct ScopeGfxState {
+  GfxState *s;
+
+  ScopeGfxState(GfxState *sIn):s(sIn) {}
+  ~ScopeGfxState() {delete s;}
+};
+
+struct ScopeSplashOutputDev {
+  SplashOutputDev *s;
+
+  ScopeSplashOutputDev(SplashOutputDev *sIn):s(sIn) {}
+  ~ScopeSplashOutputDev() {delete s;}
+};
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  FuzzedDataProvider dataProvider(data, size);
+
+  const int32_t width = dataProvider.ConsumeIntegralInRange(100, 1000);
+  const int32_t height = dataProvider.ConsumeIntegralInRange(100, 1000);
+
+  if (!width || !height || width &gt; 10000 || height &gt; 10000)
+    return 0;
+
+  ScopeSplashBitmap bmp(new SplashBitmap(width, height, 1, splashModeRGB8, false, false, NULL));
+  ScopeSplash splash(new Splash(bmp.s, false, NULL));
+  ScopeSplashOutputDev splashOut(new SplashOutputDev(splashModeRGB8, 4, false, NULL, true));
+
+  double x = dataProvider.ConsumeFloatingPoint&lt;double&gt;();
+  double y = dataProvider.ConsumeFloatingPoint&lt;double&gt;();
+  double dx = dataProvider.ConsumeFloatingPoint&lt;double&gt;();
+  double dy = dataProvider.ConsumeFloatingPoint&lt;double&gt;();
+  double originX = dataProvider.ConsumeFloatingPoint&lt;double&gt;();
+  double originY = dataProvider.ConsumeFloatingPoint&lt;double&gt;();
+  CharCode code = dataProvider.ConsumeIntegral&lt;CharCode&gt;();
+  std::string str = dataProvider.ConsumeRandomLengthString(10);
+  Unicode *u = NULL;
+  if (str.size() != 0){
+    u = new Unicode[str[0]];
+    for(size_t i=1;i&lt;str.size();i++){
+      u[i]=str[i];
+    }
+  }
+  GBool invisible = dataProvider.ConsumeBool();
+  GBool fill = dataProvider.ConsumeBool();
+  GBool stroke = dataProvider.ConsumeBool();
+
+  SplashFont* font = splashOut.s-&gt;getCurrentFont();
+  double* mat = font-&gt;getMatrix();
+  ScopeGfxState state(new GfxState(72.0, 72.0, nullptr, 0, gTrue)); // Changed here
+
+  splashOut.s-&gt;drawChar(state.s, x, y, dx, dy,
+               originX, originY,
+               code, str.size(), u, 1,
+               invisible, fill,
+               stroke);
+  splashOut.s-&gt;drawChar(state.s, x, y, dx, dy,
+               originX, originY,
+               code, str.size(), u, 1,
+               invisible, stroke,
+               fill);
+  splashOut.s-&gt;drawChar(state.s, x, y, dx, dy,
+               originX, originY,
+               code, 1+2*str.size(), u, 1,
+               fill, stroke,
+               invisible);
+
+  if (u){
+    delete[] u;
+  }
+
+  return 0;
+}
+&lt;/code&gt;
+
+Below is the error to fix:
+The code has the following build issues:
+&lt;error&gt;
+SplashOutputDev.cc:(.text._ZN15SplashOutputDev12doUpdateFontEP8GfxState[_ZN15SplashOutputDev12doUpdateFontEP8GfxState]+0x15ae): undefined reference to `FoFiTrueType::load(char*, int, int)&#39;
+/usr/bin/ld: SplashOutputDev.cc:(.text._ZN15SplashOutputDev12doUpdateFontEP8GfxState[_ZN15SplashOutputDev12doUpdateFontEP8GfxState]+0x15e2): undefined reference to `FoFiTrueType::getCFFBlock(char**, int*)&#39;
+/usr/bin/ld: SplashOutputDev.cc:(.text._ZN15SplashOutputDev12doUpdateFontEP8GfxState[_ZN15SplashOutputDev12doUpdateFontEP8GfxState]+0x162d): undefined reference to `FoFiType1C::make(char*, int)&#39;
+/usr/bin/ld: SplashOutputDev.cc:(.text._ZN15SplashOutputDev12doUpdateFontEP8GfxState[_ZN15SplashOutputDev12doUpdateFontEP8GfxState]+0x16c9): undefined reference to `FoFiType1C::load(char*)&#39;
+/usr/bin/ld: SplashOutputDev.cc:(.text._ZN15SplashOutputDev12doUpdateFontEP8GfxState[_ZN15SplashOutputDev12doUpdateFontEP8GfxState]+0x1896): undefined reference to `FoFiTrueType::getNumCmaps()&#39;
+/usr/bin/ld: SplashOutputDev.cc:(.text._ZN15SplashOutputDev12doUpdateFontEP8GfxState[_ZN15SplashOutputDev12doUpdateFontEP8GfxState]+0x18c4): undefined reference to `FoFiTrueType::getCmapPlatform(int)&#39;
+/usr/bin/ld: SplashOutputDev.cc:(.text._ZN15SplashOutputDev12doUpdateFontEP8GfxState[_ZN15SplashOutputDev12doUpdateFontEP8GfxState]+0x18d6): undefined reference to `FoFiTrueType::getCmapEncoding(int)&#39;
+/usr/bin/ld: SplashOutputDev.cc:(.text._ZN15SplashOutputDev12doUpdateFontEP8GfxState[_ZN15SplashOutputDev12doUpdateFontEP8GfxState]+0x269e): undefined reference to `FoFiTrueType::mapCodeToGID(int, int)&#39;
+GfxFont.cc:(.text._ZN7GfxFont11getFontTypeEP4XRefP4DictP3Ref[_ZN7GfxFont11getFontTypeEP4XRefP4DictP3Ref]+0xf37): undefined reference to `FoFiIdentifier::identifyStream(int (*)(void*), void*)&#39;
+GfxFont.cc:(.text._ZN7GfxFont10locateFontEP4XRefi[_ZN7GfxFont10locateFontEP4XRefi]+0x1121): undefined reference to `FoFiIdentifier::identifyFile(char*)&#39;
+GfxFont.cc:(.text._ZN11Gfx8BitFontC2EP4XRefPKc3RefP7GString11GfxFontTypeS4_P4Dict[_ZN11Gfx8BitFontC2EP4XRefPKc3RefP7GString11GfxFontTypeS4_P4Dict]+0x1a82): undefined reference to `FoFiType1::make(char*, int)&#39;
+/usr/bin/ld: GfxFont.cc:(.text._ZN11Gfx8BitFontC2EP4XRefPKc3RefP7GString11GfxFontTypeS4_P4Dict[_ZN11Gfx8BitFontC2EP4XRefPKc3RefP7GString11GfxFontTypeS4_P4Dict]+0x1a9e): undefined reference to `FoFiType1::getName()&#39;
+/usr/bin/ld: GfxFont.cc:(.text._ZN11Gfx8BitFontC2EP4XRefPKc3RefP7GString11GfxFontTypeS4_P4Dict[_ZN11Gfx8BitFontC2EP4XRefPKc3RefP7GString11GfxFontTypeS4_P4Dict]+0x1bbb): undefined reference to `FoFiType1C::getName()&#39;
+/usr/bin/ld: GfxFont.cc:(.text._ZN11Gfx8BitFontC2EP4XRefPKc3RefP7GString11GfxFontTypeS4_P4Dict[_ZN11Gfx8BitFontC2EP4XRefPKc3RefP7GString11GfxFontTypeS4_P4Dict]+0x1c77): undefined reference to `FoFiType1::getEncoding()&#39;
+/usr/bin/ld: GfxFont.cc:(.text._ZN11Gfx8BitFontC2EP4XRefPKc3RefP7GString11GfxFontTypeS4_P4Dict[_ZN11Gfx8BitFontC2EP4XRefPKc3RefP7GString11GfxFontTypeS4_P4Dict]+0x1cc6): undefined reference to `FoFiType1C::getEncoding()&#39;
+GfxFont.cc:(.text._ZN11Gfx8BitFont15getCodeToGIDMapEP12FoFiTrueType[_ZN11Gfx8BitFont15getCodeToGIDMapEP12FoFiTrueType]+0xa85): undefined reference to `FoFiTrueType::mapNameToGID(char*)&#39;
+GfxFont.cc:(.text._ZN11Gfx8BitFont15getCodeToGIDMapEP10FoFiType1C[_ZN11Gfx8BitFont15getCodeToGIDMapEP10FoFiType1C]+0x57): undefined reference to `FoFiType1C::getNameToGIDMap()&#39;
+GfxFont.cc:(.text._ZN10GfxCIDFont26readTrueTypeUnicodeMappingEP4XRef[_ZN10GfxCIDFont26readTrueTypeUnicodeMappingEP4XRef]+0x1ca): undefined reference to `FoFiTrueType::make(char*, int, int, int)&#39;
+/usr/bin/ld: SplashFTFontEngine.cc:(.text._ZN18SplashFTFontEngine19loadOpenTypeT1CFontEP16SplashFontFileIDPciPPKc[_ZN18SplashFTFontEngine19loadOpenTypeT1CFontEP16SplashFontFileIDPciPPKc]+0x1a9): undefined reference to `FoFiTrueType::convertToType1(char*, char const**, int, void (*)(void*, char const*, int), void*)&#39;
+/usr/bin/ld: SplashFTFontEngine.cc:(.text._ZN18SplashFTFontEngine11loadCIDFontEP16SplashFontFileIDPciPii[_ZN18SplashFTFontEngine11loadCIDFontEP16SplashFontFileIDPciPii]+0x19c): undefined reference to `FoFiType1C::getCIDToGIDMap(int*)&#39;
+/usr/bin/ld: SplashFTFontEngine.cc:(.text._ZN18SplashFTFontEngine19loadOpenTypeCFFFontEP16SplashFontFileIDPciPii[_ZN18SplashFTFontEngine19loadOpenTypeCFFFontEP16SplashFontFileIDPciPii]+0x395): undefined reference to `FoFiTrueType::getCIDToGIDMap(int*)&#39;
+/usr/bin/ld: SplashFTFontEngine.cc:(.text._ZN18SplashFTFontEngine16loadTrueTypeFontEP16SplashFontFileIDPciiPii[_ZN18SplashFTFontEngine16loadTrueTypeFontEP16SplashFontFileIDPciiPii]+0x17e): undefined reference to `FoFiTrueType::writeTTF(void (*)(void*, char const*, int), void*, char*, int*, unsigned char*, int)&#39;
+&lt;/error&gt;
+
+
+Below are instructions to assist you in fixing the error.
+&lt;instruction&gt;
+You must add the following #include statement to fix the error of &lt;error&gt;undefined reference to FoFiTrueType::load(char*, int, int)&lt;/error&gt;:
+&lt;code&gt;
+#include &#34;/src/xpdf-4.05/xpdf/OutputDev.h&#34;
+&lt;/code&gt;.
+You must add the following #include statement to fix the error of &lt;error&gt;undefined reference to FoFiTrueType::getCFFBlock(char**, int*)&lt;/error&gt;:
+&lt;code&gt;
+#include &#34;/src/xpdf-4.05/xpdf/OutputDev.h&#34;
+&lt;/code&gt;.
+You must add the following #include statement to fix the error of &lt;error&gt;undefined reference to FoFiType1C::make(char*, int)&lt;/error&gt;:
+&lt;code&gt;
+#include &#34;/src/xpdf-4.05/xpdf/OutputDev.h&#34;
+&lt;/code&gt;.
+You must add the following #include statement to fix the error of &lt;error&gt;undefined reference to FoFiType1C::load(char*)&lt;/error&gt;:
+&lt;code&gt;
+#include &#34;/src/xpdf-4.05/xpdf/OutputDev.h&#34;
+&lt;/code&gt;.
+You must add the following #include statement to fix the error of &lt;error&gt;undefined reference to FoFiTrueType::getNumCmaps()&lt;/error&gt;:
+&lt;code&gt;
+#include &#34;/src/xpdf-4.05/xpdf/OutputDev.h&#34;
+&lt;/code&gt;.
+You must add the following #include statement to fix the error of &lt;error&gt;undefined reference to FoFiTrueType::getCmapPlatform(int)&lt;/error&gt;:
+&lt;code&gt;
+#include &#34;/src/xpdf-4.05/xpdf/OutputDev.h&#34;
+&lt;/code&gt;.
+You must add the following #include statement to fix the error of &lt;error&gt;undefined reference to FoFiTrueType::getCmapEncoding(int)&lt;/error&gt;:
+&lt;code&gt;
+#include &#34;/src/xpdf-4.05/xpdf/OutputDev.h&#34;
+&lt;/code&gt;.
+You must add the following #include statement to fix the error of &lt;error&gt;undefined reference to FoFiTrueType::mapCodeToGID(int, int)&lt;/error&gt;:
+&lt;code&gt;
+#include &#34;/src/xpdf-4.05/xpdf/OutputDev.h&#34;
+&lt;/code&gt;.
+You must add the following #include statement to fix the error of &lt;error&gt;undefined reference to FoFiIdentifier::identifyStream(int (*)(void*), void*)&lt;/error&gt;:
+&lt;code&gt;
+#include &#34;/src/xpdf-4.05/xpdf/OutputDev.h&#34;
+&lt;/code&gt;.
+You must add the following #include statement to fix the error of &lt;error&gt;undefined reference to FoFiIdentifier::identifyFile(char*)&lt;/error&gt;:
+&lt;code&gt;
+#include &#34;/src/xpdf-4.05/xpdf/OutputDev.h&#34;
+&lt;/code&gt;.
+You must add the following #include statement to fix the error of &lt;error&gt;undefined reference to FoFiType1::make(char*, int)&lt;/error&gt;:
+&lt;code&gt;
+#include &#34;/src/xpdf-4.05/xpdf/OutputDev.h&#34;
+&lt;/code&gt;.
+You must add the following #include statement to fix the error of &lt;error&gt;undefined reference to FoFiType1::getName()&lt;/error&gt;:
+&lt;code&gt;
+#include &#34;/src/xpdf-4.05/xpdf/OutputDev.h&#34;
+&lt;/code&gt;.
+You must add the following #include statement to fix the error of &lt;error&gt;undefined reference to FoFiType1C::getName()&lt;/error&gt;:
+&lt;code&gt;
+#include &#34;/src/xpdf-4.05/xpdf/OutputDev.h&#34;
+&lt;/code&gt;.
+You must add the following #include statement to fix the error of &lt;error&gt;undefined reference to FoFiType1::getEncoding()&lt;/error&gt;:
+&lt;code&gt;
+#include &#34;/src/xpdf-4.05/xpdf/OutputDev.h&#34;
+&lt;/code&gt;.
+You must add the following #include statement to fix the error of &lt;error&gt;undefined reference to FoFiType1C::getEncoding()&lt;/error&gt;:
+&lt;code&gt;
+#include &#34;/src/xpdf-4.05/xpdf/OutputDev.h&#34;
+&lt;/code&gt;.
+You must add the following #include statement to fix the error of &lt;error&gt;undefined reference to FoFiTrueType::mapNameToGID(char*)&lt;/error&gt;:
+&lt;code&gt;
+#include &#34;/src/xpdf-4.05/xpdf/OutputDev.h&#34;
+&lt;/code&gt;.
+You must add the following #include statement to fix the error of &lt;error&gt;undefined reference to FoFiType1C::getNameToGIDMap()&lt;/error&gt;:
+&lt;code&gt;
+#include &#34;/src/xpdf-4.05/xpdf/OutputDev.h&#34;
+&lt;/code&gt;.
+You must add the following #include statement to fix the error of &lt;error&gt;undefined reference to FoFiTrueType::make(char*, int, int, int)&lt;/error&gt;:
+&lt;code&gt;
+#include &#34;/src/xpdf-4.05/xpdf/OutputDev.h&#34;
+&lt;/code&gt;.
+You must add the following #include statement to fix the error of &lt;error&gt;undefined reference to FoFiTrueType::convertToType1(char*, char const**, int, void (*)(void*, char const*, int), void*)&lt;/error&gt;:
+&lt;code&gt;
+#include &#34;/src/xpdf-4.05/xpdf/OutputDev.h&#34;
+&lt;/code&gt;.
+You must add the following #include statement to fix the error of &lt;error&gt;undefined reference to FoFiType1C::getCIDToGIDMap(int*)&lt;/error&gt;:
+&lt;code&gt;
+#include &#34;/src/xpdf-4.05/xpdf/OutputDev.h&#34;
+&lt;/code&gt;.
+You must add the following #include statement to fix the error of &lt;error&gt;undefined reference to FoFiTrueType::getCIDToGIDMap(int*)&lt;/error&gt;:
+&lt;code&gt;
+#include &#34;/src/xpdf-4.05/xpdf/OutputDev.h&#34;
+&lt;/code&gt;.
+You must add the following #include statement to fix the error of &lt;error&gt;undefined reference to FoFiTrueType::writeTTF(void (*)(void*, char const*, int), void*, char*, int*, unsigned char*, int)&lt;/error&gt;:
+&lt;code&gt;
+#include &#34;/src/xpdf-4.05/xpdf/OutputDev.h&#34;
+&lt;/code&gt;.
+
+&lt;/instruction&gt;
+
+Fix code:
+1. Consider possible solutions for the issues listed above.
+2. Choose a solution that can maximize fuzzing result, which is utilizing the function under test and feeding it not null input.
+3. Apply the solutions to the original code.
+It&#39;s important to show the complete code, not only the fixed line.
+&lt;solution&gt;
+</pre>
+
+
+
+<h3>Code #5</h3>
+
+<pre>
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+#include &lt;cstddef&gt;
+#include &lt;cstdint&gt;
+#include &lt;cstdlib&gt;
+
+#include &#34;Object.h&#34;
+#include &#34;/src/xpdf-4.05/xpdf/XRef.h&#34;
+#include &#34;Dict.h&#34;
+#include &#34;Splash.h&#34;
+#include &#34;SplashBitmap.h&#34;
+#include &#34;SplashFont.h&#34;
+#include &#34;SplashOutputDev.h&#34;
+#include &#34;GfxState.h&#34;
+#include &#34;/src/xpdf-4.05/xpdf/OutputDev.h&#34;
+
+struct ScopeSplashBitmap {
+  SplashBitmap *s;
+
+  ScopeSplashBitmap(SplashBitmap *sIn):s(sIn) {}
+  ~ScopeSplashBitmap() {delete s;}
+};
+
+struct ScopeSplash {
+  Splash *s;
+
+  ScopeSplash(Splash *sIn):s(sIn) {}
+  ~ScopeSplash() {delete s;}
+};
+
+struct ScopeGfxState {
+  GfxState *s;
+
+  ScopeGfxState(GfxState *sIn):s(sIn) {}
+  ~ScopeGfxState() {delete s;}
+};
+
+struct ScopeSplashOutputDev {
+  SplashOutputDev *s;
+
+  ScopeSplashOutputDev(SplashOutputDev *sIn):s(sIn) {}
+  ~ScopeSplashOutputDev() {delete s;}
+};
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  FuzzedDataProvider dataProvider(data, size);
+
+  const int32_t width = dataProvider.ConsumeIntegralInRange(100, 1000);
+  const int32_t height = dataProvider.ConsumeIntegralInRange(100, 1000);
+
+  if (!width || !height || width &gt; 10000 || height &gt; 10000)
+    return 0;
+
+  ScopeSplashBitmap bmp(new SplashBitmap(width, height, 1, splashModeRGB8, false, false, NULL));
+  ScopeSplash splash(new Splash(bmp.s, false, NULL));
+  ScopeSplashOutputDev splashOut(new SplashOutputDev(splashModeRGB8, 4, false, NULL, true));
+
+  double x = dataProvider.ConsumeFloatingPoint&lt;double&gt;();
+  double y = dataProvider.ConsumeFloatingPoint&lt;double&gt;();
+  double dx = dataProvider.ConsumeFloatingPoint&lt;double&gt;();
+  double dy = dataProvider.ConsumeFloatingPoint&lt;double&gt;();
+  double originX = dataProvider.ConsumeFloatingPoint&lt;double&gt;();
+  double originY = dataProvider.ConsumeFloatingPoint&lt;double&gt;();
+  CharCode code = dataProvider.ConsumeIntegral&lt;CharCode&gt;();
+  std::string str = dataProvider.ConsumeRandomLengthString(10);
+  Unicode *u = NULL;
+  if (str.size() != 0){
+    u = new Unicode[str[0]];
+    for(size_t i=1;i&lt;str.size();i++){
+      u[i]=str[i];
+    }
+  }
+  GBool invisible = dataProvider.ConsumeBool();
+  GBool fill = dataProvider.ConsumeBool();
+  GBool stroke = dataProvider.ConsumeBool();
+
+  SplashFont* font = splashOut.s-&gt;getCurrentFont();
+  double* mat = font-&gt;getMatrix();
+  ScopeGfxState state(new GfxState(72.0, 72.0, nullptr, 0, gTrue));
+
+  splashOut.s-&gt;drawChar(state.s, x, y, dx, dy,
+               originX, originY,
+               code, str.size(), u, 1,
+               invisible, fill,
+               stroke);
+  splashOut.s-&gt;drawChar(state.s, x, y, dx, dy,
+               originX, originY,
+               code, str.size(), u, 1,
+               invisible, stroke,
+               fill);
+  splashOut.s-&gt;drawChar(state.s, x, y, dx, dy,
+               originX, originY,
+               code, 1+2*str.size(), u, 1,
+               fill, stroke,
+               invisible);
+
+  if (u){
+    delete[] u;
+  }
+
+  return 0;
+}
+</pre>
+
+
+<h2>Logs</h2>
+<pre>
+Fixing /home/chyun/oss-fuzz-gen1/results5/output-xpdf-_zn15splashoutputdev8drawcharep8gfxstateddddddjipjiiii/fixed_targets/01.cc with gpt-4, attempt 1.
+Fixing /home/chyun/oss-fuzz-gen1/results5/output-xpdf-_zn15splashoutputdev8drawcharep8gfxstateddddddjipjiiii/fixed_targets/01.cc with gpt-4, attempt 2.
+Fixing /home/chyun/oss-fuzz-gen1/results5/output-xpdf-_zn15splashoutputdev8drawcharep8gfxstateddddddjipjiiii/fixed_targets/01.cc with gpt-4, attempt 3.
+Fixing /home/chyun/oss-fuzz-gen1/results5/output-xpdf-_zn15splashoutputdev8drawcharep8gfxstateddddddjipjiiii/fixed_targets/01.cc with gpt-4, attempt 4.
+Fixing /home/chyun/oss-fuzz-gen1/results5/output-xpdf-_zn15splashoutputdev8drawcharep8gfxstateddddddjipjiiii/fixed_targets/01.cc with gpt-4, attempt 5.
+Failed to build /home/chyun/oss-fuzz-gen1/results5/output-xpdf-_zn15splashoutputdev8drawcharep8gfxstateddddddjipjiiii/fixed_targets/01.cc with gpt-4 in 5 iterations of fixing.
+
+</pre>
+
+<h2>Run logs</h2>
+<pre>
+
+</pre>
+
+
+</body>

@@ -1,0 +1,866 @@
+<!doctype html>
+
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Experiment results</title>
+<style>
+* {
+    box-sizing: border-box;
+}
+
+html {
+    line-height: 1.15;
+}
+
+body {
+    font-family: sans-serif;
+    font-size: 16px;
+}
+
+table {
+    border-collapse: collapse;
+    border-spacing: 0;
+}
+
+td, th {
+    border-right: 1px #dedede solid;
+    border-bottom: 1px #dedede solid;
+    padding: 5px;
+    text-align: left;
+}
+td:first-child, th:first-child {
+    border-left: 1px #dedede solid;
+}
+th {
+    border-top: 1px #dedede solid;
+}
+
+tbody tr:nth-child(odd) {
+    background-color: #f4f5ff;
+}
+</style>
+<body>
+    LLM: 
+    
+<h1>output-xpdf-_zn6pdfdoc16displaypagesliceep9outputdeviddiiiiiiiipfipves2_ / 01</h1>
+Bug: False
+<br>
+Crash reason: NO_SEMANTIC_ERR
+<br>
+<br>
+
+<h2>Triage</h2>
+<pre>
+
+</pre>
+<br>
+
+
+
+
+
+<h3>Final code</h3>
+
+<pre>
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+#include &lt;aconf.h&gt;
+#include &lt;png.h&gt;
+#include &lt;stddef.h&gt;
+#include &lt;stdint.h&gt;
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;string.h&gt;
+#include &lt;iostream&gt;
+#include &lt;vector&gt;
+
+#include &#34;GString.h&#34;
+#include &#34;GlobalParams.h&#34;
+#include &#34;JBIG2Stream.h&#34;
+#include &#34;Object.h&#34;
+#include &#34;OutputDev.h&#34;
+#include &#34;PDFDoc.h&#34;
+#include &#34;Splash.h&#34;
+#include &#34;SplashBitmap.h&#34;
+#include &#34;SplashOutputDev.h&#34;
+#include &#34;Stream.h&#34;
+#include &#34;config.h&#34;
+#include &#34;gfile.h&#34;
+#include &#34;gmem.h&#34;
+#include &#34;gmempp.h&#34;
+#include &#34;parseargs.h&#34;
+
+class StreamYesOutputs : public SplashOutputDev {
+public:
+    StreamYesOutputs(SplashColorMode colorMode, int colorTypeA, GBool bitmapTopDown, SplashColor color)
+        : SplashOutputDev(colorMode, colorTypeA, bitmapTopDown, color)
+    {
+    }
+
+    GBool useTilingPatternFill() override
+    {
+        return gTrue;
+    }
+
+    GBool useShadedFills()
+    {
+        return gTrue;
+    }
+
+    GBool useFillColorStop()
+    {
+        return gTrue;
+    }
+};
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+    FuzzedDataProvider fdp(data, size);
+
+    double hDPI = fdp.ConsumeFloatingPoint&lt;double&gt;();
+    double vDPI = fdp.ConsumeFloatingPoint&lt;double&gt;();
+    int rotate = fdp.ConsumeIntegral&lt;int&gt;();
+    GBool useMediaBox = fdp.ConsumeBool();
+    GBool crop = fdp.ConsumeBool();
+    GBool printing = fdp.ConsumeBool();
+    int sliceX = fdp.ConsumeIntegral&lt;int&gt;();
+    int sliceY = fdp.ConsumeIntegral&lt;int&gt;();
+    int sliceW = fdp.ConsumeIntegral&lt;int&gt;();
+    int sliceH = fdp.ConsumeIntegral&lt;int&gt;();
+    void *abortCheckCbkData = NULL;  // The value for this is not known, so currently assigning NULL
+
+    std::vector&lt;char&gt; payload = fdp.ConsumeRemainingBytes&lt;char&gt;();
+
+    Object xpdf_obj;
+    xpdf_obj.initNull();
+    BaseStream *stream = new MemStream(payload.data(), 0, payload.size(), &amp;xpdf_obj);
+
+    globalParams = new GlobalParams(NULL);
+    globalParams-&gt;setErrQuiet(1);
+    globalParams-&gt;setupBaseFonts(NULL);
+    char yes[] = &#34;yes&#34;;
+    globalParams-&gt;setEnableFreeType(yes);
+    globalParams-&gt;setErrQuiet(1);
+
+    PDFDoc *doc = NULL;
+    try {
+        doc = new PDFDoc(stream);
+        if (!doc-&gt;isOk())
+        {
+            delete doc;
+            delete globalParams;
+            return 0;
+        }
+
+        SplashColor paperColor = {255, 255, 255};
+        StreamYesOutputs splashOutputDev(splashModeRGB8, 3, gFalse, paperColor);
+
+        for (int pageNum = 1; pageNum &lt;= doc-&gt;getNumPages(); pageNum++) {
+            doc-&gt;displayPageSlice(&amp;splashOutputDev, pageNum, hDPI, vDPI, rotate, useMediaBox, crop, printing,
+                                  sliceX, sliceY, sliceW, sliceH, nullptr, abortCheckCbkData);
+        }
+    } catch (const std::exception &amp;e) {
+        std::cerr &lt;&lt; e.what();
+    }
+
+    delete doc;
+    delete globalParams;
+    return 0;
+}
+</pre>
+
+
+<h3>Fixer prompt #1</h3>
+<pre>
+
+Given the following C++ fuzz harness and its build error message, fix the code to make it build for fuzzing.
+
+If there is undeclared identifier or unknown type name error, fix it by finding and including the related libraries.
+
+MUST RETURN THE FULL CODE, INCLUDING UNCHANGED PARTS.
+
+Below is the code needs to be built:
+&lt;code&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+#include &lt;aconf.h&gt;
+#include &lt;png.h&gt;
+#include &lt;stddef.h&gt;
+#include &lt;stdint.h&gt;
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;string.h&gt;
+#include &lt;iostream&gt;
+#include &lt;vector&gt;
+
+#include &#34;GString.h&#34;
+#include &#34;GlobalParams.h&#34;
+#include &#34;JBIG2Stream.h&#34;
+#include &#34;Object.h&#34;
+#include &#34;OutputDev.h&#34;
+#include &#34;PDFDoc.h&#34;
+#include &#34;Splash.h&#34;
+#include &#34;SplashBitmap.h&#34;
+#include &#34;SplashOutputDev.h&#34;
+#include &#34;Stream.h&#34;
+#include &#34;config.h&#34;
+#include &#34;gfile.h&#34;
+#include &#34;gmem.h&#34;
+#include &#34;gmempp.h&#34;
+#include &#34;parseargs.h&#34;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+    FuzzedDataProvider fdp(data, size);
+
+    double hDPI = fdp.ConsumeFloatingPoint&lt;double&gt;();
+    double vDPI = fdp.ConsumeFloatingPoint&lt;double&gt;();
+    int rotate = fdp.ConsumeIntegral&lt;int&gt;();
+    GBool useMediaBox = fdp.ConsumeBool();
+    GBool crop = fdp.ConsumeBool();
+    GBool printing = fdp.ConsumeBool();
+    int sliceX = fdp.ConsumeIntegral&lt;int&gt;();
+    int sliceY = fdp.ConsumeIntegral&lt;int&gt;();
+    int sliceW = fdp.ConsumeIntegral&lt;int&gt;();
+    int sliceH = fdp.ConsumeIntegral&lt;int&gt;();
+    void *abortCheckCbkData = NULL;  // The value for this is not known, so currently assigning NULL
+
+    std::vector&lt;char&gt; payload = fdp.ConsumeRemainingBytes&lt;char&gt;();
+
+    Object xpdf_obj;
+    xpdf_obj.initNull();
+    BaseStream *stream = new MemStream(payload.data(), 0, payload.size(), &amp;xpdf_obj);
+
+    globalParams = new GlobalParams(NULL);
+    globalParams-&gt;setErrQuiet(1);
+    globalParams-&gt;setupBaseFonts(NULL);
+    char yes[] = &#34;yes&#34;;
+    globalParams-&gt;setEnableFreeType(yes);
+    globalParams-&gt;setErrQuiet(1);
+
+    PDFDoc *doc = NULL;
+    try {
+        doc = new PDFDoc(stream);
+        if (!doc-&gt;isOk())
+        {
+            delete doc;
+            delete globalParams;
+            return 0;
+        }
+
+        SplashColor paperColor = {255, 255, 255};
+        StreamYesOutputs splashOutputDev(splashModeRGB8, 3, gFalse, paperColor);
+
+        for (int pageNum = 1; pageNum &lt;= doc-&gt;getNumPages(); pageNum++) {
+            doc-&gt;displayPageSlice(&amp;splashOutputDev, pageNum, hDPI, vDPI, rotate, useMediaBox, crop, printing,
+                                  sliceX, sliceY, sliceW, sliceH, nullptr, abortCheckCbkData);
+        }
+    } catch (const std::exception &amp;e) {
+        std::cerr &lt;&lt; e.what();
+    }
+
+    delete doc;
+    delete globalParams;
+    return 0;
+}
+
+
+// Add the following additional class inside your harness
+
+class StreamYesOutputs : public SplashOutputDev {
+public:
+    StreamYesOutputs(SplashColorMode colorMode, int colorTypeA, GBool bitmapTopDown, SplashColor color)
+        : SplashOutputDev(colorMode, colorTypeA, bitmapTopDown, color)
+    {
+    }
+
+    GBool useTilingPatternFill() override
+    {
+        return gTrue;
+    }
+
+    GBool useShadedFills() override
+    {
+        return gTrue;
+    }
+
+    GBool useFillColorStop() override
+    {
+        return gTrue;
+    }
+};
+&lt;/code&gt;
+
+Below is the error to fix:
+The code has the following build issues:
+&lt;error&gt;
+fuzz_JBIG2.cc:68:9: error: unknown type name &#39;StreamYesOutputs&#39;
+   68 |         StreamYesOutputs splashOutputDev(splashModeRGB8, 3, gFalse, paperColor);
+      |         ^
+fuzz_JBIG2.cc:98:28: error: only virtual member functions can be marked &#39;override&#39;
+   98 |     GBool useShadedFills() override
+      |                            ^~~~~~~~
+fuzz_JBIG2.cc:103:30: error: only virtual member functions can be marked &#39;override&#39;
+  103 |     GBool useFillColorStop() override
+      |                              ^~~~~~~~
+&lt;/error&gt;
+
+
+Below are instructions to assist you in fixing the error.
+&lt;instruction&gt;
+IMPORTANT: ALWAYS INCLUDE STANDARD LIBRARIES BEFORE PROJECT-SPECIFIC (xpdf) LIBRARIES. This order prevents errors like &#34;unknown type name&#34; for basic types. Additionally, include project-specific libraries that contain declarations before those thatuse these declared symbols.
+&lt;/instruction&gt;
+
+Fix code:
+1. Consider possible solutions for the issues listed above.
+2. Choose a solution that can maximize fuzzing result, which is utilizing the function under test and feeding it not null input.
+3. Apply the solutions to the original code.
+It&#39;s important to show the complete code, not only the fixed line.
+&lt;solution&gt;
+</pre>
+
+
+
+<h3>Code #1</h3>
+
+<pre>
+The solution to the problem is to move the declaration of the class `StreamYesOutputs` to the top of the file, before it is used in the function `LLVMFuzzerTestOneInput`. Also, the `override` keyword should only be used on virtual member functions, so we need to ensure that the methods we are overriding are virtual in the base class.
+
+Here is the corrected code:
+
+```cpp
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+#include &lt;aconf.h&gt;
+#include &lt;png.h&gt;
+#include &lt;stddef.h&gt;
+#include &lt;stdint.h&gt;
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;string.h&gt;
+#include &lt;iostream&gt;
+#include &lt;vector&gt;
+
+#include &#34;GString.h&#34;
+#include &#34;GlobalParams.h&#34;
+#include &#34;JBIG2Stream.h&#34;
+#include &#34;Object.h&#34;
+#include &#34;OutputDev.h&#34;
+#include &#34;PDFDoc.h&#34;
+#include &#34;Splash.h&#34;
+#include &#34;SplashBitmap.h&#34;
+#include &#34;SplashOutputDev.h&#34;
+#include &#34;Stream.h&#34;
+#include &#34;config.h&#34;
+#include &#34;gfile.h&#34;
+#include &#34;gmem.h&#34;
+#include &#34;gmempp.h&#34;
+#include &#34;parseargs.h&#34;
+
+class StreamYesOutputs : public SplashOutputDev {
+public:
+    StreamYesOutputs(SplashColorMode colorMode, int colorTypeA, GBool bitmapTopDown, SplashColor color)
+        : SplashOutputDev(colorMode, colorTypeA, bitmapTopDown, color)
+    {
+    }
+
+    GBool useTilingPatternFill() override
+    {
+        return gTrue;
+    }
+
+    GBool useShadedFills() override
+    {
+        return gTrue;
+    }
+
+    GBool useFillColorStop() override
+    {
+        return gTrue;
+    }
+};
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+    FuzzedDataProvider fdp(data, size);
+
+    double hDPI = fdp.ConsumeFloatingPoint&lt;double&gt;();
+    double vDPI = fdp.ConsumeFloatingPoint&lt;double&gt;();
+    int rotate = fdp.ConsumeIntegral&lt;int&gt;();
+    GBool useMediaBox = fdp.ConsumeBool();
+    GBool crop = fdp.ConsumeBool();
+    GBool printing = fdp.ConsumeBool();
+    int sliceX = fdp.ConsumeIntegral&lt;int&gt;();
+    int sliceY = fdp.ConsumeIntegral&lt;int&gt;();
+    int sliceW = fdp.ConsumeIntegral&lt;int&gt;();
+    int sliceH = fdp.ConsumeIntegral&lt;int&gt;();
+    void *abortCheckCbkData = NULL;  // The value for this is not known, so currently assigning NULL
+
+    std::vector&lt;char&gt; payload = fdp.ConsumeRemainingBytes&lt;char&gt;();
+
+    Object xpdf_obj;
+    xpdf_obj.initNull();
+    BaseStream *stream = new MemStream(payload.data(), 0, payload.size(), &amp;xpdf_obj);
+
+    globalParams = new GlobalParams(NULL);
+    globalParams-&gt;setErrQuiet(1);
+    globalParams-&gt;setupBaseFonts(NULL);
+    char yes[] = &#34;yes&#34;;
+    globalParams-&gt;setEnableFreeType(yes);
+    globalParams-&gt;setErrQuiet(1);
+
+    PDFDoc *doc = NULL;
+    try {
+        doc = new PDFDoc(stream);
+        if (!doc-&gt;isOk())
+        {
+            delete doc;
+            delete globalParams;
+            return 0;
+        }
+
+        SplashColor paperColor = {255, 255, 255};
+        StreamYesOutputs splashOutputDev(splashModeRGB8, 3, gFalse, paperColor);
+
+        for (int pageNum = 1; pageNum &lt;= doc-&gt;getNumPages(); pageNum++) {
+            doc-&gt;displayPageSlice(&amp;splashOutputDev, pageNum, hDPI, vDPI, rotate, useMediaBox, crop, printing,
+                                  sliceX, sliceY, sliceW, sliceH, nullptr, abortCheckCbkData);
+        }
+    } catch (const std::exception &amp;e) {
+        std::cerr &lt;&lt; e.what();
+    }
+
+    delete doc;
+    delete globalParams;
+    return 0;
+}
+```
+</pre>
+
+
+<h3>Fixer prompt #2</h3>
+<pre>
+
+Given the following C++ fuzz harness and its build error message, fix the code to make it build for fuzzing.
+
+If there is undeclared identifier or unknown type name error, fix it by finding and including the related libraries.
+
+MUST RETURN THE FULL CODE, INCLUDING UNCHANGED PARTS.
+
+Below is the code needs to be built:
+&lt;code&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+#include &lt;aconf.h&gt;
+#include &lt;png.h&gt;
+#include &lt;stddef.h&gt;
+#include &lt;stdint.h&gt;
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;string.h&gt;
+#include &lt;iostream&gt;
+#include &lt;vector&gt;
+
+#include &#34;GString.h&#34;
+#include &#34;GlobalParams.h&#34;
+#include &#34;JBIG2Stream.h&#34;
+#include &#34;Object.h&#34;
+#include &#34;OutputDev.h&#34;
+#include &#34;PDFDoc.h&#34;
+#include &#34;Splash.h&#34;
+#include &#34;SplashBitmap.h&#34;
+#include &#34;SplashOutputDev.h&#34;
+#include &#34;Stream.h&#34;
+#include &#34;config.h&#34;
+#include &#34;gfile.h&#34;
+#include &#34;gmem.h&#34;
+#include &#34;gmempp.h&#34;
+#include &#34;parseargs.h&#34;
+
+class StreamYesOutputs : public SplashOutputDev {
+public:
+    StreamYesOutputs(SplashColorMode colorMode, int colorTypeA, GBool bitmapTopDown, SplashColor color)
+        : SplashOutputDev(colorMode, colorTypeA, bitmapTopDown, color)
+    {
+    }
+
+    GBool useTilingPatternFill() override
+    {
+        return gTrue;
+    }
+
+    GBool useShadedFills() override
+    {
+        return gTrue;
+    }
+
+    GBool useFillColorStop() override
+    {
+        return gTrue;
+    }
+};
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+    FuzzedDataProvider fdp(data, size);
+
+    double hDPI = fdp.ConsumeFloatingPoint&lt;double&gt;();
+    double vDPI = fdp.ConsumeFloatingPoint&lt;double&gt;();
+    int rotate = fdp.ConsumeIntegral&lt;int&gt;();
+    GBool useMediaBox = fdp.ConsumeBool();
+    GBool crop = fdp.ConsumeBool();
+    GBool printing = fdp.ConsumeBool();
+    int sliceX = fdp.ConsumeIntegral&lt;int&gt;();
+    int sliceY = fdp.ConsumeIntegral&lt;int&gt;();
+    int sliceW = fdp.ConsumeIntegral&lt;int&gt;();
+    int sliceH = fdp.ConsumeIntegral&lt;int&gt;();
+    void *abortCheckCbkData = NULL;  // The value for this is not known, so currently assigning NULL
+
+    std::vector&lt;char&gt; payload = fdp.ConsumeRemainingBytes&lt;char&gt;();
+
+    Object xpdf_obj;
+    xpdf_obj.initNull();
+    BaseStream *stream = new MemStream(payload.data(), 0, payload.size(), &amp;xpdf_obj);
+
+    globalParams = new GlobalParams(NULL);
+    globalParams-&gt;setErrQuiet(1);
+    globalParams-&gt;setupBaseFonts(NULL);
+    char yes[] = &#34;yes&#34;;
+    globalParams-&gt;setEnableFreeType(yes);
+    globalParams-&gt;setErrQuiet(1);
+
+    PDFDoc *doc = NULL;
+    try {
+        doc = new PDFDoc(stream);
+        if (!doc-&gt;isOk())
+        {
+            delete doc;
+            delete globalParams;
+            return 0;
+        }
+
+        SplashColor paperColor = {255, 255, 255};
+        StreamYesOutputs splashOutputDev(splashModeRGB8, 3, gFalse, paperColor);
+
+        for (int pageNum = 1; pageNum &lt;= doc-&gt;getNumPages(); pageNum++) {
+            doc-&gt;displayPageSlice(&amp;splashOutputDev, pageNum, hDPI, vDPI, rotate, useMediaBox, crop, printing,
+                                  sliceX, sliceY, sliceW, sliceH, nullptr, abortCheckCbkData);
+        }
+    } catch (const std::exception &amp;e) {
+        std::cerr &lt;&lt; e.what();
+    }
+
+    delete doc;
+    delete globalParams;
+    return 0;
+}
+&lt;/code&gt;
+
+Below is the error to fix:
+The code has the following build issues:
+&lt;error&gt;
+fuzz_JBIG2.cc:41:28: error: only virtual member functions can be marked &#39;override&#39;
+   41 |     GBool useShadedFills() override
+      |                            ^~~~~~~~
+fuzz_JBIG2.cc:46:30: error: only virtual member functions can be marked &#39;override&#39;
+   46 |     GBool useFillColorStop() override
+      |                              ^~~~~~~~
+&lt;/error&gt;
+
+
+
+
+Fix code:
+1. Consider possible solutions for the issues listed above.
+2. Choose a solution that can maximize fuzzing result, which is utilizing the function under test and feeding it not null input.
+3. Apply the solutions to the original code.
+It&#39;s important to show the complete code, not only the fixed line.
+&lt;solution&gt;
+</pre>
+
+
+
+<h3>Code #2</h3>
+
+<pre>
+The error message suggests that the functions `useShadedFills()` and `useFillColorStop()` are not virtual in the base class `SplashOutputDev`. If these functions are not declared as virtual in the base class, they cannot be overridden in the derived class. 
+
+To fix this issue, you need to ensure that these functions are declared as virtual in the base class. However, without access to the base class, we can&#39;t make this change here. 
+
+Alternatively, if these functions are not required to be overridden, you can remove the `override` keyword. 
+
+Here is the corrected code:
+
+&lt;code&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+#include &lt;aconf.h&gt;
+#include &lt;png.h&gt;
+#include &lt;stddef.h&gt;
+#include &lt;stdint.h&gt;
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;string.h&gt;
+#include &lt;iostream&gt;
+#include &lt;vector&gt;
+
+#include &#34;GString.h&#34;
+#include &#34;GlobalParams.h&#34;
+#include &#34;JBIG2Stream.h&#34;
+#include &#34;Object.h&#34;
+#include &#34;OutputDev.h&#34;
+#include &#34;PDFDoc.h&#34;
+#include &#34;Splash.h&#34;
+#include &#34;SplashBitmap.h&#34;
+#include &#34;SplashOutputDev.h&#34;
+#include &#34;Stream.h&#34;
+#include &#34;config.h&#34;
+#include &#34;gfile.h&#34;
+#include &#34;gmem.h&#34;
+#include &#34;gmempp.h&#34;
+#include &#34;parseargs.h&#34;
+
+class StreamYesOutputs : public SplashOutputDev {
+public:
+    StreamYesOutputs(SplashColorMode colorMode, int colorTypeA, GBool bitmapTopDown, SplashColor color)
+        : SplashOutputDev(colorMode, colorTypeA, bitmapTopDown, color)
+    {
+    }
+
+    GBool useTilingPatternFill() override
+    {
+        return gTrue;
+    }
+
+    GBool useShadedFills()
+    {
+        return gTrue;
+    }
+
+    GBool useFillColorStop()
+    {
+        return gTrue;
+    }
+};
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+    FuzzedDataProvider fdp(data, size);
+
+    double hDPI = fdp.ConsumeFloatingPoint&lt;double&gt;();
+    double vDPI = fdp.ConsumeFloatingPoint&lt;double&gt;();
+    int rotate = fdp.ConsumeIntegral&lt;int&gt;();
+    GBool useMediaBox = fdp.ConsumeBool();
+    GBool crop = fdp.ConsumeBool();
+    GBool printing = fdp.ConsumeBool();
+    int sliceX = fdp.ConsumeIntegral&lt;int&gt;();
+    int sliceY = fdp.ConsumeIntegral&lt;int&gt;();
+    int sliceW = fdp.ConsumeIntegral&lt;int&gt;();
+    int sliceH = fdp.ConsumeIntegral&lt;int&gt;();
+    void *abortCheckCbkData = NULL;  // The value for this is not known, so currently assigning NULL
+
+    std::vector&lt;char&gt; payload = fdp.ConsumeRemainingBytes&lt;char&gt;();
+
+    Object xpdf_obj;
+    xpdf_obj.initNull();
+    BaseStream *stream = new MemStream(payload.data(), 0, payload.size(), &amp;xpdf_obj);
+
+    globalParams = new GlobalParams(NULL);
+    globalParams-&gt;setErrQuiet(1);
+    globalParams-&gt;setupBaseFonts(NULL);
+    char yes[] = &#34;yes&#34;;
+    globalParams-&gt;setEnableFreeType(yes);
+    globalParams-&gt;setErrQuiet(1);
+
+    PDFDoc *doc = NULL;
+    try {
+        doc = new PDFDoc(stream);
+        if (!doc-&gt;isOk())
+        {
+            delete doc;
+            delete globalParams;
+            return 0;
+        }
+
+        SplashColor paperColor = {255, 255, 255};
+        StreamYesOutputs splashOutputDev(splashModeRGB8, 3, gFalse, paperColor);
+
+        for (int pageNum = 1; pageNum &lt;= doc-&gt;getNumPages(); pageNum++) {
+            doc-&gt;displayPageSlice(&amp;splashOutputDev, pageNum, hDPI, vDPI, rotate, useMediaBox, crop, printing,
+                                  sliceX, sliceY, sliceW, sliceH, nullptr, abortCheckCbkData);
+        }
+    } catch (const std::exception &amp;e) {
+        std::cerr &lt;&lt; e.what();
+    }
+
+    delete doc;
+    delete globalParams;
+    return 0;
+}
+&lt;/code&gt;
+</pre>
+
+
+<h2>Logs</h2>
+<pre>
+Fixing /home/chyun/oss-fuzz-gen/results6/output-xpdf-_zn6pdfdoc16displaypagesliceep9outputdeviddiiiiiiiipfipves2_/fixed_targets/01.cc with gpt-4, attempt 1.
+Fixing /home/chyun/oss-fuzz-gen/results6/output-xpdf-_zn6pdfdoc16displaypagesliceep9outputdeviddiiiiiiiipfipves2_/fixed_targets/01.cc with gpt-4, attempt 2.
+Successfully built /home/chyun/oss-fuzz-gen/results6/output-xpdf-_zn6pdfdoc16displaypagesliceep9outputdeviddiiiiiiiipfipves2_/fixed_targets/01.cc with gpt-4 in 2 iterations of fixing.
+Triaging the crash related to /home/chyun/oss-fuzz-gen/results6/output-xpdf-_zn6pdfdoc16displaypagesliceep9outputdeviddiiiiiiiipfipves2_/fixed_targets/01.cc with gpt-4.
+Warning: no crash info in xpdf-zn6pdfdoc16displaypagesliceep9outputdeviddiiiiiiiipfipves2-01.
+Result for xpdf-zn6pdfdoc16displaypagesliceep9outputdeviddiiiiiiiipfipves2-01: crashes=False, coverage=0.006911924798258195 (400/57871), coverage diff=8.017253128733033e-06 (1/124731)
+
+</pre>
+
+<h2>Run logs</h2>
+<pre>
+INFO:__main__:Running: docker run --privileged --shm-size=2g --platform linux/amd64 --rm -e FUZZING_ENGINE=libfuzzer -e SANITIZER=address -e RUN_FUZZER_MODE=interactive -e HELPER=True -v /home/chyun/oss-fuzz-gen/results6/output-xpdf-_zn6pdfdoc16displaypagesliceep9outputdeviddiiiiiiiipfipves2_/corpora/01.cc:/tmp/fuzz_JBIG2_corpus -v /tmp/tmp0jk8v9dl/build/out/xpdf-zn6pdfdoc16displaypagesliceep9outputdeviddiiiiiiiipfipves2-01:/out -t gcr.io/oss-fuzz-base/base-runner run_fuzzer fuzz_JBIG2 -print_final_stats=1 -max_total_time=30 -len_control=0 -timeout=30.
+vm.mmap_rnd_bits = 28
+rm: cannot remove &#39;/tmp/fuzz_JBIG2_corpus&#39;: Device or resource busy
+/out/fuzz_JBIG2 -rss_limit_mb=2560 -timeout=25 -print_final_stats=1 -max_total_time=30 -len_control=0 -timeout=30 /tmp/fuzz_JBIG2_corpus -detect_leaks=0 &lt; /dev/null
+INFO: Running with entropic power schedule (0xFF, 100).
+INFO: Seed: 2065113632
+INFO: Loaded 1 modules   (57871 inline 8-bit counters): 57871 [0x55cfc244cb98, 0x55cfc245ada7), 
+INFO: Loaded 1 PC tables (57871 PCs): 57871 [0x55cfc245ada8,0x55cfc253ce98), 
+INFO:        0 files found in /tmp/fuzz_JBIG2_corpus
+INFO: -max_len is not provided; libFuzzer will not generate inputs larger than 4096 bytes
+INFO: A corpus is not provided, starting from an empty corpus
+#2	INITED cov: 321 ft: 322 corp: 1/1b exec/s: 0 rss: 41Mb
+#3	NEW    cov: 322 ft: 324 corp: 2/3b lim: 4096 exec/s: 0 rss: 43Mb L: 2/2 MS: 1 CopyPart-
+#5	NEW    cov: 322 ft: 326 corp: 3/7b lim: 4096 exec/s: 0 rss: 45Mb L: 4/4 MS: 2 ChangeBinInt-CMP- DE: &#34;..&#34;-
+#6	NEW    cov: 326 ft: 333 corp: 4/19b lim: 4096 exec/s: 0 rss: 46Mb L: 12/12 MS: 1 CMP- DE: &#34;\000\000\000\000\000\000\000\000&#34;-
+#10	NEW    cov: 326 ft: 335 corp: 5/22b lim: 4096 exec/s: 0 rss: 50Mb L: 3/12 MS: 4 CopyPart-ChangeBit-EraseBytes-PersAutoDict- DE: &#34;..&#34;-
+#15	NEW    cov: 327 ft: 336 corp: 6/32b lim: 4096 exec/s: 0 rss: 55Mb L: 10/12 MS: 5 CrossOver-ShuffleBytes-ChangeBinInt-ChangeByte-InsertRepeatedBytes-
+#19	NEW    cov: 328 ft: 337 corp: 7/33b lim: 4096 exec/s: 0 rss: 56Mb L: 1/12 MS: 4 ChangeBit-CopyPart-ChangeByte-ChangeByte-
+#23	NEW    cov: 328 ft: 338 corp: 8/39b lim: 4096 exec/s: 0 rss: 56Mb L: 6/12 MS: 4 ChangeBinInt-InsertByte-ChangeBit-CopyPart-
+#27	NEW    cov: 328 ft: 340 corp: 9/52b lim: 4096 exec/s: 0 rss: 56Mb L: 13/13 MS: 4 CMP-ChangeBinInt-CrossOver-CrossOver- DE: &#34;tilde&#34;-
+	NEW_FUNC[1/3]: 0x55cfc1cb3470 in std::__1::vector&lt;char, std::__1::allocator&lt;char&gt;&gt;::shrink_to_fit() /usr/local/bin/../include/c++/v1/vector:1590
+	NEW_FUNC[2/3]: 0x55cfc1cb3900 in std::__1::vector&lt;char, std::__1::allocator&lt;char&gt;&gt;::__construct_at_end(unsigned long) /usr/local/bin/../include/c++/v1/vector:1113
+#34	NEW    cov: 367 ft: 386 corp: 10/99b lim: 4096 exec/s: 0 rss: 56Mb L: 47/47 MS: 2 PersAutoDict-InsertRepeatedBytes- DE: &#34;..&#34;-
+#35	NEW    cov: 370 ft: 398 corp: 11/202b lim: 4096 exec/s: 0 rss: 56Mb L: 103/103 MS: 1 InsertRepeatedBytes-
+#42	NEW    cov: 370 ft: 400 corp: 12/213b lim: 4096 exec/s: 0 rss: 56Mb L: 11/103 MS: 2 EraseBytes-CMP- DE: &#34;\377\000\000\000\000\000\000\000&#34;-
+#45	NEW    cov: 372 ft: 415 corp: 13/273b lim: 4096 exec/s: 0 rss: 56Mb L: 60/103 MS: 3 InsertByte-ChangeBit-InsertRepeatedBytes-
+#48	NEW    cov: 372 ft: 417 corp: 14/303b lim: 4096 exec/s: 0 rss: 56Mb L: 30/103 MS: 3 ChangeByte-CMP-EraseBytes- DE: &#34;zerosuperio&#34;-
+#55	NEW    cov: 372 ft: 419 corp: 15/334b lim: 4096 exec/s: 0 rss: 56Mb L: 31/103 MS: 2 ChangeBit-InsertByte-
+#59	NEW    cov: 372 ft: 428 corp: 16/523b lim: 4096 exec/s: 0 rss: 57Mb L: 189/189 MS: 4 ChangeBinInt-CopyPart-EraseBytes-InsertRepeatedBytes-
+#60	NEW    cov: 372 ft: 431 corp: 17/600b lim: 4096 exec/s: 0 rss: 57Mb L: 77/189 MS: 1 InsertRepeatedBytes-
+#63	NEW    cov: 372 ft: 432 corp: 18/616b lim: 4096 exec/s: 0 rss: 57Mb L: 16/189 MS: 3 CMP-ChangeBinInt-CopyPart- DE: &#34;\000\000\000\000\000\000\001\000&#34;-
+#79	NEW    cov: 372 ft: 433 corp: 19/644b lim: 4096 exec/s: 0 rss: 57Mb L: 28/189 MS: 1 CrossOver-
+#92	REDUCE cov: 372 ft: 433 corp: 19/643b lim: 4096 exec/s: 0 rss: 57Mb L: 5/189 MS: 3 EraseBytes-InsertByte-InsertByte-
+#94	NEW    cov: 372 ft: 435 corp: 20/746b lim: 4096 exec/s: 0 rss: 57Mb L: 103/189 MS: 2 ChangeByte-PersAutoDict- DE: &#34;\000\000\000\000\000\000\001\000&#34;-
+#96	NEW    cov: 372 ft: 439 corp: 21/817b lim: 4096 exec/s: 0 rss: 57Mb L: 71/189 MS: 2 ShuffleBytes-InsertRepeatedBytes-
+#103	NEW    cov: 372 ft: 441 corp: 22/962b lim: 4096 exec/s: 0 rss: 57Mb L: 145/189 MS: 2 PersAutoDict-InsertRepeatedBytes- DE: &#34;\000\000\000\000\000\000\001\000&#34;-
+#106	NEW    cov: 372 ft: 443 corp: 23/1038b lim: 4096 exec/s: 106 rss: 57Mb L: 76/189 MS: 3 ChangeBit-PersAutoDict-ChangeBinInt- DE: &#34;tilde&#34;-
+#116	NEW    cov: 372 ft: 452 corp: 24/1093b lim: 4096 exec/s: 116 rss: 57Mb L: 55/189 MS: 5 CopyPart-ChangeBinInt-ChangeByte-ShuffleBytes-CMP- DE: &#34;\016\000\000\000\000\000\000\000&#34;-
+#128	NEW    cov: 372 ft: 453 corp: 25/1125b lim: 4096 exec/s: 128 rss: 57Mb L: 32/189 MS: 2 ChangeBinInt-InsertByte-
+#147	NEW    cov: 373 ft: 456 corp: 26/1508b lim: 4096 exec/s: 147 rss: 57Mb L: 383/383 MS: 4 InsertRepeatedBytes-InsertRepeatedBytes-ChangeBinInt-CrossOver-
+#153	NEW    cov: 373 ft: 457 corp: 27/1624b lim: 4096 exec/s: 153 rss: 57Mb L: 116/383 MS: 1 CopyPart-
+#156	NEW    cov: 373 ft: 463 corp: 28/1668b lim: 4096 exec/s: 156 rss: 57Mb L: 44/383 MS: 3 InsertByte-ChangeByte-CopyPart-
+#172	NEW    cov: 373 ft: 465 corp: 29/1707b lim: 4096 exec/s: 172 rss: 57Mb L: 39/383 MS: 1 CMP- DE: &#34;\377\000\000\000\000\000\000\000&#34;-
+#174	NEW    cov: 373 ft: 467 corp: 30/1775b lim: 4096 exec/s: 174 rss: 57Mb L: 68/383 MS: 2 CopyPart-CrossOver-
+#176	NEW    cov: 373 ft: 469 corp: 31/1820b lim: 4096 exec/s: 176 rss: 57Mb L: 45/383 MS: 2 ShuffleBytes-CrossOver-
+#182	NEW    cov: 373 ft: 471 corp: 32/1876b lim: 4096 exec/s: 182 rss: 57Mb L: 56/383 MS: 1 InsertRepeatedBytes-
+#188	NEW    cov: 373 ft: 473 corp: 33/1914b lim: 4096 exec/s: 188 rss: 57Mb L: 38/383 MS: 1 PersAutoDict- DE: &#34;\000\000\000\000\000\000\000\000&#34;-
+#202	NEW    cov: 373 ft: 474 corp: 34/1935b lim: 4096 exec/s: 202 rss: 57Mb L: 21/383 MS: 4 ChangeBinInt-ChangeByte-EraseBytes-CrossOver-
+#247	NEW    cov: 373 ft: 476 corp: 35/1969b lim: 4096 exec/s: 247 rss: 57Mb L: 34/383 MS: 5 CMP-EraseBytes-CopyPart-ChangeByte-InsertByte- DE: &#34;zdota&#34;-
+#252	NEW    cov: 373 ft: 478 corp: 36/2049b lim: 4096 exec/s: 252 rss: 57Mb L: 80/383 MS: 5 PersAutoDict-PersAutoDict-InsertRepeatedBytes-CMP-CopyPart- DE: &#34;\016\000\000\000\000\000\000\000&#34;-&#34;\000\000\000\000\000\000\001\000&#34;-&#34;\000\000\000\000\000\000\000\026&#34;-
+#305	NEW    cov: 373 ft: 480 corp: 37/2095b lim: 4096 exec/s: 152 rss: 57Mb L: 46/383 MS: 3 CopyPart-InsertRepeatedBytes-CopyPart-
+#321	NEW    cov: 373 ft: 482 corp: 38/2155b lim: 4096 exec/s: 160 rss: 57Mb L: 60/383 MS: 1 ChangeBinInt-
+#345	REDUCE cov: 373 ft: 482 corp: 38/2152b lim: 4096 exec/s: 172 rss: 57Mb L: 65/383 MS: 4 InsertByte-ChangeByte-InsertByte-EraseBytes-
+#348	NEW    cov: 373 ft: 484 corp: 39/2205b lim: 4096 exec/s: 174 rss: 57Mb L: 53/383 MS: 3 ChangeBinInt-ShuffleBytes-InsertRepeatedBytes-
+#352	NEW    cov: 373 ft: 485 corp: 40/2379b lim: 4096 exec/s: 176 rss: 57Mb L: 174/383 MS: 4 CopyPart-ChangeBit-CrossOver-CopyPart-
+#356	NEW    cov: 373 ft: 486 corp: 41/2817b lim: 4096 exec/s: 178 rss: 57Mb L: 438/438 MS: 4 ShuffleBytes-CrossOver-ChangeByte-InsertRepeatedBytes-
+#357	NEW    cov: 373 ft: 487 corp: 42/2857b lim: 4096 exec/s: 178 rss: 57Mb L: 40/438 MS: 1 PersAutoDict- DE: &#34;\016\000\000\000\000\000\000\000&#34;-
+	NEW_FUNC[1/1]: 0x55cfc1d24c80 in XRef::constructObjectEntry(char*, long, int*) /src/xpdf-4.05/xpdf/XRef.cc:1032
+#365	NEW    cov: 377 ft: 493 corp: 43/2948b lim: 4096 exec/s: 182 rss: 57Mb L: 91/438 MS: 3 PersAutoDict-CrossOver-ChangeByte- DE: &#34;zerosuperio&#34;-
+	NEW_FUNC[1/1]: 0x55cfc1d15000 in MemStream::getPos() /src/xpdf-4.05/xpdf/Stream.h:369
+#380	NEW    cov: 381 ft: 497 corp: 44/3089b lim: 4096 exec/s: 190 rss: 57Mb L: 141/438 MS: 5 ChangeBinInt-InsertRepeatedBytes-ChangeBit-CopyPart-CMP- DE: &#34;startxref&#34;-
+#381	NEW    cov: 381 ft: 498 corp: 45/3140b lim: 4096 exec/s: 190 rss: 57Mb L: 51/438 MS: 1 PersAutoDict- DE: &#34;zdota&#34;-
+#391	NEW    cov: 381 ft: 502 corp: 46/3182b lim: 4096 exec/s: 195 rss: 57Mb L: 42/438 MS: 5 InsertByte-ChangeByte-ShuffleBytes-EraseBytes-PersA
+...truncated...
+66 corp: 81/8594b lim: 4096 exec/s: 158 rss: 58Mb L: 90/632 MS: 2 InsertByte-EraseBytes-
+#2692	NEW    cov: 392 ft: 567 corp: 82/8958b lim: 4096 exec/s: 158 rss: 58Mb L: 364/632 MS: 1 CopyPart-
+#2694	REDUCE cov: 392 ft: 567 corp: 82/8946b lim: 4096 exec/s: 158 rss: 58Mb L: 352/632 MS: 2 ChangeByte-EraseBytes-
+#2755	REDUCE cov: 392 ft: 567 corp: 82/8944b lim: 4096 exec/s: 153 rss: 58Mb L: 78/632 MS: 1 EraseBytes-
+#2857	REDUCE cov: 392 ft: 567 corp: 82/8942b lim: 4096 exec/s: 158 rss: 58Mb L: 71/632 MS: 2 InsertByte-EraseBytes-
+#2862	NEW    cov: 392 ft: 568 corp: 83/9200b lim: 4096 exec/s: 159 rss: 58Mb L: 258/632 MS: 5 ChangeBit-CrossOver-CMP-PersAutoDict-CopyPart- DE: &#34;\377\377\377\003&#34;-&#34;rtxref&#34;-
+#2879	REDUCE cov: 392 ft: 568 corp: 83/9190b lim: 4096 exec/s: 159 rss: 58Mb L: 67/632 MS: 2 ChangeByte-EraseBytes-
+#3027	REDUCE cov: 392 ft: 568 corp: 83/9158b lim: 4096 exec/s: 159 rss: 58Mb L: 320/632 MS: 3 PersAutoDict-CMP-EraseBytes- DE: &#34;\020\000\000\000\000\000\000\000&#34;-&#34;\000\000\000s&#34;-
+#3028	REDUCE cov: 392 ft: 568 corp: 83/9133b lim: 4096 exec/s: 159 rss: 58Mb L: 64/632 MS: 1 EraseBytes-
+#3034	REDUCE cov: 392 ft: 568 corp: 83/9126b lim: 4096 exec/s: 159 rss: 58Mb L: 167/632 MS: 1 EraseBytes-
+#3052	REDUCE cov: 392 ft: 568 corp: 83/9121b lim: 4096 exec/s: 152 rss: 58Mb L: 54/632 MS: 3 InsertByte-ChangeBinInt-EraseBytes-
+#3079	REDUCE cov: 392 ft: 568 corp: 83/9099b lim: 4096 exec/s: 153 rss: 58Mb L: 236/632 MS: 2 InsertRepeatedBytes-EraseBytes-
+#3143	NEW    cov: 392 ft: 570 corp: 84/9406b lim: 4096 exec/s: 157 rss: 58Mb L: 307/632 MS: 4 ChangeASCIIInt-ShuffleBytes-ShuffleBytes-CopyPart-
+#3221	NEW    cov: 393 ft: 571 corp: 85/9497b lim: 4096 exec/s: 153 rss: 58Mb L: 91/632 MS: 3 ChangeBit-CopyPart-InsertRepeatedBytes-
+#3225	REDUCE cov: 393 ft: 572 corp: 86/9671b lim: 4096 exec/s: 153 rss: 58Mb L: 174/632 MS: 4 ChangeBit-CopyPart-CopyPart-InsertRepeatedBytes-
+#3243	REDUCE cov: 393 ft: 573 corp: 87/10159b lim: 4096 exec/s: 154 rss: 58Mb L: 488/632 MS: 3 InsertRepeatedBytes-ChangeBit-CopyPart-
+#3246	REDUCE cov: 393 ft: 573 corp: 87/10137b lim: 4096 exec/s: 154 rss: 58Mb L: 45/632 MS: 3 CrossOver-CMP-EraseBytes- DE: &#34;startxref&#34;-
+#3390	REDUCE cov: 393 ft: 573 corp: 87/10132b lim: 4096 exec/s: 154 rss: 58Mb L: 203/632 MS: 4 ChangeByte-ChangeASCIIInt-EraseBytes-ChangeBit-
+#3405	REDUCE cov: 393 ft: 573 corp: 87/10123b lim: 4096 exec/s: 154 rss: 58Mb L: 151/632 MS: 5 ChangeBit-ChangeASCIIInt-InsertByte-CrossOver-EraseBytes-
+#3411	REDUCE cov: 393 ft: 573 corp: 87/10093b lim: 4096 exec/s: 155 rss: 58Mb L: 130/632 MS: 1 EraseBytes-
+#3467	REDUCE cov: 393 ft: 573 corp: 87/10078b lim: 4096 exec/s: 157 rss: 58Mb L: 76/632 MS: 1 EraseBytes-
+#3479	REDUCE cov: 393 ft: 573 corp: 87/10010b lim: 4096 exec/s: 158 rss: 58Mb L: 420/632 MS: 2 ChangeBit-EraseBytes-
+#3507	REDUCE cov: 399 ft: 581 corp: 88/10119b lim: 4096 exec/s: 159 rss: 58Mb L: 109/632 MS: 3 EraseBytes-CMP-ChangeBit- DE: &#34;yinyang&#34;-
+#3509	REDUCE cov: 399 ft: 581 corp: 88/10112b lim: 4096 exec/s: 159 rss: 58Mb L: 84/632 MS: 2 InsertRepeatedBytes-EraseBytes-
+#3542	REDUCE cov: 399 ft: 581 corp: 88/10106b lim: 4096 exec/s: 154 rss: 58Mb L: 78/632 MS: 3 InsertRepeatedBytes-ChangeBinInt-EraseBytes-
+#3673	REDUCE cov: 399 ft: 581 corp: 88/10105b lim: 4096 exec/s: 159 rss: 58Mb L: 49/632 MS: 1 EraseBytes-
+#3712	NEW    cov: 399 ft: 582 corp: 89/10439b lim: 4096 exec/s: 154 rss: 58Mb L: 334/632 MS: 4 CrossOver-InsertRepeatedBytes-InsertRepeatedBytes-CopyPart-
+#3729	REDUCE cov: 399 ft: 582 corp: 89/10429b lim: 4096 exec/s: 155 rss: 58Mb L: 109/632 MS: 2 ChangeASCIIInt-EraseBytes-
+#3762	REDUCE cov: 399 ft: 582 corp: 89/10418b lim: 4096 exec/s: 156 rss: 58Mb L: 65/632 MS: 3 ChangeByte-CopyPart-EraseBytes-
+#3863	REDUCE cov: 399 ft: 582 corp: 89/10379b lim: 4096 exec/s: 154 rss: 58Mb L: 295/632 MS: 1 EraseBytes-
+#3924	REDUCE cov: 399 ft: 582 corp: 89/10347b lim: 4096 exec/s: 156 rss: 58Mb L: 204/632 MS: 1 EraseBytes-
+#4096	pulse  cov: 399 ft: 582 corp: 89/10347b lim: 4096 exec/s: 157 rss: 58Mb
+#4119	REDUCE cov: 399 ft: 582 corp: 89/10323b lim: 4096 exec/s: 158 rss: 58Mb L: 330/632 MS: 5 ChangeBit-PersAutoDict-ShuffleBytes-ChangeBit-EraseBytes- DE: &#34;rtxref&#34;-
+#4132	REDUCE cov: 400 ft: 583 corp: 90/10672b lim: 4096 exec/s: 158 rss: 58Mb L: 349/632 MS: 3 ChangeASCIIInt-ChangeByte-CrossOver-
+#4136	REDUCE cov: 400 ft: 583 corp: 90/10670b lim: 4096 exec/s: 159 rss: 58Mb L: 90/632 MS: 4 PersAutoDict-InsertByte-ShuffleBytes-EraseBytes- DE: &#34;\004\000\000\000\000\000\000\000&#34;-
+#4178	REDUCE cov: 400 ft: 583 corp: 90/10665b lim: 4096 exec/s: 154 rss: 58Mb L: 169/632 MS: 2 InsertByte-EraseBytes-
+#4294	REDUCE cov: 400 ft: 583 corp: 90/10487b lim: 4096 exec/s: 159 rss: 58Mb L: 454/454 MS: 1 EraseBytes-
+#4328	NEW    cov: 400 ft: 587 corp: 91/11024b lim: 4096 exec/s: 160 rss: 58Mb L: 537/537 MS: 4 CrossOver-ChangeASCIIInt-PersAutoDict-CopyPart- DE: &#34;\001\000\000\000\000\000\000\000&#34;-
+#4362	REDUCE cov: 400 ft: 587 corp: 91/10996b lim: 4096 exec/s: 155 rss: 58Mb L: 139/537 MS: 4 ChangeBit-CopyPart-ChangeByte-CrossOver-
+#4415	NEW    cov: 400 ft: 588 corp: 92/11266b lim: 4096 exec/s: 157 rss: 58Mb L: 270/537 MS: 3 ChangeByte-ShuffleBytes-CopyPart-
+#4561	REDUCE cov: 400 ft: 588 corp: 92/11255b lim: 4096 exec/s: 157 rss: 58Mb L: 73/537 MS: 1 EraseBytes-
+#4563	REDUCE cov: 400 ft: 588 corp: 92/11250b lim: 4096 exec/s: 157 rss: 58Mb L: 63/537 MS: 2 CMP-EraseBytes- DE: &#34;\012\000\000\000\000\000\000\000&#34;-
+#4572	REDUCE cov: 400 ft: 588 corp: 92/11242b lim: 4096 exec/s: 157 rss: 58Mb L: 65/537 MS: 4 CrossOver-CrossOver-ChangeBinInt-EraseBytes-
+#4581	REDUCE cov: 400 ft: 588 corp: 92/11162b lim: 4096 exec/s: 157 rss: 58Mb L: 269/537 MS: 4 ChangeBinInt-CopyPart-ChangeByte-EraseBytes-
+#4627	REDUCE cov: 400 ft: 588 corp: 92/11144b lim: 4096 exec/s: 159 rss: 58Mb L: 277/537 MS: 1 EraseBytes-
+#4646	NEW    cov: 400 ft: 589 corp: 93/11841b lim: 4096 exec/s: 160 rss: 58Mb L: 697/697 MS: 4 ShuffleBytes-InsertRepeatedBytes-PersAutoDict-CopyPart- DE: &#34;..&#34;-
+#4668	REDUCE cov: 400 ft: 589 corp: 93/11812b lim: 4096 exec/s: 160 rss: 58Mb L: 291/697 MS: 2 EraseBytes-ShuffleBytes-
+#4694	NEW    cov: 400 ft: 592 corp: 94/12509b lim: 4096 exec/s: 161 rss: 58Mb L: 697/697 MS: 1 PersAutoDict- DE: &#34;\000\000\000\000\000\000\001\000&#34;-
+#4705	REDUCE cov: 400 ft: 592 corp: 94/12466b lim: 4096 exec/s: 162 rss: 58Mb L: 287/697 MS: 1 EraseBytes-
+#4708	REDUCE cov: 400 ft: 592 corp: 94/12410b lim: 4096 exec/s: 162 rss: 58Mb L: 68/697 MS: 3 ChangeByte-InsertByte-EraseBytes-
+#4722	NEW    cov: 400 ft: 594 corp: 95/13308b lim: 4096 exec/s: 157 rss: 58Mb L: 898/898 MS: 4 ShuffleBytes-CrossOver-PersAutoDict-CrossOver- DE: &#34;rtxref&#34;-
+#4733	REDUCE cov: 400 ft: 594 corp: 95/13196b lim: 4096 exec/s: 157 rss: 58Mb L: 585/898 MS: 1 EraseBytes-
+#4818	NEW    cov: 400 ft: 596 corp: 96/13323b lim: 4096 exec/s: 160 rss: 58Mb L: 127/898 MS: 5 EraseBytes-ChangeByte-ChangeBit-CMP-EraseBytes- DE: &#34;@\000&#34;-
+#4856	REDUCE cov: 400 ft: 596 corp: 96/13311b lim: 4096 exec/s: 161 rss: 58Mb L: 197/898 MS: 3 ChangeBinInt-ChangeBinInt-EraseBytes-
+#4896	DONE   cov: 400 ft: 596 corp: 96/13311b lim: 4096 exec/s: 157 rss: 58Mb
+###### Recommended dictionary. ######
+&#34;..&#34; # Uses: 19
+&#34;\000\000\000\000\000\000\000\000&#34; # Uses: 24
+&#34;tilde&#34; # Uses: 25
+&#34;\377\000\000\000\000\000\000\000&#34; # Uses: 23
+&#34;zerosuperio&#34; # Uses: 31
+&#34;\000\000\000\000\000\000\001\000&#34; # Uses: 27
+&#34;\016\000\000\000\000\000\000\000&#34; # Uses: 21
+&#34;zdota&#34; # Uses: 26
+&#34;\000\000\000\000\000\000\000\026&#34; # Uses: 24
+&#34;startxref&#34; # Uses: 23
+&#34;\001\000\000\000\000\000\000\000&#34; # Uses: 21
+&#34;%PDF-&#34; # Uses: 18
+&#34;\020\000\000\000\000\000\000\000&#34; # Uses: 16
+&#34;afii10089&#34; # Uses: 17
+&#34;rtxref&#34; # Uses: 24
+&#34;\004\000\000\000\000\000\000\000&#34; # Uses: 13
+&#34;\015\000\000\000\000\000\000\000&#34; # Uses: 8
+&#34;zacute&#34; # Uses: 14
+&#34;\377\377\377\003&#34; # Uses: 11
+&#34;\000\000\000s&#34; # Uses: 9
+&#34;yinyang&#34; # Uses: 4
+&#34;\012\000\000\000\000\000\000\000&#34; # Uses: 3
+&#34;@\000&#34; # Uses: 1
+###### End of recommended dictionary. ######
+Done 4896 runs in 31 second(s)
+stat::number_of_executed_units: 4896
+stat::average_exec_per_sec:     157
+stat::new_units_added:          157
+stat::slowest_unit_time_sec:    0
+stat::peak_rss_mb:              58
+
+</pre>
+
+
+</body>

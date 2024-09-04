@@ -1,0 +1,351 @@
+<!doctype html>
+
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Experiment results</title>
+<style>
+* {
+    box-sizing: border-box;
+}
+
+html {
+    line-height: 1.15;
+}
+
+body {
+    font-family: sans-serif;
+    font-size: 16px;
+}
+
+table {
+    border-collapse: collapse;
+    border-spacing: 0;
+}
+
+td, th {
+    border-right: 1px #dedede solid;
+    border-bottom: 1px #dedede solid;
+    padding: 5px;
+    text-align: left;
+}
+td:first-child, th:first-child {
+    border-left: 1px #dedede solid;
+}
+th {
+    border-top: 1px #dedede solid;
+}
+
+tbody tr:nth-child(odd) {
+    background-color: #f4f5ff;
+}
+</style>
+<body>
+    LLM: 
+    
+<h1>output-xpdf-_zn6pdfdoc12displaypagesep9outputdeviiddiiiipfipves2_ / 01</h1>
+Bug: True
+<br>
+Crash reason: NO_SEMANTIC_ERR
+<br>
+<br>
+
+<h2>Triage</h2>
+<pre>
+Crash is caused by bug in fuzz driver
+
+The crash report indicates memory leaks detected by LeakSanitizer, with the allocations originating from the fuzz driver code at lines 41 and 52. The driver code is not properly managing memory, which leads to the leaks. Specifically, it creates new objects using &#34;new&#34; keyword but does not delete them, leading to the memory leaks. The objects created at lines 41 and 52 are not deleted after their use, causing the memory leaks.
+</pre>
+<br>
+
+
+
+
+
+<h3>Final code</h3>
+
+<pre>
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+#include &lt;aconf.h&gt;
+#include &lt;png.h&gt;
+#include &lt;stddef.h&gt;
+#include &lt;stdint.h&gt;
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;string.h&gt;
+#include &lt;vector&gt;
+
+#include &#34;GString.h&#34;
+#include &#34;GlobalParams.h&#34;
+#include &#34;JBIG2Stream.h&#34;
+#include &#34;Object.h&#34;
+#include &#34;PDFDoc.h&#34;
+#include &#34;Splash.h&#34;
+#include &#34;SplashBitmap.h&#34;
+#include &#34;SplashOutputDev.h&#34;
+#include &#34;Stream.h&#34;
+#include &#34;config.h&#34;
+#include &#34;gfile.h&#34;
+#include &#34;gmem.h&#34;
+#include &#34;gmempp.h&#34;
+#include &#34;parseargs.h&#34;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  FuzzedDataProvider fdp(data, size);
+  int first_page = fdp.ConsumeIntegral&lt;int&gt;();
+  int last_page = fdp.ConsumeIntegral&lt;int&gt;();
+  double hDPI = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  double vDPI = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  int rotate = fdp.ConsumeIntegral&lt;int&gt;();
+  GBool useMediaBox = fdp.ConsumeBool();
+  GBool crop = fdp.ConsumeBool();
+  GBool printing = fdp.ConsumeBool();
+  std::vector&lt;char&gt; payload = fdp.ConsumeRemainingBytes&lt;char&gt;();
+
+  Object xpdf_obj;
+  xpdf_obj.initNull();
+  BaseStream *stream = new MemStream(payload.data(), 0, payload.size(), &amp;xpdf_obj);
+
+  globalParams = new GlobalParams(NULL);
+  globalParams-&gt;setErrQuiet(1);
+  globalParams-&gt;setupBaseFonts(NULL);
+  char yes[] = &#34;yes&#34;;
+  globalParams-&gt;setEnableFreeType(yes); // Yes, it&#39;s a string and not a bool.
+  globalParams-&gt;setErrQuiet(1);
+
+  PDFDoc *doc = NULL;
+  try {
+    doc = new PDFDoc(stream);
+    if (doc-&gt;isOk()) {
+      SplashColor paperColor = {0xff, 0xff, 0xff};
+      SplashOutputDev *splashOut = new SplashOutputDev(splashModeRGB8, 1, gFalse, paperColor);
+      splashOut-&gt;startDoc(doc-&gt;getXRef());
+
+      doc-&gt;displayPages(splashOut, first_page, last_page, hDPI, vDPI, rotate, useMediaBox, crop, printing, NULL, NULL);
+
+      delete splashOut;
+      delete doc;
+    }
+  } catch (...) {
+  }
+
+  delete globalParams;
+
+  return 0;
+}
+</pre>
+
+
+<h2>Logs</h2>
+<pre>
+Successfully built /home/chyun/oss-fuzz-gen/results4/output-xpdf-_zn6pdfdoc12displaypagesep9outputdeviiddiiiipfipves2_/fixed_targets/01.cc with gpt-4 in 0 iterations of fixing.
+Triaging the crash related to /home/chyun/oss-fuzz-gen/results4/output-xpdf-_zn6pdfdoc12displaypagesep9outputdeviiddiiiipfipves2_/fixed_targets/01.cc with gpt-4.
+Result for xpdf-zn6pdfdoc12displaypagesep9outputdeviiddiiiipfipves2-01: crashes=True, coverage=0.00800802532127229 (463/57817), coverage diff=8.017253128733033e-06 (1/124731)
+
+</pre>
+
+<h2>Run logs</h2>
+<pre>
+Unable to find image &#39;gcr.io/oss-fuzz-base/base-runner:latest&#39; locally
+latest: Pulling from oss-fuzz-base/base-runner
+b549f31133a9: Already exists
+0501a1eada37: Already exists
+5de1db91e7cc: Already exists
+f2ef9aab3c32: Already exists
+47a465b955ca: Already exists
+e273802a76ac: Already exists
+377b8f706761: Pulling fs layer
+5c49585177ea: Pulling fs layer
+bd7579cf145f: Pulling fs layer
+d7ba2aa86d2b: Pulling fs layer
+08e035cd5d42: Pulling fs layer
+e7226190d398: Pulling fs layer
+fd3b286b9328: Pulling fs layer
+6d3171da086c: Pulling fs layer
+6cb448c80d9c: Pulling fs layer
+bd7579cf145f: Waiting
+e7226190d398: Waiting
+d7ba2aa86d2b: Waiting
+5c49585177ea: Waiting
+fd3b286b9328: Waiting
+08e035cd5d42: Waiting
+6d3171da086c: Waiting
+5115b18a21e8: Pulling fs layer
+819c088e6466: Pulling fs layer
+a09c52e11a76: Pulling fs layer
+ca7ab75b9a6c: Pulling fs layer
+7e26954a47f7: Pulling fs layer
+7e26954a47f7: Waiting
+6cb448c80d9c: Waiting
+819c088e6466: Waiting
+5115b18a21e8: Waiting
+a09c52e11a76: Waiting
+ca7ab75b9a6c: Waiting
+bd7579cf145f: Verifying Checksum
+bd7579cf145f: Download complete
+d7ba2aa86d2b: Verifying Checksum
+d7ba2aa86d2b: Download complete
+5c49585177ea: Verifying Checksum
+5c49585177ea: Download complete
+377b8f706761: Verifying Checksum
+377b8f706761: Download complete
+e7226190d398: Verifying Checksum
+e7226190d398: Download complete
+08e035cd5d42: Verifying Checksum
+08e035cd5d42: Download complete
+377b8f706761: Pull complete
+5c49585177ea: Pull complete
+bd7579cf145f: Pull complete
+d7ba2aa86d2b: Pull complete
+6cb448c80d9c: Verifying Checksum
+6cb448c80d9c: Download complete
+6d3171da086c: Verifying Checksum
+6d3171da086c: Download complete
+08e035cd5d42: Pull complete
+e7226190d398: Pull complete
+fd3b286b9328: Download complete
+5115b18a21e8: Verifying Checksum
+5115b18a21e8: Download complete
+ca7ab75b9a6c: Verifying Checksum
+ca7ab75b9a6c: Download complete
+a09c52e11a76: Verifying Checksum
+a09c52e11a76: Download complete
+7e26954a47f7: Verifying Checksum
+7e26954a47f7: Download complete
+fd3b286b9328: Pull complete
+6d3171da086c: Pull complete
+6cb448c80d9c: Pull complete
+819c088e6466: Verifying Checksum
+819c088e6466: Download complete
+5115b18a21e8: Pull complete
+819c088e6466: Pull complete
+a09c52e11a76: Pull complete
+ca7ab75b9a6c: Pull complete
+7e26954a47f7: Pull complete
+Digest: sha256:45a6757ba044c1c40b74af623d1ec183194226f795f9f533d6941bda3f537897
+Status: Image is up to date for gcr.io/oss-fuzz-base/base-runner:latest
+INFO:__main__:Running: docker run --privileged --shm-size=2g --platform linux/amd64 --rm -e FUZZING_ENGINE=libfuzzer -e SANITIZER=address -e RUN_FUZZER_MODE=interactive -e HELPER=True -v /home/chyun/oss-fuzz-gen/results4/output-xpdf-_zn6pdfdoc12displaypagesep9outputdeviiddiiiipfipves2_/corpora/01.cc:/tmp/fuzz_JBIG2_corpus -v /tmp/tmpv52r0cdc/build/out/xpdf-zn6pdfdoc12displaypagesep9outputdeviiddiiiipfipves2-01:/out -t gcr.io/oss-fuzz-base/base-runner run_fuzzer fuzz_JBIG2 -print_final_stats=1 -max_total_time=30 -len_control=0 -timeout=30.
+vm.mmap_rnd_bits = 28
+rm: cannot remove &#39;/tmp/fuzz_JBIG2_corpus&#39;: Device or resource busy
+/out/fuzz_JBIG2 -rss_limit_mb=2560 -timeout=25 -print_final_stats=1 -max_total_time=30 -len_control=0 -timeout=30 /tmp/fuzz_JBIG2_corpus -detect_leaks=0 &lt; /dev/null
+INFO: Running with entropic power schedule (0xFF, 100).
+INFO: Seed: 1585186920
+INFO: Loaded 1 modules   (57817 inline 8-bit counters): 57817 [0x564acdb83a48, 0x564acdb91c21), 
+INFO: Loaded 1 PC tables (57817 PCs): 57817 [0x564acdb91c28,0x564acdc739b8), 
+INFO:        0 files found in /tmp/fuzz_JBIG2_corpus
+INFO: -max_len is not provided; libFuzzer will not generate inputs larger than 4096 bytes
+INFO: A corpus is not provided, starting from an empty corpus
+#2	INITED cov: 306 ft: 307 corp: 1/1b exec/s: 0 rss: 41Mb
+#3	NEW    cov: 311 ft: 315 corp: 2/10b lim: 4096 exec/s: 0 rss: 43Mb L: 9/9 MS: 1 CMP- DE: &#34;\377\377\377\377\377\377\377\377&#34;-
+#5	NEW    cov: 311 ft: 317 corp: 3/12b lim: 4096 exec/s: 0 rss: 45Mb L: 2/9 MS: 2 ChangeBit-InsertByte-
+#11	NEW    cov: 313 ft: 320 corp: 4/22b lim: 4096 exec/s: 0 rss: 51Mb L: 10/10 MS: 1 PersAutoDict- DE: &#34;\377\377\377\377\377\377\377\377&#34;-
+#12	NEW    cov: 313 ft: 322 corp: 5/27b lim: 4096 exec/s: 0 rss: 52Mb L: 5/10 MS: 1 CrossOver-
+#16	NEW    cov: 313 ft: 324 corp: 6/43b lim: 4096 exec/s: 0 rss: 55Mb L: 16/16 MS: 4 CMP-EraseBytes-ChangeByte-PersAutoDict- DE: &#34;zaha&#34;-&#34;\377\377\377\377\377\377\377\377&#34;-
+#17	NEW    cov: 313 ft: 325 corp: 7/56b lim: 4096 exec/s: 0 rss: 55Mb L: 13/16 MS: 1 PersAutoDict- DE: &#34;zaha&#34;-
+#22	NEW    cov: 313 ft: 326 corp: 8/63b lim: 4096 exec/s: 0 rss: 56Mb L: 7/16 MS: 5 ChangeASCIIInt-ChangeByte-CrossOver-CMP-EraseBytes- DE: &#34;n0&#34;-
+#24	NEW    cov: 316 ft: 330 corp: 9/81b lim: 4096 exec/s: 0 rss: 56Mb L: 18/18 MS: 2 CrossOver-PersAutoDict- DE: &#34;\377\377\377\377\377\377\377\377&#34;-
+#29	NEW    cov: 320 ft: 336 corp: 10/111b lim: 4096 exec/s: 0 rss: 56Mb L: 30/30 MS: 5 PersAutoDict-CrossOver-CMP-CrossOver-InsertRepeatedBytes- DE: &#34;n0&#34;-&#34;\000\000\000\000\000\000\000\000&#34;-
+#33	NEW    cov: 320 ft: 337 corp: 11/114b lim: 4096 exec/s: 0 rss: 56Mb L: 3/30 MS: 4 ChangeByte-InsertByte-PersAutoDict-EraseBytes- DE: &#34;n0&#34;-
+#37	NEW    cov: 321 ft: 340 corp: 12/138b lim: 4096 exec/s: 0 rss: 56Mb L: 24/30 MS: 4 ChangeByte-CopyPart-ChangeByte-PersAutoDict- DE: &#34;\377\377\377\377\377\377\377\377&#34;-
+#45	NEW    cov: 321 ft: 341 corp: 13/159b lim: 4096 exec/s: 0 rss: 56Mb L: 21/30 MS: 3 CopyPart-ChangeBit-CrossOver-
+	NEW_FUNC[1/3]: 0x564acd456f80 in std::__1::vector&lt;char, std::__1::allocator&lt;char&gt;&gt;::shrink_to_fit() /usr/local/bin/../include/c++/v1/vector:1590
+	NEW_FUNC[2/3]: 0x564acd457410 in std::__1::vector&lt;char, std::__1::allocator&lt;char&gt;&gt;::__construct_at_end(unsigned long) /usr/local/bin/../include/c++/v1/vector:1113
+#48	NEW    cov: 353 ft: 373 corp: 14/285b lim: 4096 exec/s: 0 rss: 56Mb L: 126/126 MS: 3 InsertByte-InsertByte-InsertRepeatedBytes-
+#54	NEW    cov: 353 ft: 376 corp: 15/366b lim: 4096 exec/s: 0 rss: 56Mb L: 81/126 MS: 1 InsertRepeatedBytes-
+#55	NEW    cov: 353 ft: 385 corp: 16/577b lim: 4096 exec/s: 0 rss: 56Mb L: 211/211 MS: 1 CopyPart-
+#68	NEW    cov: 353 ft: 393 corp: 17/618b lim: 4096 exec/s: 0 rss: 56Mb L: 41/211 MS: 3 ChangeBinInt-PersAutoDict-InsertRepeatedBytes- DE: &#34;\000\000\000\000\000\000\000\000&#34;-
+#72	NEW    cov: 354 ft: 398 corp: 18/691b lim: 4096 exec/s: 0 rss: 56Mb L: 73/211 MS: 4 CrossOver-CrossOver-CopyPart-CrossOver-
+#74	NEW    cov: 354 ft: 407 corp: 19/748b lim: 4096 exec/s: 0 rss: 56Mb L: 57/211 MS: 2 ChangeByte-InsertRepeatedBytes-
+#76	NEW    cov: 354 ft: 409 corp: 20/759b lim: 4096 exec/s: 0 rss: 56Mb L: 11/211 MS: 2 ChangeByte-InsertByte-
+#78	NEW    cov: 354 ft: 412 corp: 21/825b lim: 4096 exec/s: 0 rss: 56Mb L: 66/211 MS: 2 ShuffleBytes-InsertRepeatedBytes-
+#79	NEW    cov: 354 ft: 414 corp: 22/831b lim: 4096 exec/s: 0 rss: 56Mb L: 6/211 MS: 1 InsertByte-
+#81	NEW    cov: 354 ft: 415 corp: 23/957b lim: 4096 exec/s: 0 rss: 56Mb L: 126/211 MS: 2 ShuffleBytes-ChangeByte-
+#85	NEW    cov: 354 ft: 416 corp: 24/969b lim: 4096 exec/s: 0 rss: 56Mb L: 12/211 MS: 4 ChangeByte-ChangeByte-ChangeBit-InsertByte-
+#92	NEW    cov: 354 ft: 418 corp: 25/1086b lim: 4096 exec/s: 0 rss: 56Mb L: 117/211 MS: 2 ShuffleBytes-CrossOver-
+#102	REDUCE cov: 354 ft: 418 corp: 25/1073b lim: 4096 exec/s: 0 rss: 56Mb L: 53/211 MS: 5 CopyPart-ChangeBinInt-CMP-CopyPart-EraseBytes- DE: &#34;wawarabic&#34;-
+#107	NEW    cov: 354 ft: 419 corp: 26/1183b lim: 4096 exec/s: 0 rss: 56Mb L: 110/211 MS: 5 CrossOver-ChangeByte-CMP-InsertRepeatedBytes-ChangeBinInt- DE: &#34;sukatakan&#34;-
+#123	NEW    cov: 354 ft: 422 corp: 27/1227b lim: 4096 exec/s: 0 rss: 56Mb L: 44/211 MS: 1 InsertRepeatedBytes-
+#124	REDUCE cov: 354 ft: 423 corp: 28/1273b lim: 4096 exec/s: 0 rss: 56Mb L: 46/211 MS: 1 EraseBytes-
+#128	NEW    cov: 354 ft: 429 corp: 29/1311b lim: 4096 exec/s: 0 rss: 56Mb L: 38/211 MS: 4 InsertRepeatedBytes-ShuffleBytes-ChangeBinInt-CMP- DE: &#34;\377\377\377\377\377\377\377\377&#34;-
+#129	NEW    cov: 354 ft: 431 corp: 30/1339b lim: 4096 exec/s: 0 rss: 56Mb L: 28/211 MS: 1 InsertRepeatedBytes-
+#149	NEW    cov: 354 ft: 438 corp: 31/1375b lim: 4096 exec/s: 0 rss: 56Mb L: 36/211 MS: 5 EraseBytes-CrossOver-EraseBytes-CopyPart-CMP- DE: &#34;tikeutaparenko&#34;-
+#152	NEW    cov: 354 ft: 440
+...truncated...
+c/llvm-project/compiler-rt/lib/fuzzer/FuzzerMain.cpp:20:10
+    #8 0x7f1f6038f082 in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x24082) (BuildId: 0702430aef5fa3dda43986563e9ffcc47efbd75e)
+
+DEDUP_TOKEN: operator new(unsigned long)--LLVMFuzzerTestOneInput--fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long)
+[1m[34mDirect leak of 88 byte(s) in 1 object(s) allocated from:
+[1m[0m    #0 0x564acd45398d in operator new(unsigned long) /src/llvm-project/compiler-rt/lib/asan/asan_new_delete.cpp:95:3
+    #1 0x564acd45665e in LLVMFuzzerTestOneInput /src/xpdf-4.05/build/fuzz_JBIG2.cc:52:11
+    #2 0x564acd308660 in fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:614:13
+    #3 0x564acd309b61 in fuzzer::Fuzzer::ReadAndExecuteSeedCorpora(std::__Fuzzer::vector&lt;fuzzer::SizedFile, std::__Fuzzer::allocator&lt;fuzzer::SizedFile&gt;&gt;&amp;) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:807:3
+    #4 0x564acd30a147 in fuzzer::Fuzzer::Loop(std::__Fuzzer::vector&lt;fuzzer::SizedFile, std::__Fuzzer::allocator&lt;fuzzer::SizedFile&gt;&gt;&amp;) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:867:3
+    #5 0x564acd2f8756 in fuzzer::FuzzerDriver(int*, char***, int (*)(unsigned char const*, unsigned long)) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:914:6
+    #6 0x564acd324c82 in main /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMain.cpp:20:10
+    #7 0x7f1f6038f082 in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x24082) (BuildId: 0702430aef5fa3dda43986563e9ffcc47efbd75e)
+
+DEDUP_TOKEN: operator new(unsigned long)--LLVMFuzzerTestOneInput--fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long)
+[1m[34mIndirect leak of 304000 byte(s) in 4750 object(s) allocated from:
+[1m[0m    #0 0x564acd45398d in operator new(unsigned long) /src/llvm-project/compiler-rt/lib/asan/asan_new_delete.cpp:95:3
+    #1 0x564acd45651d in LLVMFuzzerTestOneInput /src/xpdf-4.05/build/fuzz_JBIG2.cc:41:24
+    #2 0x564acd308660 in fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:614:13
+    #3 0x564acd307e85 in fuzzer::Fuzzer::RunOne(unsigned char const*, unsigned long, bool, fuzzer::InputInfo*, bool, bool*) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:516:7
+    #4 0x564acd309655 in fuzzer::Fuzzer::MutateAndTestOne() /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:760:19
+    #5 0x564acd30a445 in fuzzer::Fuzzer::Loop(std::__Fuzzer::vector&lt;fuzzer::SizedFile, std::__Fuzzer::allocator&lt;fuzzer::SizedFile&gt;&gt;&amp;) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:905:5
+    #6 0x564acd2f8756 in fuzzer::FuzzerDriver(int*, char***, int (*)(unsigned char const*, unsigned long)) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:914:6
+    #7 0x564acd324c82 in main /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMain.cpp:20:10
+    #8 0x7f1f6038f082 in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x24082) (BuildId: 0702430aef5fa3dda43986563e9ffcc47efbd75e)
+
+DEDUP_TOKEN: operator new(unsigned long)--LLVMFuzzerTestOneInput--fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long)
+[1m[34mIndirect leak of 19536 byte(s) in 222 object(s) allocated from:
+[1m[0m    #0 0x564acd45398d in operator new(unsigned long) /src/llvm-project/compiler-rt/lib/asan/asan_new_delete.cpp:95:3
+    #1 0x564acd45665e in LLVMFuzzerTestOneInput /src/xpdf-4.05/build/fuzz_JBIG2.cc:52:11
+    #2 0x564acd308660 in fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:614:13
+    #3 0x564acd307e85 in fuzzer::Fuzzer::RunOne(unsigned char const*, unsigned long, bool, fuzzer::InputInfo*, bool, bool*) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:516:7
+    #4 0x564acd309655 in fuzzer::Fuzzer::MutateAndTestOne() /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:760:19
+    #5 0x564acd30a445 in fuzzer::Fuzzer::Loop(std::__Fuzzer::vector&lt;fuzzer::SizedFile, std::__Fuzzer::allocator&lt;fuzzer::SizedFile&gt;&gt;&amp;) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:905:5
+    #6 0x564acd2f8756 in fuzzer::FuzzerDriver(int*, char***, int (*)(unsigned char const*, unsigned long)) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:914:6
+    #7 0x564acd324c82 in main /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMain.cpp:20:10
+    #8 0x7f1f6038f082 in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x24082) (BuildId: 0702430aef5fa3dda43986563e9ffcc47efbd75e)
+
+DEDUP_TOKEN: operator new(unsigned long)--LLVMFuzzerTestOneInput--fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long)
+[1m[34mIndirect leak of 64 byte(s) in 1 object(s) allocated from:
+[1m[0m    #0 0x564acd45398d in operator new(unsigned long) /src/llvm-project/compiler-rt/lib/asan/asan_new_delete.cpp:95:3
+    #1 0x564acd45651d in LLVMFuzzerTestOneInput /src/xpdf-4.05/build/fuzz_JBIG2.cc:41:24
+    #2 0x564acd308660 in fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:614:13
+    #3 0x564acd307e85 in fuzzer::Fuzzer::RunOne(unsigned char const*, unsigned long, bool, fuzzer::InputInfo*, bool, bool*) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:516:7
+    #4 0x564acd309cd6 in fuzzer::Fuzzer::ReadAndExecuteSeedCorpora(std::__Fuzzer::vector&lt;fuzzer::SizedFile, std::__Fuzzer::allocator&lt;fuzzer::SizedFile&gt;&gt;&amp;) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:812:5
+    #5 0x564acd30a147 in fuzzer::Fuzzer::Loop(std::__Fuzzer::vector&lt;fuzzer::SizedFile, std::__Fuzzer::allocator&lt;fuzzer::SizedFile&gt;&gt;&amp;) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:867:3
+    #6 0x564acd2f8756 in fuzzer::FuzzerDriver(int*, char***, int (*)(unsigned char const*, unsigned long)) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:914:6
+    #7 0x564acd324c82 in main /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMain.cpp:20:10
+    #8 0x7f1f6038f082 in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x24082) (BuildId: 0702430aef5fa3dda43986563e9ffcc47efbd75e)
+
+DEDUP_TOKEN: operator new(unsigned long)--LLVMFuzzerTestOneInput--fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long)
+[1m[34mIndirect leak of 64 byte(s) in 1 object(s) allocated from:
+[1m[0m    #0 0x564acd45398d in operator new(unsigned long) /src/llvm-project/compiler-rt/lib/asan/asan_new_delete.cpp:95:3
+    #1 0x564acd45651d in LLVMFuzzerTestOneInput /src/xpdf-4.05/build/fuzz_JBIG2.cc:41:24
+    #2 0x564acd308660 in fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:614:13
+    #3 0x564acd309b61 in fuzzer::Fuzzer::ReadAndExecuteSeedCorpora(std::__Fuzzer::vector&lt;fuzzer::SizedFile, std::__Fuzzer::allocator&lt;fuzzer::SizedFile&gt;&gt;&amp;) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:807:3
+    #4 0x564acd30a147 in fuzzer::Fuzzer::Loop(std::__Fuzzer::vector&lt;fuzzer::SizedFile, std::__Fuzzer::allocator&lt;fuzzer::SizedFile&gt;&gt;&amp;) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:867:3
+    #5 0x564acd2f8756 in fuzzer::FuzzerDriver(int*, char***, int (*)(unsigned char const*, unsigned long)) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:914:6
+    #6 0x564acd324c82 in main /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMain.cpp:20:10
+    #7 0x7f1f6038f082 in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x24082) (BuildId: 0702430aef5fa3dda43986563e9ffcc47efbd75e)
+
+DEDUP_TOKEN: operator new(unsigned long)--LLVMFuzzerTestOneInput--fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long)
+SUMMARY: AddressSanitizer: 722304 byte(s) leaked in 9504 allocation(s).
+MS: 5 ChangeBit-ChangeByte-InsertByte-ChangeBit-ChangeBinInt-; base unit: 42b8cc79c4f8f78a55fbb9f9b8e76fa06aee563b
+
+
+artifact_prefix=&#39;./&#39;; Test unit written to ./crash-da39a3ee5e6b4b0d3255bfef95601890afd80709
+Base64: 
+stat::number_of_executed_units: 4752
+stat::average_exec_per_sec:     153
+stat::new_units_added:          204
+stat::slowest_unit_time_sec:    0
+stat::peak_rss_mb:              60
+
+</pre>
+
+
+</body>

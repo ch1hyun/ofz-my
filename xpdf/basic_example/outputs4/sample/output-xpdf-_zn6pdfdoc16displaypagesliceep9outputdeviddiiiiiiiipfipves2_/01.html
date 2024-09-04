@@ -1,0 +1,1075 @@
+<!doctype html>
+
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Experiment results</title>
+<style>
+* {
+    box-sizing: border-box;
+}
+
+html {
+    line-height: 1.15;
+}
+
+body {
+    font-family: sans-serif;
+    font-size: 16px;
+}
+
+table {
+    border-collapse: collapse;
+    border-spacing: 0;
+}
+
+td, th {
+    border-right: 1px #dedede solid;
+    border-bottom: 1px #dedede solid;
+    padding: 5px;
+    text-align: left;
+}
+td:first-child, th:first-child {
+    border-left: 1px #dedede solid;
+}
+th {
+    border-top: 1px #dedede solid;
+}
+
+tbody tr:nth-child(odd) {
+    background-color: #f4f5ff;
+}
+</style>
+<body>
+    LLM: 
+    
+<h1>output-xpdf-_zn6pdfdoc16displaypagesliceep9outputdeviddiiiiiiiipfipves2_ / 01</h1>
+Bug: False
+<br>
+Crash reason: FP_NEAR_INIT_CRASH
+<br>
+<br>
+
+<h2>Triage</h2>
+<pre>
+Crash is caused by bug in project.
+
+The crash report shows an attempt to free an address which was not allocated by malloc. The crash is happening in the destructor of PDFDoc, which is part of the project code, not the fuzz driver. The destructor is likely trying to free memory that it doesn&#39;t own or has been already freed. This is a common mistake when managing memory manually in C++, and it can lead to crashes like this one. The fix would be to carefully audit the memory management in the PDFDoc class to ensure it&#39;s not freeing memory it doesn&#39;t own or double freeing memory.
+</pre>
+<br>
+
+
+
+
+
+<h3>Final code</h3>
+
+<pre>
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+#include &#34;cstddef&#34;
+#include &#34;inttypes.h&#34;
+#include &#34;stdint.h&#34;
+#include &#34;string.h&#34;
+#include &lt;vector&gt;
+
+#include &#34;GlobalParams.h&#34;
+#include &#34;/src/xpdf-4.05/xpdf/PDFDoc.h&#34;
+#include &#34;SplashBitmap.h&#34;
+#include &#34;SplashOutputDev.h&#34;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
+  if (size &lt; 1) return 0;
+  
+  std::vector&lt;unsigned char&gt; pdf_doc_data(size + 1, &#39;\0&#39;);
+  memcpy(pdf_doc_data.data(), data, size);
+  pdf_doc_data.push_back(&#39;\0&#39;);
+
+  // Setup the error output handler to never output anything
+  globalParams = new GlobalParams(nullptr);
+  globalParams-&gt;setErrQuiet(gTrue);
+
+  // Setup the input device
+  Object pdf_doc;
+  pdf_doc.initNull();
+  MemStream stream(reinterpret_cast&lt;char*&gt;(pdf_doc_data.data()), 0, size, &amp;pdf_doc);
+
+  FuzzedDataProvider fdp(data, size);
+  
+  // Setup the output device
+  SplashColor paper_color = {0xff, 0xff, 0xff};
+  SplashOutputDev splash_output_dev(splashModeRGB8, 4, gFalse, paper_color);
+    
+  // Initiate the pdf doc
+  PDFDoc* content_pdf_doc = new PDFDoc(&amp;stream);
+  if (!content_pdf_doc-&gt;isOk()) {
+    delete globalParams;
+    delete content_pdf_doc;
+    return 0;
+  }
+  
+  // Input variables of the displayPageSlice function
+  int pg = fdp.ConsumeIntegralInRange&lt;int&gt;(1, content_pdf_doc-&gt;getNumPages());
+  double h_dpi = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  double v_dpi = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  int rotate = fdp.ConsumeIntegral&lt;int&gt;();
+  GBool useMediaBox = fdp.ConsumeBool();
+  GBool crop = fdp.ConsumeBool();
+  GBool printing = fdp.ConsumeBool();
+  int sliceX = fdp.ConsumeIntegral&lt;int&gt;();
+  int sliceY = fdp.ConsumeIntegral&lt;int&gt;();
+  int sliceW = fdp.ConsumeIntegral&lt;int&gt;();
+  int sliceH = fdp.ConsumeIntegral&lt;int&gt;();
+  
+  // Display the page slice
+  content_pdf_doc-&gt;displayPageSlice(&amp;splash_output_dev, pg, h_dpi, v_dpi, rotate, 
+                     useMediaBox, crop, printing, sliceX, sliceY, sliceW, sliceH,
+                     nullptr, nullptr);
+  
+  delete globalParams;
+  delete content_pdf_doc;
+  return 0;
+}
+</pre>
+
+
+<h3>Fixer prompt #1</h3>
+<pre>
+
+Given the following C++ fuzz harness and its build error message, fix the code to make it build for fuzzing.
+
+If there is undeclared identifier or unknown type name error, fix it by finding and including the related libraries.
+
+MUST RETURN THE FULL CODE, INCLUDING UNCHANGED PARTS.
+
+Below is the code needs to be built:
+&lt;code&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+#include &lt;google/protobuf/util/internal/datapiece.h&gt;
+#include &#34;Profile.pb.h&#34;
+#include &#34;cstddef&#34;
+#include &#34;inttypes.h&#34;
+#include &#34;stdint.h&#34;
+#include &#34;string.h&#34;
+
+#include &#34;GlobalParams.h&#34;
+#include &#34;PDFDoc.h&#34;
+#include &#34;SplashBitmap.h&#34;
+#include &#34;SplashOutputDev.h&#34;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
+  std::vector&lt;unsigned char&gt; pdf_doc_data(size + 1, &#39;\0&#39;);
+  memcpy(pdf_doc_data.data(), data, size);
+  pdf_doc_data.push_back(&#39;\0&#39;);
+
+  // Setup the error output handler to never output anything
+  globalParams = new GlobalParams();
+  globalParams-&gt;setErrQuiet(gTrue);
+
+  // Setup the input device
+  Object pdf_doc(owner);
+  pdf_doc.initNull();
+  MemStream stream(static_cast&lt;char*&gt;(pdf_doc_data.data()), 0, size, &amp;pdf_doc);
+  if (pdf_doc_data.size() &lt; 1) return 0;
+
+  FuzzedDataProvider fdp(data, size);
+  
+  // Setup the output device
+  SplashColor paper_color = {0xff, 0xff, 0xff};
+  SplashOutputDev splash_output_dev(splashModeRGB8, 4, gFalse, paper_color);
+    
+  // Initiate the pdf doc
+  PDFDoc content_pdf_doc(&amp;stream);
+  
+  // Input variables of the displayPageSlice function
+  int pg = fdp.ConsumeIntegral&lt;int&gt;();
+  double h_dpi = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  double v_dpi = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  int rotate = fdp.ConsumeIntegral&lt;int&gt;();
+  GBool useMediaBox = fdp.ConsumeBool();
+  GBool crop = fdp.ConsumeBool();
+  GBool printing = fdp.ConsumeBool();
+  int sliceX = fdp.ConsumeIntegral&lt;int&gt;();
+  int sliceY = fdp.ConsumeIntegral&lt;int&gt;();
+  int sliceW = fdp.ConsumeIntegral&lt;int&gt;();
+  int sliceH = fdp.ConsumeIntegral&lt;int&gt;();
+  
+  // Display the page slice
+  content_pdf_doc.displayPageSlice(&amp;splash_output_dev, pg, h_dpi, v_dpi, rotate, 
+                     useMediaBox, crop, printing, sliceX, sliceY, sliceW, sliceH,
+                     nullptr, nullptr);
+  
+  delete globalParams;
+  return 0;
+}
+&lt;/code&gt;
+
+Below is the error to fix:
+The code has the following build issues:
+&lt;error&gt;
+fuzz_JBIG2.cc:2:10: fatal error: &#39;google/protobuf/util/internal/datapiece.h&#39; file not found
+    2 | #include &lt;google/protobuf/util/internal/datapiece.h&gt;
+      |          ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+&lt;/error&gt;
+
+
+Below are instructions to assist you in fixing the error.
+&lt;instruction&gt;
+IMPORTANT: DO NOT include the header file google/protobuf/util/internal/datapiece.h in the generated fuzz target again, the file does not exist in the project-under-test.
+If the non-existent &lt;filepath&gt;google/protobuf/util/internal/datapiece.h&lt;/filepath&gt; was included for the declaration of &lt;code&gt;void PDFDoc::displayPageSlice(OutputDev *, int, double, double, int, GBool, GBool, GBool, int, int, int, int, DW_TAG_subroutine_typeInfinite loop *, void *)&lt;/code&gt;, you must replace it with the EXACT path of the actual file &lt;filepath&gt;#include &#34;/src/xpdf-4.05/xpdf/PDFDoc.h&#34;&lt;/filepath&gt;. For example:
+&lt;code&gt;
+#include &#34;#include &#34;/src/xpdf-4.05/xpdf/PDFDoc.h&#34;&#34;
+&lt;/code&gt;
+Otherwise, consider replacing it with some of the following statementsthat may be correct alternatives:
+&lt;code&gt;
+#include &#34;/src/freetype/include/freetype/internal/t1types.h&#34;
+#include &#34;/src/freetype/include/freetype/internal/tttypes.h&#34;
+#include &#34;/src/freetype/include/freetype/internal/autohint.h&#34;
+#include &#34;/src/freetype/include/freetype/internal/cfftypes.h&#34;
+#include &#34;/src/freetype/include/freetype/internal/cffotypes.h&#34;
+&lt;/code&gt;
+
+&lt;/instruction&gt;
+
+Fix code:
+1. Consider possible solutions for the issues listed above.
+2. Choose a solution that can maximize fuzzing result, which is utilizing the function under test and feeding it not null input.
+3. Apply the solutions to the original code.
+It&#39;s important to show the complete code, not only the fixed line.
+&lt;solution&gt;
+</pre>
+
+
+
+<h3>Code #1</h3>
+
+<pre>
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+#include &#34;Profile.pb.h&#34;
+#include &#34;cstddef&#34;
+#include &#34;inttypes.h&#34;
+#include &#34;stdint.h&#34;
+#include &#34;string.h&#34;
+
+#include &#34;GlobalParams.h&#34;
+#include &#34;PDFDoc.h&#34;
+#include &#34;SplashBitmap.h&#34;
+#include &#34;SplashOutputDev.h&#34;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
+  std::vector&lt;unsigned char&gt; pdf_doc_data(size + 1, &#39;\0&#39;);
+  memcpy(pdf_doc_data.data(), data, size);
+  pdf_doc_data.push_back(&#39;\0&#39;);
+
+  // Setup the error output handler to never output anything
+  globalParams = new GlobalParams();
+  globalParams-&gt;setErrQuiet(gTrue);
+
+  // Setup the input device
+  Object pdf_doc(owner);
+  pdf_doc.initNull();
+  MemStream stream(static_cast&lt;char*&gt;(pdf_doc_data.data()), 0, size, &amp;pdf_doc);
+  if (pdf_doc_data.size() &lt; 1) return 0;
+
+  FuzzedDataProvider fdp(data, size);
+  
+  // Setup the output device
+  SplashColor paper_color = {0xff, 0xff, 0xff};
+  SplashOutputDev splash_output_dev(splashModeRGB8, 4, gFalse, paper_color);
+    
+  // Initiate the pdf doc
+  PDFDoc content_pdf_doc(&amp;stream);
+  
+  // Input variables of the displayPageSlice function
+  int pg = fdp.ConsumeIntegral&lt;int&gt;();
+  double h_dpi = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  double v_dpi = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  int rotate = fdp.ConsumeIntegral&lt;int&gt;();
+  GBool useMediaBox = fdp.ConsumeBool();
+  GBool crop = fdp.ConsumeBool();
+  GBool printing = fdp.ConsumeBool();
+  int sliceX = fdp.ConsumeIntegral&lt;int&gt;();
+  int sliceY = fdp.ConsumeIntegral&lt;int&gt;();
+  int sliceW = fdp.ConsumeIntegral&lt;int&gt;();
+  int sliceH = fdp.ConsumeIntegral&lt;int&gt;();
+  
+  // Display the page slice
+  content_pdf_doc.displayPageSlice(&amp;splash_output_dev, pg, h_dpi, v_dpi, rotate, 
+                     useMediaBox, crop, printing, sliceX, sliceY, sliceW, sliceH,
+                     nullptr, nullptr);
+  
+  delete globalParams;
+  return 0;
+}
+</pre>
+
+
+<h3>Fixer prompt #2</h3>
+<pre>
+
+Given the following C++ fuzz harness and its build error message, fix the code to make it build for fuzzing.
+
+If there is undeclared identifier or unknown type name error, fix it by finding and including the related libraries.
+
+MUST RETURN THE FULL CODE, INCLUDING UNCHANGED PARTS.
+
+Below is the code needs to be built:
+&lt;code&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+#include &#34;Profile.pb.h&#34;
+#include &#34;cstddef&#34;
+#include &#34;inttypes.h&#34;
+#include &#34;stdint.h&#34;
+#include &#34;string.h&#34;
+
+#include &#34;GlobalParams.h&#34;
+#include &#34;PDFDoc.h&#34;
+#include &#34;SplashBitmap.h&#34;
+#include &#34;SplashOutputDev.h&#34;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
+  std::vector&lt;unsigned char&gt; pdf_doc_data(size + 1, &#39;\0&#39;);
+  memcpy(pdf_doc_data.data(), data, size);
+  pdf_doc_data.push_back(&#39;\0&#39;);
+
+  // Setup the error output handler to never output anything
+  globalParams = new GlobalParams();
+  globalParams-&gt;setErrQuiet(gTrue);
+
+  // Setup the input device
+  Object pdf_doc(owner);
+  pdf_doc.initNull();
+  MemStream stream(static_cast&lt;char*&gt;(pdf_doc_data.data()), 0, size, &amp;pdf_doc);
+  if (pdf_doc_data.size() &lt; 1) return 0;
+
+  FuzzedDataProvider fdp(data, size);
+  
+  // Setup the output device
+  SplashColor paper_color = {0xff, 0xff, 0xff};
+  SplashOutputDev splash_output_dev(splashModeRGB8, 4, gFalse, paper_color);
+    
+  // Initiate the pdf doc
+  PDFDoc content_pdf_doc(&amp;stream);
+  
+  // Input variables of the displayPageSlice function
+  int pg = fdp.ConsumeIntegral&lt;int&gt;();
+  double h_dpi = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  double v_dpi = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  int rotate = fdp.ConsumeIntegral&lt;int&gt;();
+  GBool useMediaBox = fdp.ConsumeBool();
+  GBool crop = fdp.ConsumeBool();
+  GBool printing = fdp.ConsumeBool();
+  int sliceX = fdp.ConsumeIntegral&lt;int&gt;();
+  int sliceY = fdp.ConsumeIntegral&lt;int&gt;();
+  int sliceW = fdp.ConsumeIntegral&lt;int&gt;();
+  int sliceH = fdp.ConsumeIntegral&lt;int&gt;();
+  
+  // Display the page slice
+  content_pdf_doc.displayPageSlice(&amp;splash_output_dev, pg, h_dpi, v_dpi, rotate, 
+                     useMediaBox, crop, printing, sliceX, sliceY, sliceW, sliceH,
+                     nullptr, nullptr);
+  
+  delete globalParams;
+  return 0;
+}
+&lt;/code&gt;
+
+Below is the error to fix:
+The code has the following build issues:
+&lt;error&gt;
+fuzz_JBIG2.cc:2:10: fatal error: &#39;Profile.pb.h&#39; file not found
+    2 | #include &#34;Profile.pb.h&#34;
+      |          ^~~~~~~~~~~~~~
+&lt;/error&gt;
+
+
+Below are instructions to assist you in fixing the error.
+&lt;instruction&gt;
+IMPORTANT: DO NOT include the header file Profile.pb.h in the generated fuzz target again, the file does not exist in the project-under-test.
+If the non-existent &lt;filepath&gt;Profile.pb.h&lt;/filepath&gt; was included for the declaration of &lt;code&gt;void PDFDoc::displayPageSlice(OutputDev *, int, double, double, int, GBool, GBool, GBool, int, int, int, int, DW_TAG_subroutine_typeInfinite loop *, void *)&lt;/code&gt;, you must replace it with the EXACT path of the actual file &lt;filepath&gt;#include &#34;/src/xpdf-4.05/xpdf/PDFDoc.h&#34;&lt;/filepath&gt;. For example:
+&lt;code&gt;
+#include &#34;#include &#34;/src/xpdf-4.05/xpdf/PDFDoc.h&#34;&#34;
+&lt;/code&gt;
+Otherwise, consider replacing it with some of the following statementsthat may be correct alternatives:
+&lt;code&gt;
+#include &#34;/src/xpdf-4.05/goo/gfile.h&#34;
+#include &#34;/src/freetype/include/freetype/ftbdf.h&#34;
+#include &#34;/src/freetype/src/bdf/bdf.h&#34;
+#include &#34;/src/freetype/src/autofit/afblue.h&#34;
+#include &#34;/src/xpdf-4.05/fofi/FoFiTrueType.h&#34;
+&lt;/code&gt;
+
+&lt;/instruction&gt;
+
+Fix code:
+1. Consider possible solutions for the issues listed above.
+2. Choose a solution that can maximize fuzzing result, which is utilizing the function under test and feeding it not null input.
+3. Apply the solutions to the original code.
+It&#39;s important to show the complete code, not only the fixed line.
+&lt;solution&gt;
+</pre>
+
+
+
+<h3>Code #2</h3>
+
+<pre>
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+#include &#34;cstddef&#34;
+#include &#34;inttypes.h&#34;
+#include &#34;stdint.h&#34;
+#include &#34;string.h&#34;
+
+#include &#34;GlobalParams.h&#34;
+#include &#34;/src/xpdf-4.05/xpdf/PDFDoc.h&#34;
+#include &#34;SplashBitmap.h&#34;
+#include &#34;SplashOutputDev.h&#34;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
+  std::vector&lt;unsigned char&gt; pdf_doc_data(size + 1, &#39;\0&#39;);
+  memcpy(pdf_doc_data.data(), data, size);
+  pdf_doc_data.push_back(&#39;\0&#39;);
+
+  // Setup the error output handler to never output anything
+  globalParams = new GlobalParams();
+  globalParams-&gt;setErrQuiet(gTrue);
+
+  // Setup the input device
+  Object pdf_doc(owner);
+  pdf_doc.initNull();
+  MemStream stream(static_cast&lt;char*&gt;(pdf_doc_data.data()), 0, size, &amp;pdf_doc);
+  if (pdf_doc_data.size() &lt; 1) return 0;
+
+  FuzzedDataProvider fdp(data, size);
+  
+  // Setup the output device
+  SplashColor paper_color = {0xff, 0xff, 0xff};
+  SplashOutputDev splash_output_dev(splashModeRGB8, 4, gFalse, paper_color);
+    
+  // Initiate the pdf doc
+  PDFDoc content_pdf_doc(&amp;stream);
+  
+  // Input variables of the displayPageSlice function
+  int pg = fdp.ConsumeIntegral&lt;int&gt;();
+  double h_dpi = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  double v_dpi = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  int rotate = fdp.ConsumeIntegral&lt;int&gt;();
+  GBool useMediaBox = fdp.ConsumeBool();
+  GBool crop = fdp.ConsumeBool();
+  GBool printing = fdp.ConsumeBool();
+  int sliceX = fdp.ConsumeIntegral&lt;int&gt;();
+  int sliceY = fdp.ConsumeIntegral&lt;int&gt;();
+  int sliceW = fdp.ConsumeIntegral&lt;int&gt;();
+  int sliceH = fdp.ConsumeIntegral&lt;int&gt;();
+  
+  // Display the page slice
+  content_pdf_doc.displayPageSlice(&amp;splash_output_dev, pg, h_dpi, v_dpi, rotate, 
+                     useMediaBox, crop, printing, sliceX, sliceY, sliceW, sliceH,
+                     nullptr, nullptr);
+  
+  delete globalParams;
+  return 0;
+}
+</pre>
+
+
+<h3>Fixer prompt #3</h3>
+<pre>
+
+Given the following C++ fuzz harness and its build error message, fix the code to make it build for fuzzing.
+
+If there is undeclared identifier or unknown type name error, fix it by finding and including the related libraries.
+
+MUST RETURN THE FULL CODE, INCLUDING UNCHANGED PARTS.
+
+Below is the code needs to be built:
+&lt;code&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+#include &#34;cstddef&#34;
+#include &#34;inttypes.h&#34;
+#include &#34;stdint.h&#34;
+#include &#34;string.h&#34;
+
+#include &#34;GlobalParams.h&#34;
+#include &#34;/src/xpdf-4.05/xpdf/PDFDoc.h&#34;
+#include &#34;SplashBitmap.h&#34;
+#include &#34;SplashOutputDev.h&#34;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
+  std::vector&lt;unsigned char&gt; pdf_doc_data(size + 1, &#39;\0&#39;);
+  memcpy(pdf_doc_data.data(), data, size);
+  pdf_doc_data.push_back(&#39;\0&#39;);
+
+  // Setup the error output handler to never output anything
+  globalParams = new GlobalParams();
+  globalParams-&gt;setErrQuiet(gTrue);
+
+  // Setup the input device
+  Object pdf_doc(owner);
+  pdf_doc.initNull();
+  MemStream stream(static_cast&lt;char*&gt;(pdf_doc_data.data()), 0, size, &amp;pdf_doc);
+  if (pdf_doc_data.size() &lt; 1) return 0;
+
+  FuzzedDataProvider fdp(data, size);
+  
+  // Setup the output device
+  SplashColor paper_color = {0xff, 0xff, 0xff};
+  SplashOutputDev splash_output_dev(splashModeRGB8, 4, gFalse, paper_color);
+    
+  // Initiate the pdf doc
+  PDFDoc content_pdf_doc(&amp;stream);
+  
+  // Input variables of the displayPageSlice function
+  int pg = fdp.ConsumeIntegral&lt;int&gt;();
+  double h_dpi = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  double v_dpi = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  int rotate = fdp.ConsumeIntegral&lt;int&gt;();
+  GBool useMediaBox = fdp.ConsumeBool();
+  GBool crop = fdp.ConsumeBool();
+  GBool printing = fdp.ConsumeBool();
+  int sliceX = fdp.ConsumeIntegral&lt;int&gt;();
+  int sliceY = fdp.ConsumeIntegral&lt;int&gt;();
+  int sliceW = fdp.ConsumeIntegral&lt;int&gt;();
+  int sliceH = fdp.ConsumeIntegral&lt;int&gt;();
+  
+  // Display the page slice
+  content_pdf_doc.displayPageSlice(&amp;splash_output_dev, pg, h_dpi, v_dpi, rotate, 
+                     useMediaBox, crop, printing, sliceX, sliceY, sliceW, sliceH,
+                     nullptr, nullptr);
+  
+  delete globalParams;
+  return 0;
+}
+&lt;/code&gt;
+
+Below is the error to fix:
+The code has the following build issues:
+&lt;error&gt;
+fuzz_JBIG2.cc:18:22: error: no matching constructor for initialization of &#39;GlobalParams&#39;
+   18 |   globalParams = new GlobalParams();
+      |                      ^
+../xpdf/GlobalParams.h:236:3: note: candidate constructor not viable: requires single argument &#39;cfgFileName&#39;, but no arguments were provided
+  236 |   GlobalParams(const char *cfgFileName);
+      |   ^            ~~~~~~~~~~~~~~~~~~~~~~~
+../xpdf/GlobalParams.h:231:7: note: candidate constructor (the implicit copy constructor) not viable: requires 1 argument, but 0 were provided
+  231 | class GlobalParams {
+      |       ^~~~~~~~~~~~
+fuzz_JBIG2.cc:22:18: error: unknown type name &#39;owner&#39;
+   22 |   Object pdf_doc(owner);
+      |                  ^
+fuzz_JBIG2.cc:22:17: warning: parentheses were disambiguated as a function declaration [-Wvexing-parse]
+   22 |   Object pdf_doc(owner);
+      |                 ^~~~~~~
+fuzz_JBIG2.cc:22:18: note: add a pair of parentheses to declare a variable
+   22 |   Object pdf_doc(owner);
+      |                  ^
+      |                  (
+fuzz_JBIG2.cc:24:20: error: static_cast from &#39;value_type *&#39; (aka &#39;unsigned char *&#39;) to &#39;char *&#39; is not allowed
+   24 |   MemStream stream(static_cast&lt;char*&gt;(pdf_doc_data.data()), 0, size, &amp;pdf_doc);
+      |                    ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+&lt;/error&gt;
+
+
+Below are instructions to assist you in fixing the error.
+&lt;instruction&gt;
+IMPORTANT: ALWAYS INCLUDE STANDARD LIBRARIES BEFORE PROJECT-SPECIFIC (xpdf) LIBRARIES. This order prevents errors like &#34;unknown type name&#34; for basic types. Additionally, include project-specific libraries that contain declarations before those thatuse these declared symbols.
+&lt;/instruction&gt;
+
+Fix code:
+1. Consider possible solutions for the issues listed above.
+2. Choose a solution that can maximize fuzzing result, which is utilizing the function under test and feeding it not null input.
+3. Apply the solutions to the original code.
+It&#39;s important to show the complete code, not only the fixed line.
+&lt;solution&gt;
+</pre>
+
+
+
+<h3>Code #3</h3>
+
+<pre>
+&lt;code&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+#include &#34;cstddef&#34;
+#include &#34;inttypes.h&#34;
+#include &#34;stdint.h&#34;
+#include &#34;string.h&#34;
+#include &lt;vector&gt;
+
+#include &#34;GlobalParams.h&#34;
+#include &#34;/src/xpdf-4.05/xpdf/PDFDoc.h&#34;
+#include &#34;SplashBitmap.h&#34;
+#include &#34;SplashOutputDev.h&#34;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
+  std::vector&lt;unsigned char&gt; pdf_doc_data(size + 1, &#39;\0&#39;);
+  memcpy(pdf_doc_data.data(), data, size);
+  pdf_doc_data.push_back(&#39;\0&#39;);
+
+  // Setup the error output handler to never output anything
+  globalParams = new GlobalParams(nullptr);
+  globalParams-&gt;setErrQuiet(gTrue);
+
+  // Setup the input device
+  Object pdf_doc;
+  pdf_doc.initNull();
+  MemStream stream(reinterpret_cast&lt;char*&gt;(pdf_doc_data.data()), 0, size, &amp;pdf_doc);
+  if (pdf_doc_data.size() &lt; 1) return 0;
+
+  FuzzedDataProvider fdp(data, size);
+  
+  // Setup the output device
+  SplashColor paper_color = {0xff, 0xff, 0xff};
+  SplashOutputDev splash_output_dev(splashModeRGB8, 4, gFalse, paper_color);
+    
+  // Initiate the pdf doc
+  PDFDoc content_pdf_doc(&amp;stream);
+  
+  // Input variables of the displayPageSlice function
+  int pg = fdp.ConsumeIntegral&lt;int&gt;();
+  double h_dpi = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  double v_dpi = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  int rotate = fdp.ConsumeIntegral&lt;int&gt;();
+  GBool useMediaBox = fdp.ConsumeBool();
+  GBool crop = fdp.ConsumeBool();
+  GBool printing = fdp.ConsumeBool();
+  int sliceX = fdp.ConsumeIntegral&lt;int&gt;();
+  int sliceY = fdp.ConsumeIntegral&lt;int&gt;();
+  int sliceW = fdp.ConsumeIntegral&lt;int&gt;();
+  int sliceH = fdp.ConsumeIntegral&lt;int&gt;();
+  
+  // Display the page slice
+  content_pdf_doc.displayPageSlice(&amp;splash_output_dev, pg, h_dpi, v_dpi, rotate, 
+                     useMediaBox, crop, printing, sliceX, sliceY, sliceW, sliceH,
+                     nullptr, nullptr);
+  
+  delete globalParams;
+  return 0;
+}
+&lt;/code&gt;
+</pre>
+
+
+<h3>Fixer prompt #4</h3>
+<pre>
+
+Given the following C++ fuzz harness and its build error message, fix the code to make it build for fuzzing.
+
+If there is undeclared identifier or unknown type name error, fix it by finding and including the related libraries.
+
+MUST RETURN THE FULL CODE, INCLUDING UNCHANGED PARTS.
+
+Below is the code needs to be built:
+&lt;code&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+#include &#34;cstddef&#34;
+#include &#34;inttypes.h&#34;
+#include &#34;stdint.h&#34;
+#include &#34;string.h&#34;
+#include &lt;vector&gt;
+
+#include &#34;GlobalParams.h&#34;
+#include &#34;/src/xpdf-4.05/xpdf/PDFDoc.h&#34;
+#include &#34;SplashBitmap.h&#34;
+#include &#34;SplashOutputDev.h&#34;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
+  std::vector&lt;unsigned char&gt; pdf_doc_data(size + 1, &#39;\0&#39;);
+  memcpy(pdf_doc_data.data(), data, size);
+  pdf_doc_data.push_back(&#39;\0&#39;);
+
+  // Setup the error output handler to never output anything
+  globalParams = new GlobalParams(nullptr);
+  globalParams-&gt;setErrQuiet(gTrue);
+
+  // Setup the input device
+  Object pdf_doc;
+  pdf_doc.initNull();
+  MemStream stream(reinterpret_cast&lt;char*&gt;(pdf_doc_data.data()), 0, size, &amp;pdf_doc);
+  if (pdf_doc_data.size() &lt; 1) return 0;
+
+  FuzzedDataProvider fdp(data, size);
+  
+  // Setup the output device
+  SplashColor paper_color = {0xff, 0xff, 0xff};
+  SplashOutputDev splash_output_dev(splashModeRGB8, 4, gFalse, paper_color);
+    
+  // Initiate the pdf doc
+  PDFDoc content_pdf_doc(&amp;stream);
+  
+  // Input variables of the displayPageSlice function
+  int pg = fdp.ConsumeIntegral&lt;int&gt;();
+  double h_dpi = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  double v_dpi = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  int rotate = fdp.ConsumeIntegral&lt;int&gt;();
+  GBool useMediaBox = fdp.ConsumeBool();
+  GBool crop = fdp.ConsumeBool();
+  GBool printing = fdp.ConsumeBool();
+  int sliceX = fdp.ConsumeIntegral&lt;int&gt;();
+  int sliceY = fdp.ConsumeIntegral&lt;int&gt;();
+  int sliceW = fdp.ConsumeIntegral&lt;int&gt;();
+  int sliceH = fdp.ConsumeIntegral&lt;int&gt;();
+  
+  // Display the page slice
+  content_pdf_doc.displayPageSlice(&amp;splash_output_dev, pg, h_dpi, v_dpi, rotate, 
+                     useMediaBox, crop, printing, sliceX, sliceY, sliceW, sliceH,
+                     nullptr, nullptr);
+  
+  delete globalParams;
+  return 0;
+}
+&lt;/code&gt;
+
+Below is the error to fix:
+The code can build successfully but has a runtime issue: Fuzzing crashed immediately at runtime (ASAN-ERROR: AddressSanitizer: SEGV on unknown address 0x000000000038 (pc 0x7f61b9e9efc4 bp 0x7ffffae90740 sp 0x7ffffae90708 T0)), indicating fuzz target code for invoking the function under test is incorrect or unrobust.
+&lt;error&gt;
+Crash stacks:
+Stack 0:
+#0 0x7f61b9e9efc4 in __pthread_mutex_lock (/lib/x86_64-linux-gnu/libpthread.so.0+0xafc4) (BuildId: 9a65bb469e45a1c6fbcffae5b82a2fd7a69eb479)
+#1 0x55fec75202a6 in Catalog::getPage(int) /src/xpdf-4.05/xpdf/Catalog.cc:300:3
+#2 0x55fec74b6eef in PDFDoc::displayPageSlice(OutputDev*, int, double, double, int, int, int, int, int, int, int, int, int (*)(void*), void*) /src/xpdf-4.05/xpdf/PDFDoc.cc:476:12
+#3 0x55fec7498b3f in LLVMFuzzerTestOneInput /src/xpdf-4.05/build/fuzz_JBIG2.cc:51:19
+#4 0x55fec734a660 in fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:614:13
+#5 0x55fec734bb61 in fuzzer::Fuzzer::ReadAndExecuteSeedCorpora(std::__Fuzzer::vector&lt;fuzzer::SizedFile, std::__Fuzzer::allocator&lt;fuzzer::SizedFile&gt;&gt;&amp;) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:807:3
+#6 0x55fec734c147 in fuzzer::Fuzzer::Loop(std::__Fuzzer::vector&lt;fuzzer::SizedFile, std::__Fuzzer::allocator&lt;fuzzer::SizedFile&gt;&gt;&amp;) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:867:3
+#7 0x55fec733a756 in fuzzer::FuzzerDriver(int*, char***, int (*)(unsigned char const*, unsigned long)) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:914:6
+#8 0x55fec7366c82 in main /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMain.cpp:20:10
+#9 0x7f61b9c7d082 in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x24082) (BuildId: 0702430aef5fa3dda43986563e9ffcc47efbd75e)
+#10 0x55fec732b8cd in _start (/out/fuzz_JBIG2+0x29f8cd)
+&lt;/error&gt;
+
+
+
+
+Fix code:
+1. Consider possible solutions for the issues listed above.
+2. Choose a solution that can maximize fuzzing result, which is utilizing the function under test and feeding it not null input.
+3. Apply the solutions to the original code.
+It&#39;s important to show the complete code, not only the fixed line.
+&lt;solution&gt;
+</pre>
+
+
+
+<h3>Code #4</h3>
+
+<pre>
+&lt;code&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+#include &#34;cstddef&#34;
+#include &#34;inttypes.h&#34;
+#include &#34;stdint.h&#34;
+#include &#34;string.h&#34;
+#include &lt;vector&gt;
+
+#include &#34;GlobalParams.h&#34;
+#include &#34;/src/xpdf-4.05/xpdf/PDFDoc.h&#34;
+#include &#34;SplashBitmap.h&#34;
+#include &#34;SplashOutputDev.h&#34;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
+  if (size &lt; 1) return 0;
+  
+  std::vector&lt;unsigned char&gt; pdf_doc_data(size + 1, &#39;\0&#39;);
+  memcpy(pdf_doc_data.data(), data, size);
+  pdf_doc_data.push_back(&#39;\0&#39;);
+
+  // Setup the error output handler to never output anything
+  globalParams = new GlobalParams(nullptr);
+  globalParams-&gt;setErrQuiet(gTrue);
+
+  // Setup the input device
+  Object pdf_doc;
+  pdf_doc.initNull();
+  MemStream stream(reinterpret_cast&lt;char*&gt;(pdf_doc_data.data()), 0, size, &amp;pdf_doc);
+
+  FuzzedDataProvider fdp(data, size);
+  
+  // Setup the output device
+  SplashColor paper_color = {0xff, 0xff, 0xff};
+  SplashOutputDev splash_output_dev(splashModeRGB8, 4, gFalse, paper_color);
+    
+  // Initiate the pdf doc
+  PDFDoc content_pdf_doc(&amp;stream);
+  if (!content_pdf_doc.isOk()) {
+    delete globalParams;
+    return 0;
+  }
+  
+  // Input variables of the displayPageSlice function
+  int pg = fdp.ConsumeIntegralInRange&lt;int&gt;(1, content_pdf_doc.getNumPages());
+  double h_dpi = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  double v_dpi = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  int rotate = fdp.ConsumeIntegral&lt;int&gt;();
+  GBool useMediaBox = fdp.ConsumeBool();
+  GBool crop = fdp.ConsumeBool();
+  GBool printing = fdp.ConsumeBool();
+  int sliceX = fdp.ConsumeIntegral&lt;int&gt;();
+  int sliceY = fdp.ConsumeIntegral&lt;int&gt;();
+  int sliceW = fdp.ConsumeIntegral&lt;int&gt;();
+  int sliceH = fdp.ConsumeIntegral&lt;int&gt;();
+  
+  // Display the page slice
+  content_pdf_doc.displayPageSlice(&amp;splash_output_dev, pg, h_dpi, v_dpi, rotate, 
+                     useMediaBox, crop, printing, sliceX, sliceY, sliceW, sliceH,
+                     nullptr, nullptr);
+  
+  delete globalParams;
+  return 0;
+}
+&lt;/code&gt;
+&lt;solution&gt;
+</pre>
+
+
+<h3>Fixer prompt #5</h3>
+<pre>
+
+Given the following C++ fuzz harness and its build error message, fix the code to make it build for fuzzing.
+
+If there is undeclared identifier or unknown type name error, fix it by finding and including the related libraries.
+
+MUST RETURN THE FULL CODE, INCLUDING UNCHANGED PARTS.
+
+Below is the code needs to be built:
+&lt;code&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+#include &#34;cstddef&#34;
+#include &#34;inttypes.h&#34;
+#include &#34;stdint.h&#34;
+#include &#34;string.h&#34;
+#include &lt;vector&gt;
+
+#include &#34;GlobalParams.h&#34;
+#include &#34;/src/xpdf-4.05/xpdf/PDFDoc.h&#34;
+#include &#34;SplashBitmap.h&#34;
+#include &#34;SplashOutputDev.h&#34;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
+  if (size &lt; 1) return 0;
+  
+  std::vector&lt;unsigned char&gt; pdf_doc_data(size + 1, &#39;\0&#39;);
+  memcpy(pdf_doc_data.data(), data, size);
+  pdf_doc_data.push_back(&#39;\0&#39;);
+
+  // Setup the error output handler to never output anything
+  globalParams = new GlobalParams(nullptr);
+  globalParams-&gt;setErrQuiet(gTrue);
+
+  // Setup the input device
+  Object pdf_doc;
+  pdf_doc.initNull();
+  MemStream stream(reinterpret_cast&lt;char*&gt;(pdf_doc_data.data()), 0, size, &amp;pdf_doc);
+
+  FuzzedDataProvider fdp(data, size);
+  
+  // Setup the output device
+  SplashColor paper_color = {0xff, 0xff, 0xff};
+  SplashOutputDev splash_output_dev(splashModeRGB8, 4, gFalse, paper_color);
+    
+  // Initiate the pdf doc
+  PDFDoc content_pdf_doc(&amp;stream);
+  if (!content_pdf_doc.isOk()) {
+    delete globalParams;
+    return 0;
+  }
+  
+  // Input variables of the displayPageSlice function
+  int pg = fdp.ConsumeIntegralInRange&lt;int&gt;(1, content_pdf_doc.getNumPages());
+  double h_dpi = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  double v_dpi = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  int rotate = fdp.ConsumeIntegral&lt;int&gt;();
+  GBool useMediaBox = fdp.ConsumeBool();
+  GBool crop = fdp.ConsumeBool();
+  GBool printing = fdp.ConsumeBool();
+  int sliceX = fdp.ConsumeIntegral&lt;int&gt;();
+  int sliceY = fdp.ConsumeIntegral&lt;int&gt;();
+  int sliceW = fdp.ConsumeIntegral&lt;int&gt;();
+  int sliceH = fdp.ConsumeIntegral&lt;int&gt;();
+  
+  // Display the page slice
+  content_pdf_doc.displayPageSlice(&amp;splash_output_dev, pg, h_dpi, v_dpi, rotate, 
+                     useMediaBox, crop, printing, sliceX, sliceY, sliceW, sliceH,
+                     nullptr, nullptr);
+  
+  delete globalParams;
+  return 0;
+}
+&lt;/code&gt;
+
+Below is the error to fix:
+The code can build successfully but has a runtime issue: Fuzzing crashed immediately at runtime (ASAN-ERROR: AddressSanitizer: attempting free on address which was not malloc()-ed: 0x7f43ab88fca0 in thread T0), indicating fuzz target code for invoking the function under test is incorrect or unrobust.
+&lt;error&gt;
+Crash stacks:
+Stack 0:
+#0 0x559d6f51f1ed in operator delete(void*) /src/llvm-project/compiler-rt/lib/asan/asan_new_delete.cpp:152:3
+#1 0x559d6f53fadf in PDFDoc::~PDFDoc() /src/xpdf-4.05/xpdf/PDFDoc.cc:352:5
+#2 0x559d6f521c12 in LLVMFuzzerTestOneInput /src/xpdf-4.05/build/fuzz_JBIG2.cc:62:1
+#3 0x559d6f3d3660 in fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:614:13
+#4 0x559d6f3d2e85 in fuzzer::Fuzzer::RunOne(unsigned char const*, unsigned long, bool, fuzzer::InputInfo*, bool, bool*) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:516:7
+#5 0x559d6f3d4cd6 in fuzzer::Fuzzer::ReadAndExecuteSeedCorpora(std::__Fuzzer::vector&lt;fuzzer::SizedFile, std::__Fuzzer::allocator&lt;fuzzer::SizedFile&gt;&gt;&amp;) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:812:5
+#6 0x559d6f3d5147 in fuzzer::Fuzzer::Loop(std::__Fuzzer::vector&lt;fuzzer::SizedFile, std::__Fuzzer::allocator&lt;fuzzer::SizedFile&gt;&gt;&amp;) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:867:3
+#7 0x559d6f3c3756 in fuzzer::FuzzerDriver(int*, char***, int (*)(unsigned char const*, unsigned long)) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:914:6
+#8 0x559d6f3efc82 in main /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMain.cpp:20:10
+#9 0x7f43ac067082 in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x24082) (BuildId: 0702430aef5fa3dda43986563e9ffcc47efbd75e)
+#10 0x559d6f3b48cd in _start (/out/fuzz_JBIG2+0x29f8cd)
+&lt;/error&gt;
+
+
+
+
+Fix code:
+1. Consider possible solutions for the issues listed above.
+2. Choose a solution that can maximize fuzzing result, which is utilizing the function under test and feeding it not null input.
+3. Apply the solutions to the original code.
+It&#39;s important to show the complete code, not only the fixed line.
+&lt;solution&gt;
+</pre>
+
+
+
+<h3>Code #5</h3>
+
+<pre>
+&lt;code&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+#include &#34;cstddef&#34;
+#include &#34;inttypes.h&#34;
+#include &#34;stdint.h&#34;
+#include &#34;string.h&#34;
+#include &lt;vector&gt;
+
+#include &#34;GlobalParams.h&#34;
+#include &#34;/src/xpdf-4.05/xpdf/PDFDoc.h&#34;
+#include &#34;SplashBitmap.h&#34;
+#include &#34;SplashOutputDev.h&#34;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
+  if (size &lt; 1) return 0;
+  
+  std::vector&lt;unsigned char&gt; pdf_doc_data(size + 1, &#39;\0&#39;);
+  memcpy(pdf_doc_data.data(), data, size);
+  pdf_doc_data.push_back(&#39;\0&#39;);
+
+  // Setup the error output handler to never output anything
+  globalParams = new GlobalParams(nullptr);
+  globalParams-&gt;setErrQuiet(gTrue);
+
+  // Setup the input device
+  Object pdf_doc;
+  pdf_doc.initNull();
+  MemStream stream(reinterpret_cast&lt;char*&gt;(pdf_doc_data.data()), 0, size, &amp;pdf_doc);
+
+  FuzzedDataProvider fdp(data, size);
+  
+  // Setup the output device
+  SplashColor paper_color = {0xff, 0xff, 0xff};
+  SplashOutputDev splash_output_dev(splashModeRGB8, 4, gFalse, paper_color);
+    
+  // Initiate the pdf doc
+  PDFDoc* content_pdf_doc = new PDFDoc(&amp;stream);
+  if (!content_pdf_doc-&gt;isOk()) {
+    delete globalParams;
+    delete content_pdf_doc;
+    return 0;
+  }
+  
+  // Input variables of the displayPageSlice function
+  int pg = fdp.ConsumeIntegralInRange&lt;int&gt;(1, content_pdf_doc-&gt;getNumPages());
+  double h_dpi = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  double v_dpi = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  int rotate = fdp.ConsumeIntegral&lt;int&gt;();
+  GBool useMediaBox = fdp.ConsumeBool();
+  GBool crop = fdp.ConsumeBool();
+  GBool printing = fdp.ConsumeBool();
+  int sliceX = fdp.ConsumeIntegral&lt;int&gt;();
+  int sliceY = fdp.ConsumeIntegral&lt;int&gt;();
+  int sliceW = fdp.ConsumeIntegral&lt;int&gt;();
+  int sliceH = fdp.ConsumeIntegral&lt;int&gt;();
+  
+  // Display the page slice
+  content_pdf_doc-&gt;displayPageSlice(&amp;splash_output_dev, pg, h_dpi, v_dpi, rotate, 
+                     useMediaBox, crop, printing, sliceX, sliceY, sliceW, sliceH,
+                     nullptr, nullptr);
+  
+  delete globalParams;
+  delete content_pdf_doc;
+  return 0;
+}
+&lt;/code&gt;
+
+The issue was that the PDFDoc object was being created on the stack, and then deleted as if it was created on the heap. This was causing an error because delete is meant to be used with objects created with new (on the heap), not with objects created on the stack. The solution was to create the PDFDoc object on the heap using new, and then delete it properly at the end of the function.
+</pre>
+
+
+<h2>Logs</h2>
+<pre>
+Fixing /home/chyun/oss-fuzz-gen1/results1/output-xpdf-_zn6pdfdoc16displaypagesliceep9outputdeviddiiiiiiiipfipves2_/fixed_targets/01.cc with gpt-4, attempt 1.
+Fixing /home/chyun/oss-fuzz-gen1/results1/output-xpdf-_zn6pdfdoc16displaypagesliceep9outputdeviddiiiiiiiipfipves2_/fixed_targets/01.cc with gpt-4, attempt 2.
+Fixing /home/chyun/oss-fuzz-gen1/results1/output-xpdf-_zn6pdfdoc16displaypagesliceep9outputdeviddiiiiiiiipfipves2_/fixed_targets/01.cc with gpt-4, attempt 3.
+Fixing /home/chyun/oss-fuzz-gen1/results1/output-xpdf-_zn6pdfdoc16displaypagesliceep9outputdeviddiiiiiiiipfipves2_/fixed_targets/01.cc with gpt-4, attempt 4.
+Fixing /home/chyun/oss-fuzz-gen1/results1/output-xpdf-_zn6pdfdoc16displaypagesliceep9outputdeviddiiiiiiiipfipves2_/fixed_targets/01.cc with gpt-4, attempt 5.
+Successfully built /home/chyun/oss-fuzz-gen1/results1/output-xpdf-_zn6pdfdoc16displaypagesliceep9outputdeviddiiiiiiiipfipves2_/fixed_targets/01.cc with gpt-4 in 5 iterations of fixing.
+Triaging the crash related to /home/chyun/oss-fuzz-gen1/results1/output-xpdf-_zn6pdfdoc16displaypagesliceep9outputdeviddiiiiiiiipfipves2_/fixed_targets/01.cc with gpt-4.
+Warning: Failed to fix semantic error FP_NEAR_INIT_CRASH in xpdf-zn6pdfdoc16displaypagesliceep9outputdeviddiiiiiiiipfipves2-01.
+
+</pre>
+
+<h2>Run logs</h2>
+<pre>
+INFO:__main__:Running: docker run --privileged --shm-size=2g --platform linux/amd64 --rm -e FUZZING_ENGINE=libfuzzer -e SANITIZER=address -e RUN_FUZZER_MODE=interactive -e HELPER=True -v /home/chyun/oss-fuzz-gen1/results1/output-xpdf-_zn6pdfdoc16displaypagesliceep9outputdeviddiiiiiiiipfipves2_/corpora/01.cc:/tmp/fuzz_JBIG2_corpus -v /tmp/tmpvryew9ie/build/out/xpdf-zn6pdfdoc16displaypagesliceep9outputdeviddiiiiiiiipfipves2-01:/out -t gcr.io/oss-fuzz-base/base-runner run_fuzzer fuzz_JBIG2 -print_final_stats=1 -max_total_time=30 -len_control=0 -timeout=30.
+vm.mmap_rnd_bits = 28
+rm: cannot remove &#39;/tmp/fuzz_JBIG2_corpus&#39;: Device or resource busy
+/out/fuzz_JBIG2 -rss_limit_mb=2560 -timeout=25 -print_final_stats=1 -max_total_time=30 -len_control=0 -timeout=30 /tmp/fuzz_JBIG2_corpus -detect_leaks=0 &lt; /dev/null
+INFO: Running with entropic power schedule (0xFF, 100).
+INFO: Seed: 870322825
+INFO: Loaded 1 modules   (57817 inline 8-bit counters): 57817 [0x56265886ca48, 0x56265887ac21), 
+INFO: Loaded 1 PC tables (57817 PCs): 57817 [0x56265887ac28,0x56265895c9b8), 
+INFO:        0 files found in /tmp/fuzz_JBIG2_corpus
+INFO: -max_len is not provided; libFuzzer will not generate inputs larger than 4096 bytes
+INFO: A corpus is not provided, starting from an empty corpus
+=================================================================
+[1m[31m==17==ERROR: AddressSanitizer: attempting free on address which was not malloc()-ed: 0x7f805eb79ca0 in thread T0
+[1m[0mSCARINESS: 40 (bad-free)
+    #0 0x56265813d1ed in operator delete(void*) /src/llvm-project/compiler-rt/lib/asan/asan_new_delete.cpp:152:3
+    #1 0x56265815daaf in PDFDoc::~PDFDoc() /src/xpdf-4.05/xpdf/PDFDoc.cc:352:5
+    #2 0x56265813fbf5 in LLVMFuzzerTestOneInput /src/xpdf-4.05/build/fuzz_JBIG2.cc
+    #3 0x562657ff1660 in fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:614:13
+    #4 0x562657ff0e85 in fuzzer::Fuzzer::RunOne(unsigned char const*, unsigned long, bool, fuzzer::InputInfo*, bool, bool*) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:516:7
+    #5 0x562657ff2cd6 in fuzzer::Fuzzer::ReadAndExecuteSeedCorpora(std::__Fuzzer::vector&lt;fuzzer::SizedFile, std::__Fuzzer::allocator&lt;fuzzer::SizedFile&gt;&gt;&amp;) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:812:5
+    #6 0x562657ff3147 in fuzzer::Fuzzer::Loop(std::__Fuzzer::vector&lt;fuzzer::SizedFile, std::__Fuzzer::allocator&lt;fuzzer::SizedFile&gt;&gt;&amp;) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:867:3
+    #7 0x562657fe1756 in fuzzer::FuzzerDriver(int*, char***, int (*)(unsigned char const*, unsigned long)) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:914:6
+    #8 0x56265800dc82 in main /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMain.cpp:20:10
+    #9 0x7f805f0ce082 in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x24082) (BuildId: 0702430aef5fa3dda43986563e9ffcc47efbd75e)
+    #10 0x562657fd28cd in _start (/out/fuzz_JBIG2+0x29f8cd)
+
+DEDUP_TOKEN: operator delete(void*)--PDFDoc::~PDFDoc()--LLVMFuzzerTestOneInput
+[1m[32mAddress 0x7f805eb79ca0 is located in stack of thread T0 at offset 160 in frame[1m[0m
+[1m[0m    #0 0x56265813ec7f in LLVMFuzzerTestOneInput /src/xpdf-4.05/build/fuzz_JBIG2.cc:13
+
+DEDUP_TOKEN: LLVMFuzzerTestOneInput
+  This frame has 7 object(s):
+    [32, 56) &#39;pdf_doc_data&#39; (line 16)
+    [96, 97) &#39;ref.tmp&#39; (line 16)
+    [112, 113) &#39;ref.tmp1&#39; (line 18)
+    [128, 144) &#39;pdf_doc&#39; (line 25)
+    [160, 224) &#39;stream&#39; (line 27)[1m[32m &lt;== Memory access at offset 160 is inside this variable[1m[0m
+    [256, 260) &#39;paper_color&#39; (line 32)
+    [272, 640) &#39;splash_output_dev&#39; (line 33)
+HINT: this may be a false positive if your program uses some custom stack unwind mechanism, swapcontext or vfork
+      (longjmp and C++ exceptions *are* supported)
+SUMMARY: AddressSanitizer: bad-free /src/llvm-project/compiler-rt/lib/asan/asan_new_delete.cpp:152:3 in operator delete(void*)
+==17==ABORTING
+MS: 0 ; base unit: 0000000000000000000000000000000000000000
+0xa,
+\012
+artifact_prefix=&#39;./&#39;; Test unit written to ./crash-adc83b19e793491b1c6ea0fd8b46cd9f32e592fc
+Base64: Cg==
+stat::number_of_executed_units: 2
+stat::average_exec_per_sec:     0
+stat::new_units_added:          0
+stat::slowest_unit_time_sec:    0
+stat::peak_rss_mb:              40
+
+</pre>
+
+
+</body>

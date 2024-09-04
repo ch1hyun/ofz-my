@@ -1,0 +1,43 @@
+{
+    "samples": [
+
+    {
+        "benchmark": "output-xpdf-_zn3gfx14opsetextgstateep6objecti",
+        "sample": "01",
+        "status": "Done",
+        "compiles": "False",
+        "crashes": "False",
+        "crash_reason": "-",
+        "bug": "True",
+        "coverage": "0.00",
+        "coverage_diff": "0.0",
+        "coverage_report": "#",
+        "stacktrace": "/stacktrace",
+        "target_binary": "/target_binary",
+        "reproducer": "/artifacts",
+        "run_log": "run.log",
+        "source_code": "#include <fuzzer/FuzzedDataProvider.h>\\n\\n#include <aconf.h>\\n#include <png.h>\\n#include <stddef.h>\\n#include <stdint.h>\\n#include <stdio.h>\\n#include <stdlib.h>\\n#include <string.h>\\n#include <vector>\\n\\n#include \"GString.h\"\\n#include \"GlobalParams.h\"\\n#include \"JBIG2Stream.h\"\\n#include \"Object.h\"\\n#include \"PDFDoc.h\"\\n#include \"Splash.h\"\\n#include \"SplashBitmap.h\"\\n#include \"SplashOutputDev.h\"\\n#include \"Stream.h\"\\n#include \"config.h\"\\n#include \"gfile.h\"\\n#include \"gmem.h\"\\n#include \"gmempp.h\"\\n#include \"parseargs.h\"\\n#include \"GfxState.h\"\\n#include \"GfxFont.h\"\\n#include \"Gfx.h\"\\n\\nextern \"C\" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {\\n  FuzzedDataProvider fdp(data, size);\\n  std::vector<char> payload = fdp.ConsumeRemainingBytes<char>();\\n\\n  globalParams = new GlobalParams(NULL);\\n  globalParams->setErrQuiet(1);\\n  globalParams->setupBaseFonts(NULL);\\n  char yes[] = \"yes\";\\n  globalParams->setEnableFreeType(yes); // Yes, it's a string and not a bool.\\n  globalParams->setErrQuiet(1);\\n\\n  PDFDoc *doc = NULL;\\n  Object xpdf_obj;\\n  xpdf_obj.initNull();\\n  BaseStream *stream = new MemStream(payload.data(), 0, payload.size(), &xpdf_obj);\\n\\n  try {\\n    doc = new PDFDoc(stream);\\n    if (doc->isOk() == gTrue) {\\n      doc->getNumPages();\\n      Object info;\\n      doc->getDocInfo(&info);\\n      if (info.isDict()) {\\n        Dict *dict = info.getDict();\\n        for (int j = 0; j < dict->getLength(); j++) {\\n          Object refObj;\\n          dict->getValNF(j, &refObj);\\n          OutputDev *out = new SplashOutputDev(splashModeRGB8, 4, gFalse, gFalse);\\n          Gfx *gfx = new Gfx(doc, out, dict, NULL, NULL, NULL, NULL); // Fixed constructor\\n          if(gfx) {\\n            int i = fdp.ConsumeIntegral<int>();\\n            // As opSetExtGState is private, we cannot call it directly. \\n            // We need to find a public method that eventually calls this private method.\\n            // For example, let's assume that displayPage calls opSetExtGState internally.\\n            gfx->displayPage(i); // Changed method call from displayText to displayPage\\n          }\\n          delete gfx;\\n        }\\n      }\\n      info.free();\\n    }  \\n  } catch (...) {\\n  }\\n\\n  delete globalParams;\\n\\n  return 0;\\n}",
+        "model": ""
+    },
+
+    {
+        "benchmark": "output-xpdf-_zn3gfx14opsetextgstateep6objecti",
+        "sample": "02",
+        "status": "Done",
+        "compiles": "False",
+        "crashes": "False",
+        "crash_reason": "-",
+        "bug": "True",
+        "coverage": "0.00",
+        "coverage_diff": "0.0",
+        "coverage_report": "#",
+        "stacktrace": "/stacktrace",
+        "target_binary": "/target_binary",
+        "reproducer": "/artifacts",
+        "run_log": "run.log",
+        "source_code": "#include <fuzzer/FuzzedDataProvider.h>\\n\\n#include <stddef.h>\\n#include <stdint.h>\\n#include <stdio.h>\\n#include <stdlib.h>\\n#include <string.h>\\n#include <vector>\\n\\n#include \"Gfx.h\"\\n#include \"GlobalParams.h\"\\n#include \"Object.h\"\\n#include \"OutputDev.h\"\\n#include \"PDFDoc.h\"\\n\\nextern \"C\" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {\\n  FuzzedDataProvider stream(data, size);\\n\\n  const std::string fileName = \"/tmp/spworahtyan\";\\n  FILE *file = fopen(fileName.c_str(), \"wb\");\\n  if (!file)\\n    return 0;\\n  fwrite(data, 1, size, file);\\n  fclose(file);\\n\\n  globalParams = new GlobalParams(\"/tmp/config.txt\");\\n  globalParams->setEnableFreeType(const_cast<char*>(\"yes\"));\\n\\n  PDFDoc *doc = nullptr;\\n\\n  try {\\n    doc = new PDFDoc(new GString(fileName.c_str()));\\n\\n    // Hold a reference because `doc->getCatalog()` is a temporary object.\\n    Catalog *catalog = doc->getCatalog();\\n\\n    Dict *resources = new Dict(doc->getXRef());\\n\\n    PDFRectangle cropBox = {0, 0, 1024, 1024};\\n    const int rotate = 0;\\n    GBool useMediaBox = gFalse;\\n    GBool crop = gTrue;\\n\\n    GfxState *state = new GfxState(72.0, 72.0, &cropBox, rotate, useMediaBox);\\n\\n    XRef *xref = doc->getXRef();\\n    OutputDev *dev = nullptr;\\n    Gfx *gfx = new Gfx(doc, dev, 1, resources, 72.0, 72.0, &cropBox, &cropBox, rotate, nullptr, nullptr);\\n\\n    const int numArgs = 1;\\n    Object args[numArgs];\\n\\n    // Call the function under test\\n    gfx->display(&args[0]);\\n\\n  } catch (...) {\\n  }\\n\\n  delete doc;\\n  delete globalParams;\\n\\n  return 0;\\n}",
+        "model": ""
+    }
+
+    ]
+}

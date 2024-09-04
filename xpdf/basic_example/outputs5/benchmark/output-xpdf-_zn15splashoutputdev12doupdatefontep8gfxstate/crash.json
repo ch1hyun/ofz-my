@@ -1,0 +1,43 @@
+{
+    "samples": [
+
+    {
+        "benchmark": "output-xpdf-_zn15splashoutputdev12doupdatefontep8gfxstate",
+        "sample": "01",
+        "status": "Done",
+        "compiles": "False",
+        "crashes": "False",
+        "crash_reason": "-",
+        "bug": "True",
+        "coverage": "0.00",
+        "coverage_diff": "0.0",
+        "coverage_report": "#",
+        "stacktrace": "/stacktrace",
+        "target_binary": "/target_binary",
+        "reproducer": "/artifacts",
+        "run_log": "run.log",
+        "source_code": "#include <fuzzer/FuzzedDataProvider.h>\\n\\n#include <stddef.h>\\n#include <stdint.h>\\n#include <string.h>\\n\\n#include \"GfxFont.h\"\\n#include \"GlobalParams.h\"\\n#include \"SplashOutputDev.h\"\\n#include \"splash/SplashFontEngine.h\"\\n#include \"splash/Splash.h\"\\n\\nextern \"C\" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {\\n  if (!globalParams) {\\n    globalParams = new GlobalParams(nullptr);\\n  }\\n  SplashColor paperColor = {255, 255, 255};  // white\\n  SplashOutputDev splashOut(splashModeRGB8, 4, false, paperColor);\\n\\n  FuzzedDataProvider fdp(data, size);\\n  std::string name = fdp.ConsumeRandomLengthString();\\n  bool is_cid_type_0c = fdp.ConsumeBool();\\n  int to_unicode_len = fdp.remaining_bytes();\\n  std::string to_unicode_string = fdp.ConsumeRemainingBytesAsString();\\n  unsigned short *to_unicode = (unsigned short *)to_unicode_string.data();\\n\\n  GfxFontType type = is_cid_type_0c ? fontCIDType0C : fontCIDType2;\\n  Ref idA; // Added this line to fix the error\\n  idA.num = 0; // Added this line to fix the error\\n  idA.gen = 0; // Added this line to fix the error\\n  std::unique_ptr<GfxFont> font(\\n      new GfxCIDFont(NULL, name.c_str(), idA, new GString(\"Adobe-Japan1\"), \\n      type, 0, nullptr));\\n  \\n  GfxState gfx_state(72.0, 72.0, nullptr, 0, false);\\n  gfx_state.setFont(font.get(), 1.0);\\n  splashOut.updateFont(&gfx_state);\\n  // Removed the line \"splashOut.doUpdateFont(&gfx_state);\" as it is a private member and cannot be accessed here\\n  \\n  return 0;\\n}",
+        "model": ""
+    },
+
+    {
+        "benchmark": "output-xpdf-_zn15splashoutputdev12doupdatefontep8gfxstate",
+        "sample": "02",
+        "status": "Done",
+        "compiles": "True",
+        "crashes": "True",
+        "crash_reason": "FP_NEAR_INIT_CRASH",
+        "bug": "False",
+        "coverage": "0.00",
+        "coverage_diff": "0.0",
+        "coverage_report": "#",
+        "stacktrace": "/stacktrace",
+        "target_binary": "/target_binary",
+        "reproducer": "/artifacts",
+        "run_log": "run.log",
+        "source_code": "#include <fuzzer/FuzzedDataProvider.h>\\n\\n#include <memory>\\n#include <vector>\\n#include <stddef.h>\\n#include <stdint.h>\\n\\n#include \"PDFDoc.h\"\\n#include \"SplashOutputDev.h\"\\n#include \"GlobalParams.h\"\\n#include \"/src/xpdf-4.05/goo/GString.h\"\\n\\nextern \"C\" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {\\n  FuzzedDataProvider fdp(data, size);\\n  std::vector<unsigned char> buffer = fdp.ConsumeRemainingBytes<unsigned char>();\\n  char yes[] = \"yes\";\\n  \\n  // Initialize GlobalParams with default values\\n  std::unique_ptr<GlobalParams> globalParams = std::make_unique<GlobalParams>(yes);\\n  globalParams->setEnableFreeType(yes);\\n\\n  Object obj;\\n  obj.initNull();\\n  std::unique_ptr<PDFDoc> doc;\\n\\n  MemStream *str = new MemStream((char *)buffer.data(), 0, buffer.size(), &obj);\\n  doc = std::make_unique<PDFDoc>(str);\\n\\n  SplashColor paperColor;\\n  paperColor[0] = 0xff;\\n  paperColor[1] = 0xff;\\n  paperColor[2] = 0xff;\\n  auto splashOut = std::make_unique<SplashOutputDev>(splashModeBGR8, 4, false, paperColor);\\n  splashOut->startDoc(doc->getXRef());\\n  doc->displayPages(splashOut.get(), 1, doc->getNumPages(), 72, 72, 0,\\n                    false, true, false);\\n\\n  for (int i=1; i < doc->getNumPages(); ++i) {\\n    doc->displayPage(splashOut.get(), i, 72, 72, 0, false, true, false);\\n    GfxState* state = new GfxState(72, 72, doc->getCatalog()->getPage(i)->getCropBox(), 0, false);\\n    // splashOut->doUpdateFont(state); // This method is private and cannot be accessed here.\\n    delete state;\\n  }\\n\\n  return 0;\\n}",
+        "model": ""
+    }
+
+    ]
+}

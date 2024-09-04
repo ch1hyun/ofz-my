@@ -1,0 +1,350 @@
+<!doctype html>
+
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Experiment results</title>
+<style>
+* {
+    box-sizing: border-box;
+}
+
+html {
+    line-height: 1.15;
+}
+
+body {
+    font-family: sans-serif;
+    font-size: 16px;
+}
+
+table {
+    border-collapse: collapse;
+    border-spacing: 0;
+}
+
+td, th {
+    border-right: 1px #dedede solid;
+    border-bottom: 1px #dedede solid;
+    padding: 5px;
+    text-align: left;
+}
+td:first-child, th:first-child {
+    border-left: 1px #dedede solid;
+}
+th {
+    border-top: 1px #dedede solid;
+}
+
+tbody tr:nth-child(odd) {
+    background-color: #f4f5ff;
+}
+</style>
+<body>
+    LLM: 
+    
+<h1>output-xpdf-_zn6pdfdoc12displaypagesep9outputdeviiddiiiipfipves2_ / 01</h1>
+Bug: False
+<br>
+Crash reason: NO_SEMANTIC_ERR
+<br>
+<br>
+
+<h2>Triage</h2>
+<pre>
+
+</pre>
+<br>
+
+
+
+
+
+<h3>Final code</h3>
+
+<pre>
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+#include &lt;aconf.h&gt;
+#include &lt;png.h&gt;
+#include &lt;stddef.h&gt;
+#include &lt;stdint.h&gt;
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;string.h&gt;
+#include &lt;vector&gt;
+
+#include &#34;GString.h&#34;
+#include &#34;GlobalParams.h&#34;
+#include &#34;JBIG2Stream.h&#34;
+#include &#34;Object.h&#34;
+#include &#34;PDFDoc.h&#34;
+#include &#34;Splash.h&#34;
+#include &#34;SplashBitmap.h&#34;
+#include &#34;SplashOutputDev.h&#34;
+#include &#34;Stream.h&#34;
+#include &#34;config.h&#34;
+#include &#34;gfile.h&#34;
+#include &#34;gmem.h&#34;
+#include &#34;gmempp.h&#34;
+#include &#34;parseargs.h&#34;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  FuzzedDataProvider fdp(data, size);
+  double hdpi = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  double vdpi = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  int rotate = fdp.ConsumeIntegral&lt;int&gt;();
+  GBool useMediaBox = fdp.ConsumeBool();
+  GBool crop = fdp.ConsumeBool();
+  GBool printing = fdp.ConsumeBool();
+  std::vector&lt;char&gt; payload = fdp.ConsumeRemainingBytes&lt;char&gt;();
+
+
+  Object xpdf_obj;
+  xpdf_obj.initNull();
+  BaseStream *stream = new MemStream(payload.data(), 0, payload.size(), &amp;xpdf_obj);
+
+  Object info, xfa;
+  Object *acroForm;
+  globalParams = new GlobalParams(NULL);
+  globalParams-&gt;setErrQuiet(1);
+  globalParams-&gt;setupBaseFonts(NULL);
+  char yes[] = &#34;yes&#34;;
+  globalParams-&gt;setEnableFreeType(yes); // Yes, it&#39;s a string and not a bool.
+  globalParams-&gt;setErrQuiet(1);
+
+  PDFDoc *doc = NULL;
+  try {
+    doc = new PDFDoc(stream);
+    if (doc-&gt;isOk() == gTrue) {
+      doc-&gt;getNumPages();
+      doc-&gt;getOutline();
+      doc-&gt;getStructTreeRoot();
+      doc-&gt;getXRef();
+      doc-&gt;okToPrint(gTrue);
+      doc-&gt;okToCopy(gTrue);
+      doc-&gt;okToChange(gTrue);
+      doc-&gt;okToAddNotes(gTrue);
+      doc-&gt;isLinearized();
+      doc-&gt;getPDFVersion();
+
+      GString *metadata;
+      if ((metadata = doc-&gt;readMetadata())) {
+        (void)metadata-&gt;getCString();
+      }
+      delete metadata;
+
+      doc-&gt;getDocInfo(&amp;info);
+      if (info.isDict()) {
+        info.getDict();
+      }
+      info.free();
+
+      if ((acroForm = doc-&gt;getCatalog()-&gt;getAcroForm())-&gt;isDict()) {
+        acroForm-&gt;dictLookup(&#34;XFA&#34;, &amp;xfa);
+        xfa.free();
+      }
+
+      for (size_t i = 1; i &lt;= doc-&gt;getNumPages(); i++) {
+        doc-&gt;getLinks(i);
+        auto page = doc-&gt;getCatalog()-&gt;getPage(i);
+        if (!page-&gt;isOk()) {
+          continue;
+        }
+        page-&gt;getResourceDict();
+        page-&gt;getMetadata();
+        page-&gt;getResourceDict();
+      }
+
+      SplashColor paperColor = {0xff, 0xff, 0xff};
+      SplashOutputDev *splashOut = new SplashOutputDev(splashModeRGB8, 1, gFalse, paperColor);
+      splashOut-&gt;setNoComposite(gTrue);
+      splashOut-&gt;startDoc(doc-&gt;getXRef());
+
+      doc-&gt;displayPages(splashOut, 1, doc-&gt;getNumPages(), hdpi, vdpi, rotate, useMediaBox, crop, printing, NULL, NULL);
+
+      delete splashOut;
+    }
+  } catch (...) {
+  }
+
+  delete doc;
+  delete globalParams;
+
+  return 0;
+}
+</pre>
+
+
+<h2>Logs</h2>
+<pre>
+Successfully built /home/chyun/oss-fuzz-gen/results5/output-xpdf-_zn6pdfdoc12displaypagesep9outputdeviiddiiiipfipves2_/fixed_targets/01.cc with gpt-4 in 0 iterations of fixing.
+Triaging the crash related to /home/chyun/oss-fuzz-gen/results5/output-xpdf-_zn6pdfdoc12displaypagesep9outputdeviiddiiiipfipves2_/fixed_targets/01.cc with gpt-4.
+Warning: no crash info in xpdf-zn6pdfdoc12displaypagesep9outputdeviiddiiiipfipves2-01.
+Result for xpdf-zn6pdfdoc12displaypagesep9outputdeviiddiiiipfipves2-01: crashes=False, coverage=0.008611298438553718 (498/57831), coverage diff=8.017253128733033e-06 (1/124731)
+
+</pre>
+
+<h2>Run logs</h2>
+<pre>
+INFO:__main__:Running: docker run --privileged --shm-size=2g --platform linux/amd64 --rm -e FUZZING_ENGINE=libfuzzer -e SANITIZER=address -e RUN_FUZZER_MODE=interactive -e HELPER=True -v /home/chyun/oss-fuzz-gen/results5/output-xpdf-_zn6pdfdoc12displaypagesep9outputdeviiddiiiipfipves2_/corpora/01.cc:/tmp/fuzz_JBIG2_corpus -v /tmp/tmp9bgi2sux/build/out/xpdf-zn6pdfdoc12displaypagesep9outputdeviiddiiiipfipves2-01:/out -t gcr.io/oss-fuzz-base/base-runner run_fuzzer fuzz_JBIG2 -print_final_stats=1 -max_total_time=30 -len_control=0 -timeout=30.
+vm.mmap_rnd_bits = 28
+rm: cannot remove &#39;/tmp/fuzz_JBIG2_corpus&#39;: Device or resource busy
+/out/fuzz_JBIG2 -rss_limit_mb=2560 -timeout=25 -print_final_stats=1 -max_total_time=30 -len_control=0 -timeout=30 /tmp/fuzz_JBIG2_corpus -detect_leaks=0 &lt; /dev/null
+INFO: Running with entropic power schedule (0xFF, 100).
+INFO: Seed: 1078050424
+INFO: Loaded 1 modules   (57831 inline 8-bit counters): 57831 [0x562c71c3aa88, 0x562c71c48c6f), 
+INFO: Loaded 1 PC tables (57831 PCs): 57831 [0x562c71c48c70,0x562c71d2aae0), 
+INFO:        0 files found in /tmp/fuzz_JBIG2_corpus
+INFO: -max_len is not provided; libFuzzer will not generate inputs larger than 4096 bytes
+INFO: A corpus is not provided, starting from an empty corpus
+#2	INITED cov: 318 ft: 319 corp: 1/1b exec/s: 0 rss: 41Mb
+	NEW_FUNC[1/3]: 0x562c7150e2c0 in std::__1::vector&lt;char, std::__1::allocator&lt;char&gt;&gt;::shrink_to_fit() /usr/local/bin/../include/c++/v1/vector:1590
+	NEW_FUNC[2/3]: 0x562c7150e750 in std::__1::vector&lt;char, std::__1::allocator&lt;char&gt;&gt;::__construct_at_end(unsigned long) /usr/local/bin/../include/c++/v1/vector:1113
+#4	NEW    cov: 358 ft: 362 corp: 2/46b lim: 4096 exec/s: 0 rss: 44Mb L: 45/45 MS: 2 ChangeBit-InsertRepeatedBytes-
+#5	NEW    cov: 358 ft: 364 corp: 3/48b lim: 4096 exec/s: 0 rss: 45Mb L: 2/45 MS: 1 InsertByte-
+#6	NEW    cov: 359 ft: 368 corp: 4/94b lim: 4096 exec/s: 0 rss: 46Mb L: 46/46 MS: 1 CrossOver-
+#7	NEW    cov: 359 ft: 369 corp: 5/149b lim: 4096 exec/s: 0 rss: 47Mb L: 55/55 MS: 1 CMP- DE: &#34;zbopomofo&#34;-
+#10	NEW    cov: 360 ft: 370 corp: 6/203b lim: 4096 exec/s: 0 rss: 50Mb L: 54/55 MS: 3 InsertByte-InsertByte-CMP- DE: &#34;jeemara&#34;-
+#14	NEW    cov: 360 ft: 375 corp: 7/229b lim: 4096 exec/s: 0 rss: 54Mb L: 26/55 MS: 4 ChangeByte-ChangeBit-CrossOver-InsertByte-
+#16	NEW    cov: 360 ft: 383 corp: 8/256b lim: 4096 exec/s: 0 rss: 55Mb L: 27/55 MS: 2 PersAutoDict-InsertByte- DE: &#34;jeemara&#34;-
+#20	NEW    cov: 360 ft: 385 corp: 9/276b lim: 4096 exec/s: 0 rss: 56Mb L: 20/55 MS: 4 PersAutoDict-CopyPart-ChangeBinInt-EraseBytes- DE: &#34;jeemara&#34;-
+#21	NEW    cov: 360 ft: 394 corp: 10/351b lim: 4096 exec/s: 0 rss: 56Mb L: 75/75 MS: 1 CrossOver-
+#22	NEW    cov: 360 ft: 396 corp: 11/354b lim: 4096 exec/s: 0 rss: 56Mb L: 3/75 MS: 1 InsertByte-
+#24	NEW    cov: 360 ft: 398 corp: 12/369b lim: 4096 exec/s: 0 rss: 56Mb L: 15/75 MS: 2 InsertByte-InsertRepeatedBytes-
+#33	NEW    cov: 360 ft: 407 corp: 13/406b lim: 4096 exec/s: 0 rss: 56Mb L: 37/75 MS: 4 ChangeBit-ChangeByte-PersAutoDict-EraseBytes- DE: &#34;jeemara&#34;-
+#40	NEW    cov: 360 ft: 411 corp: 14/496b lim: 4096 exec/s: 0 rss: 56Mb L: 90/90 MS: 2 ChangeBinInt-CrossOver-
+#48	NEW    cov: 360 ft: 412 corp: 15/535b lim: 4096 exec/s: 0 rss: 56Mb L: 39/90 MS: 3 ChangeBinInt-ChangeBinInt-CopyPart-
+	NEW_FUNC[1/1]: 0x562c7158c4a0 in MemStream::getPos() /src/xpdf-4.05/xpdf/Stream.h:369
+#50	NEW    cov: 364 ft: 416 corp: 16/599b lim: 4096 exec/s: 0 rss: 56Mb L: 64/90 MS: 2 ShuffleBytes-CMP- DE: &#34;startxref&#34;-
+#57	NEW    cov: 365 ft: 417 corp: 17/681b lim: 4096 exec/s: 0 rss: 56Mb L: 82/90 MS: 2 CopyPart-ChangeBinInt-
+#62	NEW    cov: 365 ft: 419 corp: 18/685b lim: 4096 exec/s: 0 rss: 56Mb L: 4/90 MS: 5 EraseBytes-InsertByte-EraseBytes-InsertByte-InsertByte-
+#63	NEW    cov: 365 ft: 421 corp: 19/760b lim: 4096 exec/s: 0 rss: 56Mb L: 75/90 MS: 1 ChangeBinInt-
+	NEW_FUNC[1/1]: 0x562c7159f560 in XRef::constructObjectEntry(char*, long, int*) /src/xpdf-4.05/xpdf/XRef.cc:1032
+#70	NEW    cov: 371 ft: 427 corp: 20/827b lim: 4096 exec/s: 0 rss: 56Mb L: 67/90 MS: 2 ChangeBinInt-InsertRepeatedBytes-
+#82	NEW    cov: 371 ft: 428 corp: 21/834b lim: 4096 exec/s: 0 rss: 56Mb L: 7/90 MS: 2 InsertByte-CrossOver-
+#83	NEW    cov: 371 ft: 429 corp: 22/869b lim: 4096 exec/s: 0 rss: 56Mb L: 35/90 MS: 1 InsertRepeatedBytes-
+#84	NEW    cov: 371 ft: 430 corp: 23/890b lim: 4096 exec/s: 0 rss: 56Mb L: 21/90 MS: 1 InsertByte-
+#85	NEW    cov: 371 ft: 431 corp: 24/948b lim: 4096 exec/s: 0 rss: 56Mb L: 58/90 MS: 1 CrossOver-
+#86	NEW    cov: 371 ft: 433 corp: 25/1025b lim: 4096 exec/s: 0 rss: 56Mb L: 77/90 MS: 1 InsertRepeatedBytes-
+#90	NEW    cov: 371 ft: 441 corp: 26/1053b lim: 4096 exec/s: 0 rss: 56Mb L: 28/90 MS: 4 CopyPart-EraseBytes-ChangeByte-CrossOver-
+#99	NEW    cov: 372 ft: 442 corp: 27/1096b lim: 4096 exec/s: 0 rss: 56Mb L: 43/90 MS: 4 ShuffleBytes-CrossOver-EraseBytes-PersAutoDict- DE: &#34;startxref&#34;-
+#108	NEW    cov: 372 ft: 451 corp: 28/1271b lim: 4096 exec/s: 0 rss: 56Mb L: 175/175 MS: 4 CopyPart-ChangeBinInt-InsertRepeatedBytes-InsertRepeatedBytes-
+#109	NEW    cov: 372 ft: 458 corp: 29/1399b lim: 4096 exec/s: 0 rss: 56Mb L: 128/175 MS: 1 CopyPart-
+#113	NEW    cov: 372 ft: 460 corp: 30/1410b lim: 4096 exec/s: 0 rss: 56Mb L: 11/175 MS: 4 ChangeBinInt-ChangeBit-ChangeBit-EraseBytes-
+#139	NEW    cov: 372 ft: 461 corp: 31/1455b lim: 4096 exec/s: 0 rss: 56Mb L: 45/175 MS: 1 CMP- DE: &#34;\377\000\000\000\000\000\000\000&#34;-
+#146	NEW    cov: 372 ft: 462 corp: 32/1491b lim: 4096 exec/s: 0 rss: 56Mb L: 36/175 MS: 2 ChangeByte-CrossOver-
+#151	NEW    cov: 372 ft: 470 corp: 33/1520b lim: 4096 exec/s: 0 rss: 56Mb L: 29/175 MS: 5 ChangeByte-ChangeByte-ChangeByte-CopyPart-EraseBytes-
+#162	NEW    cov: 372 ft: 472 corp: 34/1605b lim: 4096 exec/s: 0 rss: 56Mb L: 85/175 MS: 1 PersAutoDict- DE: &#34;\377\000\000\000\000\000\000\000&#34;-
+#166	NEW    cov: 372 ft: 475 corp: 35/1638b lim: 4096 exec/s: 0 rss: 56Mb L: 33/175 MS: 4 PersAutoDict-EraseBytes-ChangeByte-PersAutoDict- DE: &#34;jeemara&#34;-&#34;zbopomofo&#34;-
+#180	NEW    cov: 372 ft: 476 corp: 36/1693b lim: 4096 exec/s: 180 rss: 56Mb L: 55/175 MS: 4 CrossOver-ChangeBinInt-InsertByte-EraseBytes-
+#192	NEW    cov: 372 ft: 479 corp: 37/1806b lim: 4096 exec/s: 192 rss: 57Mb L: 113/175 MS: 2 CrossOver-CrossOver-
+#198	NEW    cov: 372 ft: 481 corp: 38/1818b lim: 4096 exec/s: 198 rss: 57Mb L: 12/175 MS: 1 CMP- DE: &#34;alefhamzaa&#34;-
+#206	NEW    cov: 373 ft: 482 corp: 39/1894b lim: 4096 exec/s: 206 rss: 57Mb L: 76/175 MS: 3 CopyPart-InsertByte-ChangeByte-
+#227	REDUCE cov: 373 ft: 482 corp: 39/1891b lim: 4096 exec/s: 227 rss: 57Mb L: 43/175 MS: 1 EraseBytes-
+#230	NEW    cov: 373 ft: 484 corp: 40/1910b lim: 4096 exec/s: 230 rss: 57Mb L: 19/175 MS: 3 InsertByte-CMP-CopyPart- DE: &#34;\000\000\000\000\000\000\000\026&#34;-
+#262	NEW    cov: 373 ft: 489 corp: 41/2111b lim: 4096 exec/s: 262 rss: 57Mb L: 201/201 MS: 2 CrossOver-CrossOver-
+#291	REDUCE cov: 373 ft: 489 corp: 41/2109b lim: 4096 exec/s: 291 rss: 57Mb L: 53/201 MS: 4 EraseBytes-ChangeByte-ChangeBinInt-CMP- DE: &#34;\377\377\377\377\377\377\377\036&#34;-
+#300	NEW    cov: 373 ft: 490 corp: 42/2198b lim: 4096 exec/s: 300 rss: 57Mb L: 89/201 MS: 4 CMP-ChangeBit-InsertRepeatedBytes-CopyPart- DE: &#34;\001\000\001\000&#34;-
+#315	NEW    cov: 374 ft: 493 corp: 43/2547b lim: 4096 exec/s: 315 rss: 57Mb L: 349/349 MS: 5 InsertRepeatedBytes-ChangeBinInt-InsertRepeatedBytes-CMP-InsertRepeatedBytes- DE: &#34;\036\000&#34;-
+#319	REDUCE cov: 374 ft: 493 corp: 43/2536b lim: 4096 exec/s: 319 rss: 57Mb L: 34/349 MS: 4 CrossOver-EraseBytes-ChangeByte-EraseBytes-
+#336	NEW    cov: 374 ft: 495 corp: 44/2576b lim: 4096 exec/s: 336 rss: 57Mb L: 40/349 MS: 2 ChangeBinInt-InsertRepeatedBytes-
+#357	NEW    cov: 374 ft: 497 corp: 45/2632b lim: 4096 exec/s: 357 rss: 57Mb L: 56/349 MS: 1 CopyPart-
+#379	REDUCE cov: 374 ft: 497 corp: 45/2631b lim: 4096 exec/s: 379 rss: 57Mb L: 81/349 MS: 2 ChangeBinInt-EraseBytes-
+#399	NEW    cov: 375 ft: 498 corp: 46/2739b lim: 4096 exec/s: 199 rss: 57Mb L: 108/349 MS: 5 ChangeASCIIInt-InsertRepeatedBytes-ChangeBinInt-ChangeByte-ChangeBinInt-
+#401	REDUCE cov: 375 ft: 498 corp: 46/2727b lim: 4096 exec/s: 200 rss: 57Mb L: 42/349 MS: 2 ShuffleBytes-EraseBytes-
+#403	REDUCE cov: 375 ft: 498 corp: 46/2708b lim: 4096 exec/s: 201 rss: 57Mb L: 330/3
+...truncated...
+: 213 rss: 58Mb L: 1709/3990 MS: 2 ChangeASCIIInt-CopyPart-
+#3627	NEW    cov: 455 ft: 668 corp: 96/26Kb lim: 4096 exec/s: 201 rss: 58Mb L: 1519/3990 MS: 1 CopyPart-
+#3671	NEW    cov: 457 ft: 670 corp: 97/26Kb lim: 4096 exec/s: 203 rss: 58Mb L: 65/3990 MS: 4 CMP-ChangeBit-ChangeBit-InsertRepeatedBytes- DE: &#34;\001@&#34;-
+#3675	REDUCE cov: 457 ft: 670 corp: 97/26Kb lim: 4096 exec/s: 204 rss: 58Mb L: 498/3990 MS: 4 PersAutoDict-CMP-ChangeBinInt-EraseBytes- DE: &#34;\377\377\377\377\377\377\377\036&#34;-&#34;\377\377\377\377\377\377\377\025&#34;-
+#3691	NEW    cov: 457 ft: 671 corp: 98/28Kb lim: 4096 exec/s: 205 rss: 58Mb L: 1728/3990 MS: 1 CrossOver-
+#3820	NEW    cov: 457 ft: 675 corp: 99/30Kb lim: 4096 exec/s: 212 rss: 58Mb L: 2599/3990 MS: 4 ChangeBit-InsertByte-InsertRepeatedBytes-CopyPart-
+#3889	REDUCE cov: 457 ft: 675 corp: 99/30Kb lim: 4096 exec/s: 204 rss: 58Mb L: 2520/3990 MS: 4 ChangeBit-InsertByte-CopyPart-EraseBytes-
+#3900	REDUCE cov: 457 ft: 675 corp: 99/30Kb lim: 4096 exec/s: 205 rss: 58Mb L: 227/3990 MS: 1 EraseBytes-
+#3911	REDUCE cov: 457 ft: 675 corp: 99/30Kb lim: 4096 exec/s: 205 rss: 58Mb L: 67/3990 MS: 1 EraseBytes-
+#3927	REDUCE cov: 457 ft: 675 corp: 99/30Kb lim: 4096 exec/s: 206 rss: 58Mb L: 57/3990 MS: 1 EraseBytes-
+#3932	REDUCE cov: 457 ft: 675 corp: 99/30Kb lim: 4096 exec/s: 206 rss: 58Mb L: 61/3990 MS: 5 ChangeBinInt-ChangeBinInt-CMP-ChangeBinInt-EraseBytes- DE: &#34;\001\000\000\000\000\000\000\004&#34;-
+#3994	NEW    cov: 459 ft: 678 corp: 100/30Kb lim: 4096 exec/s: 210 rss: 58Mb L: 290/3990 MS: 2 EraseBytes-InsertByte-
+#4003	REDUCE cov: 459 ft: 678 corp: 100/30Kb lim: 4096 exec/s: 210 rss: 58Mb L: 1352/3990 MS: 4 ChangeBinInt-ChangeBinInt-ChangeASCIIInt-EraseBytes-
+#4064	REDUCE cov: 459 ft: 678 corp: 100/30Kb lim: 4096 exec/s: 203 rss: 58Mb L: 6/3990 MS: 1 EraseBytes-
+#4096	pulse  cov: 459 ft: 678 corp: 100/30Kb lim: 4096 exec/s: 204 rss: 58Mb
+#4171	REDUCE cov: 459 ft: 678 corp: 100/30Kb lim: 4096 exec/s: 208 rss: 58Mb L: 77/3990 MS: 2 CrossOver-EraseBytes-
+#4253	REDUCE cov: 459 ft: 678 corp: 100/30Kb lim: 4096 exec/s: 202 rss: 58Mb L: 317/3990 MS: 2 ShuffleBytes-EraseBytes-
+#4254	REDUCE cov: 459 ft: 678 corp: 100/30Kb lim: 4096 exec/s: 202 rss: 58Mb L: 86/3990 MS: 1 EraseBytes-
+#4261	NEW    cov: 459 ft: 680 corp: 101/30Kb lim: 4096 exec/s: 202 rss: 58Mb L: 49/3990 MS: 2 ChangeByte-EraseBytes-
+#4289	REDUCE cov: 459 ft: 680 corp: 101/30Kb lim: 4096 exec/s: 204 rss: 58Mb L: 84/3990 MS: 3 ChangeByte-PersAutoDict-EraseBytes- DE: &#34;\001\000\000\000\000\000\000\004&#34;-
+#4325	REDUCE cov: 459 ft: 680 corp: 101/30Kb lim: 4096 exec/s: 205 rss: 58Mb L: 32/3990 MS: 1 EraseBytes-
+#4423	REDUCE cov: 459 ft: 680 corp: 101/30Kb lim: 4096 exec/s: 210 rss: 58Mb L: 94/3990 MS: 3 CopyPart-PersAutoDict-EraseBytes- DE: &#34;\&#34;\000&#34;-
+#4429	NEW    cov: 460 ft: 681 corp: 102/30Kb lim: 4096 exec/s: 201 rss: 58Mb L: 125/3990 MS: 1 ChangeByte-
+#4456	NEW    cov: 460 ft: 682 corp: 103/30Kb lim: 4096 exec/s: 202 rss: 58Mb L: 233/3990 MS: 2 ChangeBinInt-CopyPart-
+#4562	REDUCE cov: 460 ft: 682 corp: 103/30Kb lim: 4096 exec/s: 207 rss: 58Mb L: 36/3990 MS: 1 EraseBytes-
+#4612	NEW    cov: 460 ft: 683 corp: 104/31Kb lim: 4096 exec/s: 209 rss: 58Mb L: 186/3990 MS: 5 PersAutoDict-ChangeBit-CrossOver-CMP-PersAutoDict- DE: &#34;\000\000\000\000\000\000\000\026&#34;-&#34;endstream&#34;-&#34;startxref&#34;-
+#4659	REDUCE cov: 460 ft: 683 corp: 104/31Kb lim: 4096 exec/s: 202 rss: 58Mb L: 162/3990 MS: 2 ChangeBinInt-EraseBytes-
+#4687	REDUCE cov: 460 ft: 683 corp: 104/31Kb lim: 4096 exec/s: 203 rss: 58Mb L: 192/3990 MS: 3 ShuffleBytes-ChangeBinInt-EraseBytes-
+#4704	NEW    cov: 460 ft: 685 corp: 105/31Kb lim: 4096 exec/s: 204 rss: 58Mb L: 34/3990 MS: 2 InsertByte-EraseBytes-
+#4787	REDUCE cov: 460 ft: 685 corp: 105/31Kb lim: 4096 exec/s: 208 rss: 58Mb L: 46/3990 MS: 3 CopyPart-ChangeASCIIInt-EraseBytes-
+#4886	REDUCE cov: 460 ft: 685 corp: 105/31Kb lim: 4096 exec/s: 203 rss: 58Mb L: 119/3990 MS: 4 ChangeByte-ChangeBinInt-PersAutoDict-EraseBytes- DE: &#34;endstream&#34;-
+#4957	REDUCE cov: 460 ft: 685 corp: 105/31Kb lim: 4096 exec/s: 206 rss: 58Mb L: 59/3990 MS: 1 EraseBytes-
+#5041	REDUCE cov: 460 ft: 685 corp: 105/31Kb lim: 4096 exec/s: 201 rss: 58Mb L: 46/3990 MS: 4 ChangeBinInt-ShuffleBytes-ChangeBit-EraseBytes-
+#5122	REDUCE cov: 460 ft: 686 corp: 106/31Kb lim: 4096 exec/s: 204 rss: 58Mb L: 232/3990 MS: 1 CrossOver-
+#5165	NEW    cov: 465 ft: 692 corp: 107/31Kb lim: 4096 exec/s: 206 rss: 58Mb L: 232/3990 MS: 3 CopyPart-ChangeBinInt-ChangeBit-
+#5199	NEW    cov: 465 ft: 694 corp: 108/31Kb lim: 4096 exec/s: 207 rss: 58Mb L: 67/3990 MS: 4 CMP-ChangeByte-InsertRepeatedBytes-EraseBytes- DE: &#34;\010\000&#34;-
+#5265	REDUCE cov: 465 ft: 694 corp: 108/31Kb lim: 4096 exec/s: 202 rss: 58Mb L: 170/3990 MS: 1 EraseBytes-
+#5481	REDUCE cov: 465 ft: 694 corp: 108/31Kb lim: 4096 exec/s: 203 rss: 58Mb L: 45/3990 MS: 1 EraseBytes-
+#5583	NEW    cov: 465 ft: 695 corp: 109/31Kb lim: 4096 exec/s: 206 rss: 58Mb L: 245/3990 MS: 2 PersAutoDict-CopyPart- DE: &#34;\377\000\000\000\000\000\000\000&#34;-
+#5620	REDUCE cov: 465 ft: 695 corp: 109/31Kb lim: 4096 exec/s: 200 rss: 58Mb L: 53/3990 MS: 2 CopyPart-EraseBytes-
+#5621	REDUCE cov: 465 ft: 695 corp: 109/31Kb lim: 4096 exec/s: 200 rss: 58Mb L: 165/3990 MS: 1 EraseBytes-
+#5628	NEW    cov: 465 ft: 697 corp: 110/31Kb lim: 4096 exec/s: 201 rss: 58Mb L: 123/3990 MS: 2 CopyPart-CrossOver-
+#5707	REDUCE cov: 465 ft: 697 corp: 110/31Kb lim: 4096 exec/s: 203 rss: 58Mb L: 117/3990 MS: 4 PersAutoDict-PersAutoDict-InsertByte-EraseBytes- DE: &#34;\377\377\377\377\377\377\377\036&#34;-&#34;\377\000\000\000\000\000\000\000&#34;-
+#5777	NEW    cov: 468 ft: 701 corp: 111/32Kb lim: 4096 exec/s: 206 rss: 58Mb L: 254/3990 MS: 5 ChangeByte-ChangeBinInt-ChangeByte-InsertRepeatedBytes-CMP- DE: &#34;endstream&#34;-
+	NEW_FUNC[1/1]: 0x562c7158c410 in MemStream::lookChar() /src/xpdf-4.05/xpdf/Stream.h:367
+#5812	REDUCE cov: 498 ft: 736 corp: 112/32Kb lim: 4096 exec/s: 200 rss: 58Mb L: 357/3990 MS: 5 CrossOver-ChangeBit-EraseBytes-ChangeByte-PersAutoDict- DE: &#34;startxref&#34;-
+#5826	NEW    cov: 498 ft: 737 corp: 113/32Kb lim: 4096 exec/s: 200 rss: 58Mb L: 334/3990 MS: 4 ChangeBit-CrossOver-InsertByte-EraseBytes-
+#5852	REDUCE cov: 498 ft: 737 corp: 113/32Kb lim: 4096 exec/s: 201 rss: 58Mb L: 43/3990 MS: 1 EraseBytes-
+#5891	NEW    cov: 498 ft: 738 corp: 114/32Kb lim: 4096 exec/s: 203 rss: 58Mb L: 253/3990 MS: 4 CMP-ChangeBit-ChangeByte-CopyPart- DE: &#34;\377\377\377\377\377\377\377\002&#34;-
+#5902	REDUCE cov: 498 ft: 738 corp: 114/32Kb lim: 4096 exec/s: 203 rss: 58Mb L: 50/3990 MS: 1 EraseBytes-
+#5969	REDUCE cov: 498 ft: 738 corp: 114/32Kb lim: 4096 exec/s: 198 rss: 58Mb L: 272/3990 MS: 2 ChangeASCIIInt-EraseBytes-
+#5980	NEW    cov: 498 ft: 740 corp: 115/33Kb lim: 4096 exec/s: 199 rss: 58Mb L: 357/3990 MS: 1 CopyPart-
+#6106	REDUCE cov: 498 ft: 740 corp: 115/33Kb lim: 4096 exec/s: 203 rss: 58Mb L: 879/3990 MS: 1 EraseBytes-
+#6113	REDUCE cov: 498 ft: 740 corp: 115/33Kb lim: 4096 exec/s: 203 rss: 58Mb L: 213/3990 MS: 2 ChangeBinInt-EraseBytes-
+#6133	DONE   cov: 498 ft: 740 corp: 115/33Kb lim: 4096 exec/s: 197 rss: 58Mb
+###### Recommended dictionary. ######
+&#34;zbopomofo&#34; # Uses: 30
+&#34;jeemara&#34; # Uses: 39
+&#34;startxref&#34; # Uses: 35
+&#34;\377\000\000\000\000\000\000\000&#34; # Uses: 32
+&#34;alefhamzaa&#34; # Uses: 28
+&#34;\000\000\000\000\000\000\000\026&#34; # Uses: 22
+&#34;\377\377\377\377\377\377\377\036&#34; # Uses: 31
+&#34;\001\000\001\000&#34; # Uses: 33
+&#34;\036\000&#34; # Uses: 25
+&#34;%PDF-&#34; # Uses: 24
+&#34;sta&#34; # Uses: 28
+&#34;\001\000\000\000\000\000\001\000&#34; # Uses: 14
+&#34;..&#34; # Uses: 24
+&#34;star&#34; # Uses: 19
+&#34;\&#34;\000&#34; # Uses: 16
+&#34;\005\000\000\000\000\000\000\000&#34; # Uses: 14
+&#34;\001@&#34; # Uses: 16
+&#34;\000\001\000\000\000\000\000\000&#34; # Uses: 7
+&#34;\011\000\000\000\000\000\000\000&#34; # Uses: 15
+&#34;%PDF-\313\313\313\313&#34; # Uses: 18
+&#34; \377\377\377\377&#34; # Uses: 15
+&#34;\377\377\377\377\377\377\377\025&#34; # Uses: 5
+&#34;\001\000\000\000\000\000\000\004&#34; # Uses: 11
+&#34;endstream&#34; # Uses: 6
+&#34;\010\000&#34; # Uses: 4
+&#34;\377\377\377\377\377\377\377\002&#34; # Uses: 3
+###### End of recommended dictionary. ######
+Done 6133 runs in 31 second(s)
+stat::number_of_executed_units: 6133
+stat::average_exec_per_sec:     197
+stat::new_units_added:          193
+stat::slowest_unit_time_sec:    0
+stat::peak_rss_mb:              58
+
+</pre>
+
+
+</body>

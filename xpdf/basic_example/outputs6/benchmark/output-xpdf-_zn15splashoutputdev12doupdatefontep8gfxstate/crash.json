@@ -1,0 +1,43 @@
+{
+    "samples": [
+
+    {
+        "benchmark": "output-xpdf-_zn15splashoutputdev12doupdatefontep8gfxstate",
+        "sample": "01",
+        "status": "Running",
+        "compiles": "False",
+        "crashes": "False",
+        "crash_reason": "",
+        "bug": "True",
+        "coverage": "0.00",
+        "coverage_diff": "0.0",
+        "coverage_report": "#",
+        "stacktrace": "/stacktrace",
+        "target_binary": "/target_binary",
+        "reproducer": "/artifacts",
+        "run_log": "run.log",
+        "source_code": "#include <fuzzer/FuzzedDataProvider.h>\\n\\n#include <aconf.h>\\n#include <png.h>\\n#include <stddef.h>\\n#include <stdint.h>\\n#include <stdio.h>\\n#include <stdlib.h>\\n#include <string.h>\\n#include <vector>\\n\\n#include \"GString.h\"\\n#include \"GlobalParams.h\"\\n#include \"GfxFont.h\"\\n#include \"JBIG2Stream.h\"\\n#include \"Object.h\"\\n#include \"PDFDoc.h\"\\n#include \"Splash.h\"\\n#include \"SplashBitmap.h\"\\n#include \"SplashOutputDev.h\"\\n#include \"Stream.h\"\\n#include \"config.h\"\\n#include \"gfile.h\"\\n#include \"gmem.h\"\\n#include \"gmempp.h\"\\n#include \"parseargs.h\"\\n\\nextern \"C\" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {\\n  FuzzedDataProvider fdp(data, size);\\n  double hdpi = fdp.ConsumeFloatingPoint<double>();\\n  double vdpi = fdp.ConsumeFloatingPoint<double>();\\n  int rotate = fdp.ConsumeIntegral<int>();\\n  bool useMediaBox = fdp.ConsumeBool();\\n  bool crop = fdp.ConsumeBool();\\n  bool printing = fdp.ConsumeBool();\\n  std::vector<char> payload = fdp.ConsumeRemainingBytes<char>();\\n\\n  Object xpdf_obj;\\n  xpdf_obj.initNull();\\n  BaseStream *stream = new MemStream(payload.data(), 0, payload.size(), &xpdf_obj);\\n\\n  Object info, xfa;\\n  Object *acroForm;\\n  globalParams = new GlobalParams(NULL);\\n  globalParams->setErrQuiet(1);\\n  globalParams->setupBaseFonts(NULL);\\n  char yes[] = \"yes\";\\n  globalParams->setEnableFreeType(yes); // Yes, it's a string and not a bool.\\n  globalParams->setErrQuiet(1);\\n\\n  PDFDoc *doc = NULL;\\n  SplashColor paperColor = {0xff, 0xff, 0xff};\\n  SplashOutputDev *splashOut = new SplashOutputDev(splashModeRGB8, 1, gFalse, paperColor);\\n\\n  try {\\n    PDFDoc doc(stream);\\n    if (doc.isOk() == gTrue) {\\n      doc.getNumPages();\\n      \\n      splashOut->setNoComposite(gTrue);\\n      splashOut->startDoc(doc.getXRef());\\n\\n      for (size_t i = 1; i <= doc.getNumPages(); ++i) {\\n        doc.displayPage(splashOut, i, hdpi, vdpi, rotate, useMediaBox, crop, printing);\\n        doc.displayPageSlice(splashOut, i, hdpi, vdpi, rotate, useMediaBox, crop, printing, 0, 0, 1, 1);\\n\\n        // Removed the problematic GfxState initialization and doUpdateFont call\\n      }\\n\\n      delete splashOut;\\n    }\\n  } catch (...) {\\n    if (doc != NULL) delete doc;\\n    if (splashOut != NULL) delete splashOut;\\n  }\\n\\n  delete globalParams;\\n\\n  return 0;\\n}",
+        "model": ""
+    },
+
+    {
+        "benchmark": "output-xpdf-_zn15splashoutputdev12doupdatefontep8gfxstate",
+        "sample": "02",
+        "status": "Done",
+        "compiles": "False",
+        "crashes": "False",
+        "crash_reason": "-",
+        "bug": "True",
+        "coverage": "0.00",
+        "coverage_diff": "0.0",
+        "coverage_report": "#",
+        "stacktrace": "/stacktrace",
+        "target_binary": "/target_binary",
+        "reproducer": "/artifacts",
+        "run_log": "run.log",
+        "source_code": "#include <stddef.h>\\n#include <stdint.h>\\n\\n#include \"/src/xpdf-4.05/goo/GString.h\"\\n#include \"/src/xpdf-4.05/xpdf/Object.h\"\\n#include \"/src/xpdf-4.05/xpdf/Dict.h\"\\n#include \"/src/xpdf-4.05/xpdf/GfxFont.h\"\\n#include \"/src/xpdf-4.05/xpdf/SplashOutputDev.h\"\\n#include \"/src/xpdf-4.05/xpdf/GfxState.h\"\\n#include \"/src/xpdf-4.05/xpdf/PDFDoc.h\"\\n#include \"/src/xpdf-4.05/xpdf/XRef.h\"\\n#include \"/src/xpdf-4.05/xpdf/Gfx.h\"\\n#include \"/src/xpdf-4.05/xpdf/Page.h\"\\n#include \"/src/xpdf-4.05/xpdf/Lexer.h\"\\n#include \"/src/xpdf-4.05/xpdf/Parser.h\"\\n\\nextern \"C\" int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {\\n  \\n  // Initialize the splash output device.\\n  SplashColor splash_paper_color;\\n  SplashOutputDev splash_output_dev(splashModeRGB8, 4, gFalse, splash_paper_color, gFalse, gFalse);\\n\\n  // Consume the rest of the input buffer.\\n  double ctm[6];\\n  for (double& elem : ctm) {\\n    elem = static_cast<double>(*data++);\\n  }\\n  \\n  // Initialize PDFDoc\\n  PDFDoc* pdfDoc = new PDFDoc(new GString(\"example.pdf\"));\\n\\n  // Create XRef\\n  XRef* xref = new XRef(pdfDoc);\\n\\n  // Use rest of data to create a GfxFont object.\\n  Array faster(0);\\n  Object font = xref->makeDirectFont(&faster, &ctm);\\n  GfxFont* gfx_font = GfxFont::makeFont(xref, new GString(\"Arial\"), font.getDict());\\n\\n  // Setup GfxState\\n  double page_bbox[4] = {0, 0, 800, 600};\\n  GfxState state(72.0, 72.0, &page_bbox, 0, gFalse, &ctm, pdfDoc->getCatalog()->getPage(1)->getResourceDict(), pdfDoc->getCatalog()->getPage(1)->getBoxColorInfo(), gfx_font);\\n\\n  splash_output_dev.updateFont(&state); \\n  splash_output_dev.doUpdateFont(&state); // Added this line to fix the error\\n\\n  // Clean up\\n  delete pdfDoc;\\n  delete xref;\\n\\n  return 0;\\n}",
+        "model": ""
+    }
+
+    ]
+}

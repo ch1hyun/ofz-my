@@ -1,0 +1,43 @@
+{
+    "samples": [
+
+    {
+        "benchmark": "output-xpdf-_zn3gfx14opsetextgstateep6objecti",
+        "sample": "01",
+        "status": "Done",
+        "compiles": "False",
+        "crashes": "False",
+        "crash_reason": "-",
+        "bug": "True",
+        "coverage": "0.00",
+        "coverage_diff": "0.0",
+        "coverage_report": "#",
+        "stacktrace": "/stacktrace",
+        "target_binary": "/target_binary",
+        "reproducer": "/artifacts",
+        "run_log": "run.log",
+        "source_code": "#include <fuzzer/FuzzedDataProvider.h>\\n\\n#include <aconf.h>\\n#include <png.h>\\n#include <stddef.h>\\n#include <stdint.h>\\n#include <stdio.h>\\n#include <stdlib.h>\\n#include <string.h>\\n#include <vector>\\n\\n#include \"GlobalParams.h\"\\n#include \"Gfx.h\"\\n#include \"/src/xpdf-4.05/xpdf/Stream.h\"\\n#include \"Object.h\"\\n#include \"PDFDoc.h\"\\n#include \"OutputDev.h\"\\n\\nextern \"C\" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {\\n  FuzzedDataProvider stream(data, size);\\n\\n  std::string str = stream.ConsumeBytesAsString(stream.remaining_bytes());\\n  GString *gs = new GString(str.c_str());\\n\\n  Object xpdf_obj;\\n  xpdf_obj.initNull();\\n  MemStream *mem_stream = new MemStream(gs->getCString(), 0, gs->getLength(), &xpdf_obj);\\n\\n  globalParams = new GlobalParams((char *)str.c_str());\\n  globalParams->setEnableFreeType((char *)\"yes\");\\n\\n  PDFDoc *doc = new PDFDoc(mem_stream);\\n  \\n  // Create a dummy OutputDev object to pass to the Gfx constructor\\n  SplashColor paperColor;\\n  SplashOutputDev *dummyOutputDev = new SplashOutputDev(splashModeRGB8, 4, gFalse, paperColor);\\n  dummyOutputDev->startDoc(doc->getXRef());\\n  Gfx *gfx = new Gfx(doc, dummyOutputDev, 72.0, 72.0, NULL, gFalse, gFalse);\\n\\n  int numArgs = stream.ConsumeIntegralInRange<int>(0, 10);\\n  int args[numArgs];\\n  for (int i = 0; i < numArgs; ++i) {\\n    args[i] = stream.ConsumeIntegral<int>();\\n  }\\n\\n  Object obj;\\n  obj.initArray(doc->getXRef());\\n\\n  for (int i = 0; i < numArgs; ++i) {\\n    Object arg;\\n    arg.initInt(args[i]);\\n    obj.arrayAdd(&arg);\\n  }\\n\\n  // Call the function opSetExtGState\\n  gfx->display(&obj);\\n\\n  delete gfx;\\n  delete doc;\\n  delete mem_stream;\\n  delete gs;\\n  delete globalParams;\\n  delete dummyOutputDev;\\n\\n  return 0;\\n}",
+        "model": ""
+    },
+
+    {
+        "benchmark": "output-xpdf-_zn3gfx14opsetextgstateep6objecti",
+        "sample": "02",
+        "status": "Done",
+        "compiles": "True",
+        "crashes": "True",
+        "crash_reason": "FP_NEAR_INIT_CRASH",
+        "bug": "False",
+        "coverage": "0.00",
+        "coverage_diff": "0.0",
+        "coverage_report": "#",
+        "stacktrace": "/stacktrace",
+        "target_binary": "/target_binary",
+        "reproducer": "/artifacts",
+        "run_log": "run.log",
+        "source_code": "#include <fuzzer/FuzzedDataProvider.h>\\n\\n#include <Object.h>\\n#include <GfxState.h>\\n#include <Gfx.h>\\n#include <PDFDoc.h>\\n#include <OutputDev.h>\\n#include <SplashOutputDev.h> \\n\\nextern \"C\" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {\\n  FuzzedDataProvider fdp(data, size);\\n\\n  int num_args = fdp.ConsumeIntegralInRange(0, 10);\\n  int obj_type = fdp.ConsumeIntegralInRange(1, 7);\\n\\n  Object obj;\\n  switch (obj_type)  {\\n    case 1:\\n      obj.initBool(fdp.ConsumeBool());\\n      break;\\n    case 2:\\n      obj.initInt(fdp.ConsumeIntegral<int>());\\n      break;\\n    case 3:\\n      obj.initReal(fdp.ConsumeFloatingPoint<double>());\\n      break;\\n    case 4: {\\n      GString *s1 = new GString(fdp.ConsumeRandomLengthString().c_str());\\n      obj.initName(s1->getCString());\\n      break;\\n    }\\n    case 5: {\\n      obj.initNull();\\n      break;\\n    }\\n    case 6: {\\n      char *cmd = strdup(fdp.ConsumeRandomLengthString().c_str());\\n      obj.initCmd(cmd);\\n      free(cmd);\\n      break;\\n    }\\n    case 7: {\\n      GString *s2 = new GString(fdp.ConsumeRandomLengthString().c_str());\\n      obj.initString(s2);\\n      break;\\n    }\\n    default:\\n      obj.initNull();\\n      break;\\n  }\\n\\n  GString *fileName = new GString(\"dummy.pdf\");\\n  PDFDoc *doc = new PDFDoc(fileName);\\n  SplashColor paperColor;\\n  paperColor[0] = paperColor[1] = paperColor[2] = 255;\\n  SplashOutputDev *out = new SplashOutputDev(splashModeRGB8, 4, false, paperColor);\\n  out->startDoc(doc->getXRef());\\n  Dict *resDict = new Dict(doc->getXRef());\\n  \\n  try {\\n    Gfx *gfx = new Gfx(doc, out, resDict, NULL, NULL);\\n    gfx->display(&obj);\\n    // Removed the function call to Gfx::opSetExtGState as it is a private member\\n  } catch (...) {}\\n\\n  delete doc;\\n  delete out;\\n  delete resDict;\\n  delete fileName;\\n  \\n  return 0;\\n}",
+        "model": ""
+    }
+
+    ]
+}

@@ -1,0 +1,43 @@
+{
+    "samples": [
+
+    {
+        "benchmark": "output-xpdf-_zn6pdfdoc16displaypagesliceep9outputdeviddiiiiiiiipfipves2_",
+        "sample": "01",
+        "status": "Done",
+        "compiles": "True",
+        "crashes": "False",
+        "crash_reason": "NO_SEMANTIC_ERR",
+        "bug": "True",
+        "coverage": "1.04",
+        "coverage_diff": "0.00032069012514932135",
+        "coverage_report": "#",
+        "stacktrace": "/stacktrace",
+        "target_binary": "/target_binary",
+        "reproducer": "/artifacts",
+        "run_log": "run.log",
+        "source_code": "#include <fuzzer/FuzzedDataProvider.h>\\n\\n#include <stddef.h>\\n#include <stdint.h>\\n#include <vector>\\n#include <algorithm>\\n\\n#include \"GlobalParams.h\"\\n#include \"PDFDoc.h\"\\n#include \"SplashOutputDev.h\"\\n#include \"config.h\"\\n#include \"/src/xpdf-4.05/xpdf/PDFDoc.h\"\\n\\n// pdf_fuzzer_init() installs an xpdf error callback to suppress console output\\n// during fuzzing.\\nvoid pdf_fuzzer_init(){\\n    // Define the function here or include the library where it is defined.\\n};\\n\\nextern \"C\" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {\\n  static bool one_time_init = []() { pdf_fuzzer_init(); return true; }();\\n  static GlobalParams *globalParams = new GlobalParams(nullptr);\\n\\n  FuzzedDataProvider fdp(data, size);\\n  const int pg_num = fdp.ConsumeIntegralInRange<int>(1, 1); // We're dealing with only single-page PDFs.\\n  const double hDPI = fdp.ConsumeFloatingPointInRange<double>(0.01, 10000.0);\\n  const double vDPI = fdp.ConsumeFloatingPointInRange<double>(0.01, 10000.0);\\n  const int rotate =  0;\\n  const bool useMediaBox = false;\\n  const bool crop = false;\\n  const bool printing = false;\\n  const int sliceX = -1;\\n  const int sliceY = -1;\\n  const int sliceW = -1;\\n  const int sliceH = -1;\\n\\n  std::vector<unsigned char> payload = fdp.ConsumeRemainingBytes<unsigned char>();\\n  const std::vector<char> payload_as_text(payload.begin(), payload.end()); \\n  const std::vector<char>::const_iterator size_unix_nul_pos =\\n      std::find(payload_as_text.begin(), payload_as_text.end(), 0);\\n  const std::vector<char>::difference_type size_unix_nul =\\n      std::distance(payload_as_text.begin(), size_unix_nul_pos);\\n  const std::vector<char>::difference_type size_likely_valid_pdf =\\n      std::min(static_cast<std::vector<char>::difference_type>(payload.size()), size_unix_nul);\\n\\n  if (size_likely_valid_pdf <= 0) {\\n    return 0;\\n  }\\n\\n  const std::string contents(payload_as_text.begin(), payload_as_text.begin() +\\n                                                      size_likely_valid_pdf);\\n  if (contents.empty()) {\\n    return 0;\\n  }\\n\\n  Object obj;\\n  obj.initNull();\\n  PDFDoc doc(new MemStream((char *)contents.c_str(), 0,\\n                           contents.size(), &obj), nullptr);\\n  if (doc.isOk()) {\\n    SplashColor paperColor;\\n    SplashOutputDev splashOut(splashModeRGB8, 4, gFalse, paperColor);\\n    splashOut.startDoc(doc.getXRef());\\n    doc.displayPageSlice(&splashOut, pg_num, hDPI, vDPI, rotate, useMediaBox,\\n                         crop, printing, sliceX, sliceY, sliceW, sliceH,\\n                         nullptr, nullptr);\\n  }\\n\\n  return 0;\\n}",
+        "model": ""
+    },
+
+    {
+        "benchmark": "output-xpdf-_zn6pdfdoc16displaypagesliceep9outputdeviddiiiiiiiipfipves2_",
+        "sample": "02",
+        "status": "Done",
+        "compiles": "False",
+        "crashes": "False",
+        "crash_reason": "-",
+        "bug": "True",
+        "coverage": "0.00",
+        "coverage_diff": "0.0",
+        "coverage_report": "#",
+        "stacktrace": "/stacktrace",
+        "target_binary": "/target_binary",
+        "reproducer": "/artifacts",
+        "run_log": "run.log",
+        "source_code": "#include <fuzzer/FuzzedDataProvider.h>\\n\\n#include <cstddef>\\n#include <cstdint>\\n#include <cstdlib>\\n#include <string>\\n\\n#include \"PDFDoc.h\"\\n#include \"SplashOutputDev.h\"\\n#include \"/src/xpdf-4.05/xpdf/Stream.h\"\\n#include \"GlobalParams.h\"\\n\\nextern \"C\" int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {\\n  FuzzedDataProvider fuzzer_stream(data, size);\\n  \\n  const double hDPI = fuzzer_stream.ConsumeFloatingPoint<double>();\\n  const double vDPI = fuzzer_stream.ConsumeFloatingPoint<double>();\\n  const int rotate = fuzzer_stream.ConsumeIntegral<int>();\\n  const GBool useMediaBox = fuzzer_stream.ConsumeBool();\\n  const GBool crop = fuzzer_stream.ConsumeBool();\\n  const GBool printing = fuzzer_stream.ConsumeBool();\\n  const int sliceX = fuzzer_stream.ConsumeIntegral<int>();\\n  const int sliceY = fuzzer_stream.ConsumeIntegral<int>();\\n  const int sliceW = fuzzer_stream.ConsumeIntegral<int>();\\n  const int sliceH = fuzzer_stream.ConsumeIntegral<int>();\\n\\n  char *bufA = new char[size];\\n  memcpy(bufA, data, size);\\n  Guint startA = 0;\\n  Guint lengthA = size;\\n  Object *dictA = new Object();\\n  MemStream *stream = new MemStream(bufA, startA, lengthA, dictA);\\n  PDFDoc doc(stream);\\n\\n  // Initialize the global parameters\\n  globalParams = new GlobalParams();\\n\\n  SplashColor paperColor;\\n  SplashOutputDev splashOut(splashModeBGR8, 4, gFalse, paperColor);\\n  splashOut.startDoc(doc.getXRef());\\n  \\n  doc.displayPageSlice(&splashOut, 1, hDPI, vDPI, rotate, useMediaBox,\\n                       crop, printing, sliceX, sliceY, sliceW, sliceH,\\n                       nullptr, nullptr);\\n\\n  delete[] bufA;\\n  delete dictA;\\n\\n  // Clean up the global parameters\\n  delete globalParams;\\n\\n  return 0;\\n}",
+        "model": ""
+    }
+
+    ]
+}

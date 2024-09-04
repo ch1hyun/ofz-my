@@ -1,0 +1,546 @@
+<!doctype html>
+
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Experiment results</title>
+<style>
+* {
+    box-sizing: border-box;
+}
+
+html {
+    line-height: 1.15;
+}
+
+body {
+    font-family: sans-serif;
+    font-size: 16px;
+}
+
+table {
+    border-collapse: collapse;
+    border-spacing: 0;
+}
+
+td, th {
+    border-right: 1px #dedede solid;
+    border-bottom: 1px #dedede solid;
+    padding: 5px;
+    text-align: left;
+}
+td:first-child, th:first-child {
+    border-left: 1px #dedede solid;
+}
+th {
+    border-top: 1px #dedede solid;
+}
+
+tbody tr:nth-child(odd) {
+    background-color: #f4f5ff;
+}
+</style>
+<body>
+    LLM: 
+    
+<h1>output-xpdf-_zn6pdfdoc12displaypagesep9outputdeviiddiiiipfipves2_ / 01</h1>
+Bug: True
+<br>
+Crash reason: NO_SEMANTIC_ERR
+<br>
+<br>
+
+<h2>Triage</h2>
+<pre>
+Crash is caused by bug in project.
+
+The crash log indicates that the crash occurred in the GlobalParams::getVectorAntialias() function which is called by the SplashOutputDev constructor. This suggests that the GlobalParams object, globalParams, might not have been properly initialized before it was used. Although the globalParams object is initialized in the fuzz driver, there might be a bug in the project code that causes the GlobalParams::getVectorAntialias() function to access memory it shouldn&#39;t, leading to a segmentation fault.
+</pre>
+<br>
+
+
+
+
+
+<h3>Final code</h3>
+
+<pre>
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+#include &lt;cstddef&gt;
+#include &lt;cstdint&gt;
+#include &lt;cstdlib&gt;
+#include &lt;string&gt;
+#include &lt;vector&gt;
+
+#include &#34;GlobalParams.h&#34;
+#include &#34;PDFDoc.h&#34;
+#include &#34;SplashOutputDev.h&#34;
+#include &#34;splash/SplashBitmap.h&#34;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
+  if (size &lt; 1) {
+    return 0;
+  }
+
+  FuzzedDataProvider stream(data, size);
+
+  const unsigned short start_page = stream.ConsumeIntegral&lt;unsigned short&gt;();
+  const unsigned short num_pages = stream.ConsumeIntegral&lt;unsigned short&gt;();
+  const double h_dpi = stream.ConsumeFloatingPoint&lt;double&gt;();
+  const double v_dpi = stream.ConsumeFloatingPoint&lt;double&gt;();
+  const bool use_media_box = stream.ConsumeBool();
+  const bool crop = stream.ConsumeBool();
+  const bool printing = stream.ConsumeBool();
+
+  auto pdf_doc_contents = stream.ConsumeRemainingBytes&lt;char&gt;();
+  if (pdf_doc_contents.empty()) {
+    return 0;
+  }
+
+  int splash_array[] = {splashModeMono1, splashModeMono8, splashModeRGB8,
+                        splashModeBGR8, splashModeCMYK8};
+  SplashColor splash_color;
+  splash_color[0] = 255;
+
+  // Initialize GlobalParams object
+  GlobalParams globalParams(&#34;&#34;);
+
+  SplashOutputDev splash_outdev(splashModeBGR8, 4, gFalse, splash_color);
+
+  const GBool pdf_unencrypted = gFalse;
+  GString fileName(&amp;pdf_doc_contents[0], pdf_doc_contents.size());
+  auto pdf_doc =
+      std::make_unique&lt;PDFDoc&gt;(&amp;fileName);
+  if (!pdf_doc-&gt;isOk()) {
+    return 0;
+  }
+
+  pdf_doc-&gt;displayPages(&amp;splash_outdev, start_page, num_pages, h_dpi, v_dpi,
+                        0,  // No rotation.
+                        use_media_box, crop, printing, nullptr, nullptr);
+
+  return 0;
+}
+</pre>
+
+
+<h3>Fixer prompt #1</h3>
+<pre>
+
+Given the following C++ fuzz harness and its build error message, fix the code to make it build for fuzzing.
+
+If there is undeclared identifier or unknown type name error, fix it by finding and including the related libraries.
+
+MUST RETURN THE FULL CODE, INCLUDING UNCHANGED PARTS.
+
+Below is the code needs to be built:
+&lt;code&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+#include &lt;cstddef&gt;
+#include &lt;cstdint&gt;
+#include &lt;cstdlib&gt;
+#include &lt;string&gt;
+#include &lt;vector&gt;
+
+#include &#34;GlobalParams.h&#34;
+#include &#34;PDFDoc.h&#34;
+#include &#34;SplashOutputDev.h&#34;
+#include &#34;splash/SplashBitmap.h&#34;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
+  if (size &lt; 1) {
+    return 0;
+  }
+
+  FuzzedDataProvider stream(data, size);
+
+  const unsigned short start_page = stream.ConsumeIntegral&lt;unsigned short&gt;();
+  const unsigned short num_pages = stream.ConsumeIntegral&lt;unsigned short&gt;();
+  const double h_dpi = stream.ConsumeFloatingPoint&lt;double&gt;();
+  const double v_dpi = stream.ConsumeFloatingPoint&lt;double&gt;();
+  const bool use_media_box = stream.ConsumeBool();
+  const bool crop = stream.ConsumeBool();
+  const bool printing = stream.ConsumeBool();
+
+  auto pdf_doc_contents = stream.ConsumeRemainingBytes&lt;uint8_t&gt;();
+  if (pdf_doc_contents.empty()) {
+    return 0;
+  }
+
+  int splash_array[] = {splashModeMono1, splashModeMono8, splashModeRGB8,
+                        splashModeXBGR8, splashModeCMYK8, splashModeDeviceN8};
+  SplashColor splash_color;
+  splash_color[0] = 255;
+  SplashOutputDev splash_outdev(splashModeXBGR8, 4, gFalse, splash_color);
+
+  const GBool pdf_unencrypted = gFalse;
+  auto pdf_doc =
+      std::make_unique&lt;PDFDoc&gt;(&amp;pdf_doc_contents[0], pdf_doc_contents.size());
+  if (!pdf_doc-&gt;isOk()) {
+    return 0;
+  }
+
+  pdf_doc-&gt;displayPages(&amp;splash_outdev, start_page, num_pages, h_dpi, v_dpi,
+                        0,  // No rotation.
+                        use_media_box, crop, printing, nullptr, nullptr);
+
+  return 0;
+}
+&lt;/code&gt;
+
+Below is the error to fix:
+The code has the following build issues:
+&lt;error&gt;
+fuzz_JBIG2.cc:35:25: error: use of undeclared identifier &#39;splashModeXBGR8&#39;; did you mean &#39;splashModeBGR8&#39;?
+   35 |                         splashModeXBGR8, splashModeCMYK8, splashModeDeviceN8};
+      |                         ^~~~~~~~~~~~~~~
+      |                         splashModeBGR8
+../splash/SplashTypes.h:42:3: note: &#39;splashModeBGR8&#39; declared here
+   42 |   splashModeBGR8                // 1 byte per component, 3 bytes per pixel:
+      |   ^
+fuzz_JBIG2.cc:35:59: error: use of undeclared identifier &#39;splashModeDeviceN8&#39;
+   35 |                         splashModeXBGR8, splashModeCMYK8, splashModeDeviceN8};
+      |                                                           ^
+fuzz_JBIG2.cc:38:33: error: use of undeclared identifier &#39;splashModeXBGR8&#39;; did you mean &#39;splashModeBGR8&#39;?
+   38 |   SplashOutputDev splash_outdev(splashModeXBGR8, 4, gFalse, splash_color);
+      |                                 ^~~~~~~~~~~~~~~
+      |                                 splashModeBGR8
+../splash/SplashTypes.h:42:3: note: &#39;splashModeBGR8&#39; declared here
+   42 |   splashModeBGR8                // 1 byte per component, 3 bytes per pixel:
+      |   ^
+In file included from fuzz_JBIG2.cc:1:
+In file included from /usr/local/lib/clang/18/include/fuzzer/FuzzedDataProvider.h:16:
+In file included from /usr/local/bin/../include/c++/v1/algorithm:1778:
+In file included from /usr/local/bin/../include/c++/v1/__algorithm/inplace_merge.h:28:
+/usr/local/bin/../include/c++/v1/__memory/unique_ptr.h:685:30: error: no matching constructor for initialization of &#39;PDFDoc&#39;
+  685 |   return unique_ptr&lt;_Tp&gt;(new _Tp(_VSTD::forward&lt;_Args&gt;(__args)...));
+      |                              ^   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+fuzz_JBIG2.cc:42:12: note: in instantiation of function template specialization &#39;std::make_unique&lt;PDFDoc, unsigned char *, unsigned long&gt;&#39; requested here
+   42 |       std::make_unique&lt;PDFDoc&gt;(&amp;pdf_doc_contents[0], pdf_doc_contents.size());
+      |            ^
+../xpdf/PDFDoc.h:38:3: note: candidate constructor not viable: no known conversion from &#39;unsigned char *&#39; to &#39;GString *&#39; for 1st argument
+   38 |   PDFDoc(GString *fileNameA, GString *ownerPassword = NULL,
+      |   ^      ~~~~~~~~~~~~~~~~~~
+../xpdf/PDFDoc.h:48:3: note: candidate constructor not viable: no known conversion from &#39;unsigned char *&#39; to &#39;char *&#39; for 1st argument
+   48 |   PDFDoc(char *fileNameA, GString *ownerPassword = NULL,
+      |   ^      ~~~~~~~~~~~~~~~
+../xpdf/PDFDoc.h:51:3: note: candidate constructor not viable: no known conversion from &#39;unsigned char *&#39; to &#39;BaseStream *&#39; for 1st argument
+   51 |   PDFDoc(BaseStream *strA, GString *ownerPassword = NULL,
+      |   ^      ~~~~~~~~~~~~~~~~
+../xpdf/PDFDoc.h:35:7: note: candidate constructor (the implicit copy constructor) not viable: requires 1 argument, but 2 were provided
+   35 | class PDFDoc {
+      |       ^~~~~~
+&lt;/error&gt;
+
+
+
+
+Fix code:
+1. Consider possible solutions for the issues listed above.
+2. Choose a solution that can maximize fuzzing result, which is utilizing the function under test and feeding it not null input.
+3. Apply the solutions to the original code.
+It&#39;s important to show the complete code, not only the fixed line.
+&lt;solution&gt;
+</pre>
+
+
+
+<h3>Code #1</h3>
+
+<pre>
+&lt;code&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+#include &lt;cstddef&gt;
+#include &lt;cstdint&gt;
+#include &lt;cstdlib&gt;
+#include &lt;string&gt;
+#include &lt;vector&gt;
+
+#include &#34;GlobalParams.h&#34;
+#include &#34;PDFDoc.h&#34;
+#include &#34;SplashOutputDev.h&#34;
+#include &#34;splash/SplashBitmap.h&#34;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
+  if (size &lt; 1) {
+    return 0;
+  }
+
+  FuzzedDataProvider stream(data, size);
+
+  const unsigned short start_page = stream.ConsumeIntegral&lt;unsigned short&gt;();
+  const unsigned short num_pages = stream.ConsumeIntegral&lt;unsigned short&gt;();
+  const double h_dpi = stream.ConsumeFloatingPoint&lt;double&gt;();
+  const double v_dpi = stream.ConsumeFloatingPoint&lt;double&gt;();
+  const bool use_media_box = stream.ConsumeBool();
+  const bool crop = stream.ConsumeBool();
+  const bool printing = stream.ConsumeBool();
+
+  auto pdf_doc_contents = stream.ConsumeRemainingBytes&lt;char&gt;();
+  if (pdf_doc_contents.empty()) {
+    return 0;
+  }
+
+  int splash_array[] = {splashModeMono1, splashModeMono8, splashModeRGB8,
+                        splashModeBGR8, splashModeCMYK8};
+  SplashColor splash_color;
+  splash_color[0] = 255;
+  SplashOutputDev splash_outdev(splashModeBGR8, 4, gFalse, splash_color);
+
+  const GBool pdf_unencrypted = gFalse;
+  GString fileName(&amp;pdf_doc_contents[0], pdf_doc_contents.size());
+  auto pdf_doc =
+      std::make_unique&lt;PDFDoc&gt;(&amp;fileName);
+  if (!pdf_doc-&gt;isOk()) {
+    return 0;
+  }
+
+  pdf_doc-&gt;displayPages(&amp;splash_outdev, start_page, num_pages, h_dpi, v_dpi,
+                        0,  // No rotation.
+                        use_media_box, crop, printing, nullptr, nullptr);
+
+  return 0;
+}
+&lt;/code&gt;
+&lt;solution&gt;
+</pre>
+
+
+<h3>Fixer prompt #2</h3>
+<pre>
+
+Given the following C++ fuzz harness and its build error message, fix the code to make it build for fuzzing.
+
+If there is undeclared identifier or unknown type name error, fix it by finding and including the related libraries.
+
+MUST RETURN THE FULL CODE, INCLUDING UNCHANGED PARTS.
+
+Below is the code needs to be built:
+&lt;code&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+#include &lt;cstddef&gt;
+#include &lt;cstdint&gt;
+#include &lt;cstdlib&gt;
+#include &lt;string&gt;
+#include &lt;vector&gt;
+
+#include &#34;GlobalParams.h&#34;
+#include &#34;PDFDoc.h&#34;
+#include &#34;SplashOutputDev.h&#34;
+#include &#34;splash/SplashBitmap.h&#34;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
+  if (size &lt; 1) {
+    return 0;
+  }
+
+  FuzzedDataProvider stream(data, size);
+
+  const unsigned short start_page = stream.ConsumeIntegral&lt;unsigned short&gt;();
+  const unsigned short num_pages = stream.ConsumeIntegral&lt;unsigned short&gt;();
+  const double h_dpi = stream.ConsumeFloatingPoint&lt;double&gt;();
+  const double v_dpi = stream.ConsumeFloatingPoint&lt;double&gt;();
+  const bool use_media_box = stream.ConsumeBool();
+  const bool crop = stream.ConsumeBool();
+  const bool printing = stream.ConsumeBool();
+
+  auto pdf_doc_contents = stream.ConsumeRemainingBytes&lt;char&gt;();
+  if (pdf_doc_contents.empty()) {
+    return 0;
+  }
+
+  int splash_array[] = {splashModeMono1, splashModeMono8, splashModeRGB8,
+                        splashModeBGR8, splashModeCMYK8};
+  SplashColor splash_color;
+  splash_color[0] = 255;
+  SplashOutputDev splash_outdev(splashModeBGR8, 4, gFalse, splash_color);
+
+  const GBool pdf_unencrypted = gFalse;
+  GString fileName(&amp;pdf_doc_contents[0], pdf_doc_contents.size());
+  auto pdf_doc =
+      std::make_unique&lt;PDFDoc&gt;(&amp;fileName);
+  if (!pdf_doc-&gt;isOk()) {
+    return 0;
+  }
+
+  pdf_doc-&gt;displayPages(&amp;splash_outdev, start_page, num_pages, h_dpi, v_dpi,
+                        0,  // No rotation.
+                        use_media_box, crop, printing, nullptr, nullptr);
+
+  return 0;
+}
+&lt;/code&gt;
+
+Below is the error to fix:
+The code can build successfully but has a runtime issue: Fuzzing crashed immediately at runtime (ASAN-ERROR: AddressSanitizer: SEGV on unknown address 0x0000000002c0 (pc 0x7fdead642fc4 bp 0x7ffdbf039b50 sp 0x7ffdbf039b38 T0)), indicating fuzz target code for invoking the function under test is incorrect or unrobust.
+&lt;error&gt;
+Crash stacks:
+Stack 0:
+#0 0x7fdead642fc4 in __pthread_mutex_lock (/lib/x86_64-linux-gnu/libpthread.so.0+0xafc4) (BuildId: 9a65bb469e45a1c6fbcffae5b82a2fd7a69eb479)
+#1 0x55ac2690b50f in GlobalParams::getVectorAntialias() /src/xpdf-4.05/xpdf/GlobalParams.cc:3187:3
+#2 0x55ac26a737ac in SplashOutputDev::SplashOutputDev(SplashColorMode, int, int, unsigned char*, int, int) /src/xpdf-4.05/xpdf/SplashOutputDev.cc:628:23
+#3 0x55ac267d757d in LLVMFuzzerTestOneInput /src/xpdf-4.05/build/fuzz_JBIG2.cc:38:19
+#4 0x55ac26689660 in fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:614:13
+#5 0x55ac26688e85 in fuzzer::Fuzzer::RunOne(unsigned char const*, unsigned long, bool, fuzzer::InputInfo*, bool, bool*) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:516:7
+#6 0x55ac2668a655 in fuzzer::Fuzzer::MutateAndTestOne() /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:760:19
+#7 0x55ac2668b445 in fuzzer::Fuzzer::Loop(std::__Fuzzer::vector&lt;fuzzer::SizedFile, std::__Fuzzer::allocator&lt;fuzzer::SizedFile&gt;&gt;&amp;) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:905:5
+#8 0x55ac26679756 in fuzzer::FuzzerDriver(int*, char***, int (*)(unsigned char const*, unsigned long)) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:914:6
+#9 0x55ac266a5c82 in main /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMain.cpp:20:10
+#10 0x7fdead421082 in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x24082) (BuildId: 0702430aef5fa3dda43986563e9ffcc47efbd75e)
+#11 0x55ac2666a8cd in _start (/out/fuzz_JBIG2+0x29f8cd)
+&lt;/error&gt;
+
+
+
+
+Fix code:
+1. Consider possible solutions for the issues listed above.
+2. Choose a solution that can maximize fuzzing result, which is utilizing the function under test and feeding it not null input.
+3. Apply the solutions to the original code.
+It&#39;s important to show the complete code, not only the fixed line.
+&lt;solution&gt;
+</pre>
+
+
+
+<h3>Code #2</h3>
+
+<pre>
+The error message indicates that the GlobalParams::getVectorAntialias() function is causing a segmentation fault. This function is called in the SplashOutputDev constructor. The issue might be related to the GlobalParams object not being properly initialized before the SplashOutputDev object is created.
+
+To fix the issue, we need to initialize the GlobalParams object before creating the SplashOutputDev object. The GlobalParams object can be initialized using the GlobalParams constructor which takes a string parameter representing the name of a configuration file. We can pass an empty string to the constructor if we do not have a specific configuration file to use.
+
+Here is the fixed code:
+
+```cpp
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+#include &lt;cstddef&gt;
+#include &lt;cstdint&gt;
+#include &lt;cstdlib&gt;
+#include &lt;string&gt;
+#include &lt;vector&gt;
+
+#include &#34;GlobalParams.h&#34;
+#include &#34;PDFDoc.h&#34;
+#include &#34;SplashOutputDev.h&#34;
+#include &#34;splash/SplashBitmap.h&#34;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
+  if (size &lt; 1) {
+    return 0;
+  }
+
+  FuzzedDataProvider stream(data, size);
+
+  const unsigned short start_page = stream.ConsumeIntegral&lt;unsigned short&gt;();
+  const unsigned short num_pages = stream.ConsumeIntegral&lt;unsigned short&gt;();
+  const double h_dpi = stream.ConsumeFloatingPoint&lt;double&gt;();
+  const double v_dpi = stream.ConsumeFloatingPoint&lt;double&gt;();
+  const bool use_media_box = stream.ConsumeBool();
+  const bool crop = stream.ConsumeBool();
+  const bool printing = stream.ConsumeBool();
+
+  auto pdf_doc_contents = stream.ConsumeRemainingBytes&lt;char&gt;();
+  if (pdf_doc_contents.empty()) {
+    return 0;
+  }
+
+  int splash_array[] = {splashModeMono1, splashModeMono8, splashModeRGB8,
+                        splashModeBGR8, splashModeCMYK8};
+  SplashColor splash_color;
+  splash_color[0] = 255;
+
+  // Initialize GlobalParams object
+  GlobalParams globalParams(&#34;&#34;);
+
+  SplashOutputDev splash_outdev(splashModeBGR8, 4, gFalse, splash_color);
+
+  const GBool pdf_unencrypted = gFalse;
+  GString fileName(&amp;pdf_doc_contents[0], pdf_doc_contents.size());
+  auto pdf_doc =
+      std::make_unique&lt;PDFDoc&gt;(&amp;fileName);
+  if (!pdf_doc-&gt;isOk()) {
+    return 0;
+  }
+
+  pdf_doc-&gt;displayPages(&amp;splash_outdev, start_page, num_pages, h_dpi, v_dpi,
+                        0,  // No rotation.
+                        use_media_box, crop, printing, nullptr, nullptr);
+
+  return 0;
+}
+```
+Please note that the actual issue might be more complex and this solution might not completely solve the problem. It&#39;s recommended to thoroughly test the code after applying this fix.
+</pre>
+
+
+<h2>Logs</h2>
+<pre>
+Fixing /home/chyun/oss-fuzz-gen1/results5/output-xpdf-_zn6pdfdoc12displaypagesep9outputdeviiddiiiipfipves2_/fixed_targets/01.cc with gpt-4, attempt 1.
+Fixing /home/chyun/oss-fuzz-gen1/results5/output-xpdf-_zn6pdfdoc12displaypagesep9outputdeviiddiiiipfipves2_/fixed_targets/01.cc with gpt-4, attempt 2.
+Successfully built /home/chyun/oss-fuzz-gen1/results5/output-xpdf-_zn6pdfdoc12displaypagesep9outputdeviiddiiiipfipves2_/fixed_targets/01.cc with gpt-4 in 2 iterations of fixing.
+Triaging the crash related to /home/chyun/oss-fuzz-gen1/results5/output-xpdf-_zn6pdfdoc12displaypagesep9outputdeviiddiiiipfipves2_/fixed_targets/01.cc with gpt-4.
+Result for xpdf-zn6pdfdoc12displaypagesep9outputdeviiddiiiipfipves2-01: crashes=True, coverage=0.00044975695825909463 (26/57809), coverage diff=0.0 (0/124731)
+
+</pre>
+
+<h2>Run logs</h2>
+<pre>
+INFO:__main__:Running: docker run --privileged --shm-size=2g --platform linux/amd64 --rm -e FUZZING_ENGINE=libfuzzer -e SANITIZER=address -e RUN_FUZZER_MODE=interactive -e HELPER=True -v /home/chyun/oss-fuzz-gen1/results5/output-xpdf-_zn6pdfdoc12displaypagesep9outputdeviiddiiiipfipves2_/corpora/01.cc:/tmp/fuzz_JBIG2_corpus -v /tmp/tmpobbma34k/build/out/xpdf-zn6pdfdoc12displaypagesep9outputdeviiddiiiipfipves2-01:/out -t gcr.io/oss-fuzz-base/base-runner run_fuzzer fuzz_JBIG2 -print_final_stats=1 -max_total_time=30 -len_control=0 -timeout=30.
+vm.mmap_rnd_bits = 28
+rm: cannot remove &#39;/tmp/fuzz_JBIG2_corpus&#39;: Device or resource busy
+/out/fuzz_JBIG2 -rss_limit_mb=2560 -timeout=25 -print_final_stats=1 -max_total_time=30 -len_control=0 -timeout=30 /tmp/fuzz_JBIG2_corpus -detect_leaks=0 &lt; /dev/null
+INFO: Running with entropic power schedule (0xFF, 100).
+INFO: Seed: 3821822698
+INFO: Loaded 1 modules   (57809 inline 8-bit counters): 57809 [0x5636ec3d6a88, 0x5636ec3e4c59), 
+INFO: Loaded 1 PC tables (57809 PCs): 57809 [0x5636ec3e4c60,0x5636ec4c6970), 
+INFO:        0 files found in /tmp/fuzz_JBIG2_corpus
+INFO: -max_len is not provided; libFuzzer will not generate inputs larger than 4096 bytes
+INFO: A corpus is not provided, starting from an empty corpus
+#2	INITED cov: 18 ft: 19 corp: 1/1b exec/s: 0 rss: 36Mb
+#3	NEW    cov: 19 ft: 21 corp: 2/3b lim: 4096 exec/s: 0 rss: 36Mb L: 2/2 MS: 1 InsertByte-
+#5	NEW    cov: 25 ft: 29 corp: 3/16b lim: 4096 exec/s: 0 rss: 36Mb L: 13/13 MS: 2 EraseBytes-InsertRepeatedBytes-
+#7	NEW    cov: 26 ft: 32 corp: 4/25b lim: 4096 exec/s: 0 rss: 36Mb L: 9/13 MS: 2 ChangeBit-CMP- DE: &#34;\377\377\377\377\377\377\377\377&#34;-
+#11	NEW    cov: 26 ft: 33 corp: 5/28b lim: 4096 exec/s: 0 rss: 36Mb L: 3/13 MS: 4 InsertByte-ChangeBinInt-ChangeBinInt-CrossOver-
+AddressSanitizer:DEADLYSIGNAL
+=================================================================
+[1m[31m==15==ERROR: AddressSanitizer: SEGV on unknown address 0x0000000002c0 (pc 0x7f0187fbefc4 bp 0x7ffeb2f88bb0 sp 0x7ffeb2f88b98 T0)
+[1m[0m==15==The signal is caused by a READ memory access.
+==15==Hint: address points to the zero page.
+SCARINESS: 10 (null-deref)
+    #0 0x7f0187fbefc4 in __pthread_mutex_lock (/lib/x86_64-linux-gnu/libpthread.so.0+0xafc4) (BuildId: 9a65bb469e45a1c6fbcffae5b82a2fd7a69eb479)
+    #1 0x5636ebcc07bf in GlobalParams::getVectorAntialias() /src/xpdf-4.05/xpdf/GlobalParams.cc:3187:3
+    #2 0x5636ebf4587c in SplashOutputDev::SplashOutputDev(SplashColorMode, int, int, unsigned char*, int, int) /src/xpdf-4.05/xpdf/SplashOutputDev.cc:628:23
+    #3 0x5636ebca95db in LLVMFuzzerTestOneInput /src/xpdf-4.05/build/fuzz_JBIG2.cc:42:19
+    #4 0x5636ebb5b660 in fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:614:13
+    #5 0x5636ebb5ae85 in fuzzer::Fuzzer::RunOne(unsigned char const*, unsigned long, bool, fuzzer::InputInfo*, bool, bool*) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:516:7
+    #6 0x5636ebb5c655 in fuzzer::Fuzzer::MutateAndTestOne() /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:760:19
+    #7 0x5636ebb5d445 in fuzzer::Fuzzer::Loop(std::__Fuzzer::vector&lt;fuzzer::SizedFile, std::__Fuzzer::allocator&lt;fuzzer::SizedFile&gt;&gt;&amp;) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:905:5
+    #8 0x5636ebb4b756 in fuzzer::FuzzerDriver(int*, char***, int (*)(unsigned char const*, unsigned long)) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:914:6
+    #9 0x5636ebb77c82 in main /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMain.cpp:20:10
+    #10 0x7f0187d9d082 in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x24082) (BuildId: 0702430aef5fa3dda43986563e9ffcc47efbd75e)
+    #11 0x5636ebb3c8cd in _start (/out/fuzz_JBIG2+0x29f8cd)
+
+DEDUP_TOKEN: __pthread_mutex_lock--GlobalParams::getVectorAntialias()--SplashOutputDev::SplashOutputDev(SplashColorMode, int, int, unsigned char*, int, int)
+AddressSanitizer can not provide additional info.
+SUMMARY: AddressSanitizer: SEGV (/lib/x86_64-linux-gnu/libpthread.so.0+0xafc4) (BuildId: 9a65bb469e45a1c6fbcffae5b82a2fd7a69eb479) in __pthread_mutex_lock
+==15==ABORTING
+MS: 1 InsertRepeatedBytes-; base unit: bb814396b96d3f49ed6efe3ea8835091a1eb11d9
+0xff,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0x2a,
+\377\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\377\377\377\377\377\377\377*
+artifact_prefix=&#39;./&#39;; Test unit written to ./crash-eb33d32ef34c98f2b750d7bb651af1da794023ff
+Base64: /wAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA/////////yo=
+stat::number_of_executed_units: 12
+stat::average_exec_per_sec:     0
+stat::new_units_added:          4
+stat::slowest_unit_time_sec:    0
+stat::peak_rss_mb:              40
+
+</pre>
+
+
+</body>
