@@ -1,0 +1,536 @@
+<!doctype html>
+
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Experiment results</title>
+<style>
+* {
+    box-sizing: border-box;
+}
+
+html {
+    line-height: 1.15;
+}
+
+body {
+    font-family: sans-serif;
+    font-size: 16px;
+}
+
+table {
+    border-collapse: collapse;
+    border-spacing: 0;
+}
+
+td, th {
+    border-right: 1px #dedede solid;
+    border-bottom: 1px #dedede solid;
+    padding: 5px;
+    text-align: left;
+}
+td:first-child, th:first-child {
+    border-left: 1px #dedede solid;
+}
+th {
+    border-top: 1px #dedede solid;
+}
+
+tbody tr:nth-child(odd) {
+    background-color: #f4f5ff;
+}
+</style>
+<body>
+    LLM: 
+    
+<h1>output-xpdf-_zn6pdfdoc12displaypagesep9outputdeviiddiiiipfipves2_ / 02</h1>
+Bug: True
+<br>
+Crash reason: NO_SEMANTIC_ERR
+<br>
+<br>
+
+<h2>Triage</h2>
+<pre>
+The crash is caused by a bug in the fuzz driver.
+
+The crash happens because the fuzz driver attempts to create a new MemStream object with a pointer to a potentially empty vector. When the FuzzedDataProvider consumes all the remaining bytes into the &#39;payload&#39; vector, there&#39;s a chance that the vector could be empty. Even though there&#39;s a check for &#39;payload.empty()&#39;, it happens after the variables for the MemStream constructor have already been defined. This means that &#39;c_payload&#39;, which is a pointer to the data in &#39;payload&#39;, could be a null pointer, leading to a null pointer dereference when it&#39;s used in the MemStream constructor. This is confirmed by the crash log, which shows a null-deref error and a segmentation fault at the MemStream line in the fuzz driver.
+</pre>
+<br>
+
+
+
+
+
+<h3>Final code</h3>
+
+<pre>
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+#include &lt;aconf.h&gt;
+#include &lt;png.h&gt;
+#include &lt;stddef.h&gt;
+#include &lt;stdint.h&gt;
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;string.h&gt;
+#include &lt;vector&gt;
+
+#include &#34;GString.h&#34;
+#include &#34;GlobalParams.h&#34;
+#include &#34;Object.h&#34;
+#include &#34;PDFDoc.h&#34;
+#include &#34;Splash.h&#34;
+#include &#34;SplashBitmap.h&#34;
+#include &#34;SplashOutputDev.h&#34;
+#include &#34;Stream.h&#34;
+#include &#34;config.h&#34;
+#include &#34;gfile.h&#34;
+#include &#34;gmem.h&#34;
+#include &#34;gmempp.h&#34;
+#include &#34;parseargs.h&#34;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+    if(size&lt;1)
+        return 0;
+
+    // Define variables
+    FuzzedDataProvider fdp(data, size);
+    double hdpi = fdp.ConsumeFloatingPoint&lt;double&gt;();
+    double vdpi = fdp.ConsumeFloatingPoint&lt;double&gt;();
+    int rotate = fdp.ConsumeIntegral&lt;int&gt;();
+    bool useMediaBox = fdp.ConsumeBool();
+    bool crop = fdp.ConsumeBool();
+    bool printing = fdp.ConsumeBool();
+    int first_page_index = fdp.ConsumeIntegralInRange&lt;int&gt;(1, 100);
+    int last_page_index = fdp.ConsumeIntegralInRange&lt;int&gt;(first_page_index, 150); // Ensure the range is always possible to be reached
+    std::vector&lt;char&gt; payload = fdp.ConsumeRemainingBytes&lt;char&gt;();
+  
+    // Check if payload is empty
+    if (payload.empty())
+        return 0;
+
+    // Create document
+    char * c_payload = const_cast&lt;char*&gt;(payload.data());
+    BaseStream *stream = new MemStream(c_payload, 0, payload.size(), 0);
+    PDFDoc doc(stream);
+    if (!doc.isOk() || first_page_index &gt; doc.getNumPages() || last_page_index &gt; doc.getNumPages())
+        return 0;
+
+    // Call function under test
+    SplashColor paperColor = {255, 255, 255};
+    SplashOutputDev * splashOut = new SplashOutputDev(splashModeRGB8, 1, gFalse, paperColor);
+    doc.displayPages(splashOut, first_page_index, last_page_index, hdpi, vdpi, rotate, useMediaBox, crop, printing, nullptr, nullptr);
+
+    return 0;
+}
+</pre>
+
+
+<h3>Fixer prompt #1</h3>
+<pre>
+
+Given the following C++ fuzz harness and its build error message, fix the code to make it build for fuzzing.
+
+If there is undeclared identifier or unknown type name error, fix it by finding and including the related libraries.
+
+MUST RETURN THE FULL CODE, INCLUDING UNCHANGED PARTS.
+
+Below is the code needs to be built:
+&lt;code&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+#include &lt;aconf.h&gt;
+#include &lt;png.h&gt;
+#include &lt;stddef.h&gt;
+#include &lt;stdint.h&gt;
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;string.h&gt;
+#include &lt;vector&gt;
+
+#include &#34;GString.h&#34;
+#include &#34;GlobalParams.h&#34;
+#include &#34;Object.h&#34;
+#include &#34;PDFDoc.h&#34;
+#include &#34;Splash.h&#34;
+#include &#34;SplashBitmap.h&#34;
+#include &#34;SplashOutputDev.h&#34;
+#include &#34;Stream.h&#34;
+#include &#34;config.h&#34;
+#include &#34;gfile.h&#34;
+#include &#34;gmem.h&#34;
+#include &#34;gmempp.h&#34;
+#include &#34;parseargs.h&#34;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+    if(size&lt;1)
+        return 0;
+
+    // Define variables
+    FuzzedDataProvider fdp(data, size);
+    double hdpi = fdp.ConsumeFloatingPoint&lt;double&gt;();
+    double vdpi = fdp.ConsumeFloatingPoint&lt;double&gt;();
+    int rotate = fdp.ConsumeIntegral&lt;int&gt;();
+    bool useMediaBox = fdp.ConsumeBool();
+    bool crop = fdp.ConsumeBool();
+    bool printing = fdp.ConsumeBool();
+    int first_page_index = fdp.ConsumeIntegralInRange&lt;int&gt;(1, 100);
+    int last_page_index = fdp.ConsumeIntegralInRange&lt;int&gt;(first_page_index, 150); // Ensure the range is always possible to be reached
+    std::vector&lt;char&gt; payload = fdp.ConsumeRemainingBytes&lt;char&gt;();
+  
+    // Create document
+    const char * c_payload = (const char*) payload.data();
+    BaseStream *stream = new MemStream(c_payload, 0, payload.size(), 0);
+    PDFDoc doc(stream);
+    if (!doc.isOk() || first_page_index &gt; doc.getNumPages() || last_page_index &gt; doc.getNumPages())
+        return 0;
+
+    // Call function under test
+    SplashColor paperColor = {255, 255, 255};
+    SplashOutputDev * splashOut = new SplashOutputDev(splashModeRGB8, 1, gFalse, paperColor);
+    doc.displayPages(splashOut, first_page_index, last_page_index, hdpi, vdpi, rotate, useMediaBox, crop, printing, nullptr, nullptr);
+
+    return 0;
+}
+&lt;/code&gt;
+
+Below is the error to fix:
+The code has the following build issues:
+&lt;error&gt;
+fuzz_JBIG2.cc:44:30: error: no matching constructor for initialization of &#39;MemStream&#39;
+   44 |     BaseStream *stream = new MemStream(c_payload, 0, payload.size(), 0);
+      |                              ^         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+../xpdf/Stream.h:356:3: note: candidate constructor not viable: 1st argument (&#39;const char *&#39;) would lose const qualifier
+  356 |   MemStream(char *bufA, Guint startA, Guint lengthA, Object *dictA);
+      |   ^         ~~~~~~~~~~
+../xpdf/Stream.h:353:7: note: candidate constructor (the implicit copy constructor) not viable: requires 1 argument, but 4 were provided
+  353 | class MemStream: public BaseStream {
+      |       ^~~~~~~~~
+&lt;/error&gt;
+
+
+
+
+Fix code:
+1. Consider possible solutions for the issues listed above.
+2. Choose a solution that can maximize fuzzing result, which is utilizing the function under test and feeding it not null input.
+3. Apply the solutions to the original code.
+It&#39;s important to show the complete code, not only the fixed line.
+&lt;solution&gt;
+</pre>
+
+
+
+<h3>Code #1</h3>
+
+<pre>
+The error message indicates that the constructor for &#39;MemStream&#39; is not matching because the first argument (&#39;const char *&#39;) would lose const qualifier. This can be fixed by removing the const qualifier from the c_payload variable.
+
+Here is the fixed code:
+
+```cpp
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+#include &lt;aconf.h&gt;
+#include &lt;png.h&gt;
+#include &lt;stddef.h&gt;
+#include &lt;stdint.h&gt;
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;string.h&gt;
+#include &lt;vector&gt;
+
+#include &#34;GString.h&#34;
+#include &#34;GlobalParams.h&#34;
+#include &#34;Object.h&#34;
+#include &#34;PDFDoc.h&#34;
+#include &#34;Splash.h&#34;
+#include &#34;SplashBitmap.h&#34;
+#include &#34;SplashOutputDev.h&#34;
+#include &#34;Stream.h&#34;
+#include &#34;config.h&#34;
+#include &#34;gfile.h&#34;
+#include &#34;gmem.h&#34;
+#include &#34;gmempp.h&#34;
+#include &#34;parseargs.h&#34;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+    if(size&lt;1)
+        return 0;
+
+    // Define variables
+    FuzzedDataProvider fdp(data, size);
+    double hdpi = fdp.ConsumeFloatingPoint&lt;double&gt;();
+    double vdpi = fdp.ConsumeFloatingPoint&lt;double&gt;();
+    int rotate = fdp.ConsumeIntegral&lt;int&gt;();
+    bool useMediaBox = fdp.ConsumeBool();
+    bool crop = fdp.ConsumeBool();
+    bool printing = fdp.ConsumeBool();
+    int first_page_index = fdp.ConsumeIntegralInRange&lt;int&gt;(1, 100);
+    int last_page_index = fdp.ConsumeIntegralInRange&lt;int&gt;(first_page_index, 150); // Ensure the range is always possible to be reached
+    std::vector&lt;char&gt; payload = fdp.ConsumeRemainingBytes&lt;char&gt;();
+  
+    // Create document
+    char * c_payload = const_cast&lt;char*&gt;(payload.data());
+    BaseStream *stream = new MemStream(c_payload, 0, payload.size(), 0);
+    PDFDoc doc(stream);
+    if (!doc.isOk() || first_page_index &gt; doc.getNumPages() || last_page_index &gt; doc.getNumPages())
+        return 0;
+
+    // Call function under test
+    SplashColor paperColor = {255, 255, 255};
+    SplashOutputDev * splashOut = new SplashOutputDev(splashModeRGB8, 1, gFalse, paperColor);
+    doc.displayPages(splashOut, first_page_index, last_page_index, hdpi, vdpi, rotate, useMediaBox, crop, printing, nullptr, nullptr);
+
+    return 0;
+}
+```
+
+The change was made at line 30 where the const_cast operator was used to remove the const qualifier from the payload.data() before assigning it to c_payload.
+</pre>
+
+
+<h3>Fixer prompt #2</h3>
+<pre>
+
+Given the following C++ fuzz harness and its build error message, fix the code to make it build for fuzzing.
+
+If there is undeclared identifier or unknown type name error, fix it by finding and including the related libraries.
+
+MUST RETURN THE FULL CODE, INCLUDING UNCHANGED PARTS.
+
+Below is the code needs to be built:
+&lt;code&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+#include &lt;aconf.h&gt;
+#include &lt;png.h&gt;
+#include &lt;stddef.h&gt;
+#include &lt;stdint.h&gt;
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;string.h&gt;
+#include &lt;vector&gt;
+
+#include &#34;GString.h&#34;
+#include &#34;GlobalParams.h&#34;
+#include &#34;Object.h&#34;
+#include &#34;PDFDoc.h&#34;
+#include &#34;Splash.h&#34;
+#include &#34;SplashBitmap.h&#34;
+#include &#34;SplashOutputDev.h&#34;
+#include &#34;Stream.h&#34;
+#include &#34;config.h&#34;
+#include &#34;gfile.h&#34;
+#include &#34;gmem.h&#34;
+#include &#34;gmempp.h&#34;
+#include &#34;parseargs.h&#34;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+    if(size&lt;1)
+        return 0;
+
+    // Define variables
+    FuzzedDataProvider fdp(data, size);
+    double hdpi = fdp.ConsumeFloatingPoint&lt;double&gt;();
+    double vdpi = fdp.ConsumeFloatingPoint&lt;double&gt;();
+    int rotate = fdp.ConsumeIntegral&lt;int&gt;();
+    bool useMediaBox = fdp.ConsumeBool();
+    bool crop = fdp.ConsumeBool();
+    bool printing = fdp.ConsumeBool();
+    int first_page_index = fdp.ConsumeIntegralInRange&lt;int&gt;(1, 100);
+    int last_page_index = fdp.ConsumeIntegralInRange&lt;int&gt;(first_page_index, 150); // Ensure the range is always possible to be reached
+    std::vector&lt;char&gt; payload = fdp.ConsumeRemainingBytes&lt;char&gt;();
+  
+    // Create document
+    char * c_payload = const_cast&lt;char*&gt;(payload.data());
+    BaseStream *stream = new MemStream(c_payload, 0, payload.size(), 0);
+    PDFDoc doc(stream);
+    if (!doc.isOk() || first_page_index &gt; doc.getNumPages() || last_page_index &gt; doc.getNumPages())
+        return 0;
+
+    // Call function under test
+    SplashColor paperColor = {255, 255, 255};
+    SplashOutputDev * splashOut = new SplashOutputDev(splashModeRGB8, 1, gFalse, paperColor);
+    doc.displayPages(splashOut, first_page_index, last_page_index, hdpi, vdpi, rotate, useMediaBox, crop, printing, nullptr, nullptr);
+
+    return 0;
+}
+&lt;/code&gt;
+
+Below is the error to fix:
+The code can build successfully but has a runtime issue: Fuzzing crashed immediately at runtime (ASAN-ERROR: AddressSanitizer: SEGV on unknown address 0x000000000000 (pc 0x7fd1241e2aeb bp 0x7fffd4476cc0 sp 0x7fffd4476478 T0)), indicating fuzz target code for invoking the function under test is incorrect or unrobust.
+&lt;error&gt;
+Crash stacks:
+Stack 0:
+#0 0x7fd1241e2aeb in memcpy (/lib/x86_64-linux-gnu/libc.so.6+0xbbaeb) (BuildId: 0702430aef5fa3dda43986563e9ffcc47efbd75e)
+#1 0x5619b57c3a84 in __asan_memcpy /src/llvm-project/compiler-rt/lib/asan/asan_interceptors_memintrinsics.cpp:63:3
+#2 0x5619b581561c in BaseStream /src/xpdf-4.05/xpdf/Stream.cc:326:8
+#3 0x5619b581561c in MemStream::MemStream(char*, unsigned int, unsigned int, Object*) /src/xpdf-4.05/xpdf/Stream.cc:873:5
+#4 0x5619b58055e6 in LLVMFuzzerTestOneInput /src/xpdf-4.05/build/fuzz_JBIG2.cc:44:30
+#5 0x5619b56b7660 in fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:614:13
+#6 0x5619b56b6e85 in fuzzer::Fuzzer::RunOne(unsigned char const*, unsigned long, bool, fuzzer::InputInfo*, bool, bool*) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:516:7
+#7 0x5619b56b8cd6 in fuzzer::Fuzzer::ReadAndExecuteSeedCorpora(std::__Fuzzer::vector&lt;fuzzer::SizedFile, std::__Fuzzer::allocator&lt;fuzzer::SizedFile&gt;&gt;&amp;) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:812:5
+#8 0x5619b56b9147 in fuzzer::Fuzzer::Loop(std::__Fuzzer::vector&lt;fuzzer::SizedFile, std::__Fuzzer::allocator&lt;fuzzer::SizedFile&gt;&gt;&amp;) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:867:3
+#9 0x5619b56a7756 in fuzzer::FuzzerDriver(int*, char***, int (*)(unsigned char const*, unsigned long)) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:914:6
+#10 0x5619b56d3c82 in main /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMain.cpp:20:10
+#11 0x7fd12414b082 in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x24082) (BuildId: 0702430aef5fa3dda43986563e9ffcc47efbd75e)
+#12 0x5619b56988cd in _start (/out/fuzz_JBIG2+0x29f8cd)
+&lt;/error&gt;
+
+
+
+
+Fix code:
+1. Consider possible solutions for the issues listed above.
+2. Choose a solution that can maximize fuzzing result, which is utilizing the function under test and feeding it not null input.
+3. Apply the solutions to the original code.
+It&#39;s important to show the complete code, not only the fixed line.
+&lt;solution&gt;
+</pre>
+
+
+
+<h3>Code #2</h3>
+
+<pre>
+The error message indicates that a segmentation fault (SEGV) occurred due to accessing a null or invalid memory address. The error occurred in the MemStream constructor, which is called in the LLVMFuzzerTestOneInput function. This suggests that the input data provided to the MemStream constructor may be invalid or null.
+
+The issue is likely due to the conversion of the vector&lt;char&gt; payload to char* c_payload. If the vector is empty, its data() method will return a null pointer, which would cause a segmentation fault when passed to the MemStream constructor. 
+
+To fix this, we can add a check to ensure that the payload vector is not empty before creating the MemStream:
+
+```cpp
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+#include &lt;aconf.h&gt;
+#include &lt;png.h&gt;
+#include &lt;stddef.h&gt;
+#include &lt;stdint.h&gt;
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;string.h&gt;
+#include &lt;vector&gt;
+
+#include &#34;GString.h&#34;
+#include &#34;GlobalParams.h&#34;
+#include &#34;Object.h&#34;
+#include &#34;PDFDoc.h&#34;
+#include &#34;Splash.h&#34;
+#include &#34;SplashBitmap.h&#34;
+#include &#34;SplashOutputDev.h&#34;
+#include &#34;Stream.h&#34;
+#include &#34;config.h&#34;
+#include &#34;gfile.h&#34;
+#include &#34;gmem.h&#34;
+#include &#34;gmempp.h&#34;
+#include &#34;parseargs.h&#34;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+    if(size&lt;1)
+        return 0;
+
+    // Define variables
+    FuzzedDataProvider fdp(data, size);
+    double hdpi = fdp.ConsumeFloatingPoint&lt;double&gt;();
+    double vdpi = fdp.ConsumeFloatingPoint&lt;double&gt;();
+    int rotate = fdp.ConsumeIntegral&lt;int&gt;();
+    bool useMediaBox = fdp.ConsumeBool();
+    bool crop = fdp.ConsumeBool();
+    bool printing = fdp.ConsumeBool();
+    int first_page_index = fdp.ConsumeIntegralInRange&lt;int&gt;(1, 100);
+    int last_page_index = fdp.ConsumeIntegralInRange&lt;int&gt;(first_page_index, 150); // Ensure the range is always possible to be reached
+    std::vector&lt;char&gt; payload = fdp.ConsumeRemainingBytes&lt;char&gt;();
+  
+    // Check if payload is empty
+    if (payload.empty())
+        return 0;
+
+    // Create document
+    char * c_payload = const_cast&lt;char*&gt;(payload.data());
+    BaseStream *stream = new MemStream(c_payload, 0, payload.size(), 0);
+    PDFDoc doc(stream);
+    if (!doc.isOk() || first_page_index &gt; doc.getNumPages() || last_page_index &gt; doc.getNumPages())
+        return 0;
+
+    // Call function under test
+    SplashColor paperColor = {255, 255, 255};
+    SplashOutputDev * splashOut = new SplashOutputDev(splashModeRGB8, 1, gFalse, paperColor);
+    doc.displayPages(splashOut, first_page_index, last_page_index, hdpi, vdpi, rotate, useMediaBox, crop, printing, nullptr, nullptr);
+
+    return 0;
+}
+```
+</pre>
+
+
+<h2>Logs</h2>
+<pre>
+Fixing /home/chyun/oss-fuzz-gen/results7/output-xpdf-_zn6pdfdoc12displaypagesep9outputdeviiddiiiipfipves2_/fixed_targets/02.cc with gpt-4, attempt 1.
+Fixing /home/chyun/oss-fuzz-gen/results7/output-xpdf-_zn6pdfdoc12displaypagesep9outputdeviiddiiiipfipves2_/fixed_targets/02.cc with gpt-4, attempt 2.
+Successfully built /home/chyun/oss-fuzz-gen/results7/output-xpdf-_zn6pdfdoc12displaypagesep9outputdeviiddiiiipfipves2_/fixed_targets/02.cc with gpt-4 in 2 iterations of fixing.
+Triaging the crash related to /home/chyun/oss-fuzz-gen/results7/output-xpdf-_zn6pdfdoc12displaypagesep9outputdeviiddiiiipfipves2_/fixed_targets/02.cc with gpt-4.
+Result for xpdf-zn6pdfdoc12displaypagesep9outputdeviiddiiiipfipves2-02: crashes=True, coverage=0.00046703914479943263 (27/57811), coverage diff=0.0 (0/124731)
+
+</pre>
+
+<h2>Run logs</h2>
+<pre>
+INFO:__main__:Running: docker run --privileged --shm-size=2g --platform linux/amd64 --rm -e FUZZING_ENGINE=libfuzzer -e SANITIZER=address -e RUN_FUZZER_MODE=interactive -e HELPER=True -v /home/chyun/oss-fuzz-gen/results7/output-xpdf-_zn6pdfdoc12displaypagesep9outputdeviiddiiiipfipves2_/corpora/02.cc:/tmp/fuzz_JBIG2_corpus -v /tmp/tmpfopxn2s_/build/out/xpdf-zn6pdfdoc12displaypagesep9outputdeviiddiiiipfipves2-02:/out -t gcr.io/oss-fuzz-base/base-runner run_fuzzer fuzz_JBIG2 -print_final_stats=1 -max_total_time=30 -len_control=0 -timeout=30.
+vm.mmap_rnd_bits = 28
+rm: cannot remove &#39;/tmp/fuzz_JBIG2_corpus&#39;: Device or resource busy
+/out/fuzz_JBIG2 -rss_limit_mb=2560 -timeout=25 -print_final_stats=1 -max_total_time=30 -len_control=0 -timeout=30 /tmp/fuzz_JBIG2_corpus -detect_leaks=0 &lt; /dev/null
+INFO: Running with entropic power schedule (0xFF, 100).
+INFO: Seed: 666407857
+INFO: Loaded 1 modules   (57811 inline 8-bit counters): 57811 [0x556a78d5ba48, 0x556a78d69c1b), 
+INFO: Loaded 1 PC tables (57811 PCs): 57811 [0x556a78d69c20,0x556a78e4b950), 
+INFO:        0 files found in /tmp/fuzz_JBIG2_corpus
+INFO: -max_len is not provided; libFuzzer will not generate inputs larger than 4096 bytes
+INFO: A corpus is not provided, starting from an empty corpus
+#2	INITED cov: 20 ft: 21 corp: 1/1b exec/s: 0 rss: 36Mb
+#7	NEW    cov: 21 ft: 23 corp: 2/3b lim: 4096 exec/s: 0 rss: 36Mb L: 2/2 MS: 5 ShuffleBytes-CopyPart-ChangeBit-ChangeByte-CrossOver-
+#8	NEW    cov: 21 ft: 25 corp: 3/6b lim: 4096 exec/s: 0 rss: 36Mb L: 3/3 MS: 1 CopyPart-
+#14	NEW    cov: 21 ft: 27 corp: 4/10b lim: 4096 exec/s: 0 rss: 36Mb L: 4/4 MS: 1 CrossOver-
+#16	NEW    cov: 21 ft: 28 corp: 5/15b lim: 4096 exec/s: 0 rss: 36Mb L: 5/5 MS: 2 ChangeBinInt-CopyPart-
+#30	NEW    cov: 22 ft: 29 corp: 6/16b lim: 4096 exec/s: 0 rss: 36Mb L: 1/5 MS: 4 ChangeBit-ChangeBit-ChangeBit-ChangeBit-
+#34	NEW    cov: 27 ft: 37 corp: 7/27b lim: 4096 exec/s: 0 rss: 36Mb L: 11/11 MS: 4 ChangeBinInt-ChangeByte-CopyPart-CMP- DE: &#34;\377\377\377\377\377\377\377\377&#34;-
+#44	NEW    cov: 27 ft: 39 corp: 8/42b lim: 4096 exec/s: 0 rss: 36Mb L: 15/15 MS: 5 ChangeByte-CMP-ShuffleBytes-EraseBytes-CMP- DE: &#34;\006\000\000\000\000\000\000\000&#34;-&#34;\000\000\000\000\000\000\000\000&#34;-
+AddressSanitizer:DEADLYSIGNAL
+=================================================================
+[1m[31m==15==ERROR: AddressSanitizer: SEGV on unknown address 0x000000000000 (pc 0x7f9201167aeb bp 0x7fffac49fd40 sp 0x7fffac49f4f8 T0)
+[1m[0m==15==The signal is caused by a READ memory access.
+==15==Hint: address points to the zero page.
+SCARINESS: 10 (null-deref)
+    #0 0x7f9201167aeb in memcpy (/lib/x86_64-linux-gnu/libc.so.6+0xbbaeb) (BuildId: 0702430aef5fa3dda43986563e9ffcc47efbd75e)
+    #1 0x556a785eca84 in __asan_memcpy /src/llvm-project/compiler-rt/lib/asan/asan_interceptors_memintrinsics.cpp:63:3
+    #2 0x556a7863e62c in BaseStream /src/xpdf-4.05/xpdf/Stream.cc:326:8
+    #3 0x556a7863e62c in MemStream::MemStream(char*, unsigned int, unsigned int, Object*) /src/xpdf-4.05/xpdf/Stream.cc:873:5
+    #4 0x556a7862e5ef in LLVMFuzzerTestOneInput /src/xpdf-4.05/build/fuzz_JBIG2.cc:48:30
+    #5 0x556a784e0660 in fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:614:13
+    #6 0x556a784dfe85 in fuzzer::Fuzzer::RunOne(unsigned char const*, unsigned long, bool, fuzzer::InputInfo*, bool, bool*) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:516:7
+    #7 0x556a784e1655 in fuzzer::Fuzzer::MutateAndTestOne() /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:760:19
+    #8 0x556a784e2445 in fuzzer::Fuzzer::Loop(std::__Fuzzer::vector&lt;fuzzer::SizedFile, std::__Fuzzer::allocator&lt;fuzzer::SizedFile&gt;&gt;&amp;) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:905:5
+    #9 0x556a784d0756 in fuzzer::FuzzerDriver(int*, char***, int (*)(unsigned char const*, unsigned long)) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:914:6
+    #10 0x556a784fcc82 in main /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMain.cpp:20:10
+    #11 0x7f92010d0082 in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x24082) (BuildId: 0702430aef5fa3dda43986563e9ffcc47efbd75e)
+    #12 0x556a784c18cd in _start (/out/fuzz_JBIG2+0x29f8cd)
+
+DEDUP_TOKEN: memcpy--__asan_memcpy--BaseStream
+AddressSanitizer can not provide additional info.
+SUMMARY: AddressSanitizer: SEGV (/lib/x86_64-linux-gnu/libc.so.6+0xbbaeb) (BuildId: 0702430aef5fa3dda43986563e9ffcc47efbd75e) in memcpy
+==15==ABORTING
+MS: 3 ChangeByte-PersAutoDict-InsertRepeatedBytes- DE: &#34;\000\000\000\000\000\000\000\000&#34;-; base unit: c7255dc48b42d44f6c0676d6009051b7e1aa885b
+0x2b,0x0,0x0,0x0,0x0,0x0,0xc6,0xc6,0xc6,0xc6,0xc6,0xc6,0xc6,0xc6,0xc6,0xc6,0xc6,0xc6,0xc6,0xc6,0xc6,0xc6,0xc6,0xc6,0xc6,0xc6,0xc6,0xc6,0xc6,0xc6,0xc6,0xc6,0xc6,0xc6,0xc6,0xc6,0xc6,0xc6,0xc6,0xc6,0xc6,0xc6,0xc6,0xc6,0xc6,0xc6,0xc6,0xc6,0xc6,0xc6,0xc6,0xc6,0xc6,0xc6,0xc6,0xc6,0xc6,0xc6,0xc6,0x0,0x0,0x0,
++\000\000\000\000\000\306\306\306\306\306\306\306\306\306\306\306\306\306\306\306\306\306\306\306\306\306\306\306\306\306\306\306\306\306\306\306\306\306\306\306\306\306\306\306\306\306\306\306\306\306\306\306\306\306\306\306\306\306\000\000\000
+artifact_prefix=&#39;./&#39;; Test unit written to ./crash-877e5c8a12e4044a4151d3b6e142a42d6a25fea0
+Base64: KwAAAAAAxsbGxsbGxsbGxsbGxsbGxsbGxsbGxsbGxsbGxsbGxsbGxsbGxsbGxsbGxsbGxsbGxsbGxsYAAAA=
+stat::number_of_executed_units: 47
+stat::average_exec_per_sec:     0
+stat::new_units_added:          7
+stat::slowest_unit_time_sec:    0
+stat::peak_rss_mb:              37
+
+</pre>
+
+
+</body>

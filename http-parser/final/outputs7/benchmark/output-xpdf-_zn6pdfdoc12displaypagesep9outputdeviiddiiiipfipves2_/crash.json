@@ -1,0 +1,43 @@
+{
+    "samples": [
+
+    {
+        "benchmark": "output-xpdf-_zn6pdfdoc12displaypagesep9outputdeviiddiiiipfipves2_",
+        "sample": "01",
+        "status": "Done",
+        "compiles": "False",
+        "crashes": "False",
+        "crash_reason": "-",
+        "bug": "True",
+        "coverage": "0.00",
+        "coverage_diff": "0.0",
+        "coverage_report": "#",
+        "stacktrace": "/stacktrace",
+        "target_binary": "/target_binary",
+        "reproducer": "/artifacts",
+        "run_log": "run.log",
+        "source_code": "#include <assert.h>\\n#include <stdint.h>\\n#include <iostream>\\n#include <fstream>\\n#include <string>\\n\\n#include \"aconf.h\"\\n#include \"goo/gfile.h\"\\n#include \"/src/xpdf-4.05/goo/GString.h\"\\n#include \"Object.h\"\\n#include \"/src/xpdf-4.05/xpdf/PDFDoc.h\"\\n#include \"Page.h\"\\n#include \"Catalog.h\"\\n#include \"SplashOutputDev.h\"\\n#include \"fuzzer/FuzzedDataProvider.h\"\\n#include \"GlobalParams.h\"\\n#include \"UnicodeMap.h\"\\n\\n#ifdef MULTITHREADED\\n#include \"/src/xpdf-4.05/goo/GMutex.h\"\\nGMutex* mutex;\\n#endif\\n\\nclass FuzzerOutputDev : public OutputDev {\\npublic:\\n  void drawChar(GfxState *state, double x, double y,\\n                        double dx, double dy,\\n                        double originX, double originY,\\n                        CharCode code, int nBytes, Unicode *u, int uLen) { }\\n  GBool upsideDown() { return gTrue; }\\n  GBool useDrawChar() { return gTrue; }\\n  GBool interpretType3Chars() { return gTrue; }\\n};\\n\\nextern \"C\" void LLVMFuzzerInitialize(int *argc, char ***argv) {\\n  globalParams = new GlobalParams(nullptr);\\n\\n#ifdef MULTITHREADED\\n    mutex=new GMutex();\\n#endif\\n}\\n\\nextern \"C\" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {\\n  if (size < 100) {\\n    return 0;\\n  }\\n\\n  FuzzedDataProvider fuzzed_data(data, size);\\n\\n  // Define dev\\n  FuzzerOutputDev dev;\\n\\n  // Define input data\\n  std::string test_data(reinterpret_cast<const char*>(data), size);\\n  std::string test_data_file = std::string(getenv(\"FUZZER_TEMP_DIR\")) + \"/doc.pdf\";\\n  std::ofstream f(test_data_file, std::ios::out | std::ios::binary);\\n  f << test_data;\\n  f.close();\\n  GString fileName(test_data_file.c_str());\\n  PDFDoc doc(&fileName, nullptr, nullptr);\\n\\n  if (!doc.isOk() || doc.getNumPages() == 0) {\\n    return 0;\\n  }\\n\\n  Catalog *catalog = doc.getCatalog();\\n\\n  int pgh, pgw;\\n  doc.getPage(1)->getCropBox(&pgw, &pgh);\\n  double hDPI = 150.0;\\n  double vDPI = 150.0;\\n  int rotate = 0; \\n  GBool useMediaBox = false; \\n  GBool crop = false; \\n  GBool doLinks = true;\\n  GBool printing = false;\\n  int firstPage = 1;\\n  int lastPage = doc.getNumPages(); \\n  double yBottom = 0; \\n  double yTop = pgh;\\n  double xRight = pgw+10; \\n  double xLeft = -10;\\n  int sliceX = -1; \\n  int sliceY = -1; \\n  int sliceW = pgw*2; \\n  int sliceH = pgh*2;\\n\\n  catalog->getPage(1)->display(&dev, hDPI, vDPI, rotate, \\n                               doLinks, useMediaBox, crop, \\n                               printing, nullptr, nullptr);\\n  \\n  // Fill the parameters\\n  OutputDev* outputDev = &dev;\\n  firstPage = fuzzed_data.ConsumeIntegralInRange<int>(1, doc.getNumPages());\\n  lastPage = fuzzed_data.ConsumeIntegralInRange<int>(firstPage, doc.getNumPages());\\n  hDPI = fuzzed_data.ConsumeFloatingPoint<double>();\\n  vDPI = fuzzed_data.ConsumeFloatingPoint<double>();\\n  rotate = fuzzed_data.ConsumeIntegralInRange<int>(-360, 360);\\n  useMediaBox = fuzzed_data.ConsumeBool();\\n  crop = fuzzed_data.ConsumeBool();\\n  printing = fuzzed_data.ConsumeBool();\\n  GBool (*abortCheckCbk)(void *data) = nullptr;\\n  void *abortCheckCbkData = nullptr;\\n\\n  doc.displayPages(outputDev, firstPage, lastPage, hDPI, vDPI, rotate, useMediaBox, crop, printing, abortCheckCbk, abortCheckCbkData);\\n  \\n  return 0;\\n}",
+        "model": ""
+    },
+
+    {
+        "benchmark": "output-xpdf-_zn6pdfdoc12displaypagesep9outputdeviiddiiiipfipves2_",
+        "sample": "02",
+        "status": "Done",
+        "compiles": "True",
+        "crashes": "True",
+        "crash_reason": "NO_SEMANTIC_ERR",
+        "bug": "True",
+        "coverage": "0.05",
+        "coverage_diff": "0.0",
+        "coverage_report": "#",
+        "stacktrace": "/stacktrace",
+        "target_binary": "/target_binary",
+        "reproducer": "/artifacts",
+        "run_log": "run.log",
+        "source_code": "#include <fuzzer/FuzzedDataProvider.h>\\n\\n#include <aconf.h>\\n#include <png.h>\\n#include <stddef.h>\\n#include <stdint.h>\\n#include <stdio.h>\\n#include <stdlib.h>\\n#include <string.h>\\n#include <vector>\\n\\n#include \"GString.h\"\\n#include \"GlobalParams.h\"\\n#include \"Object.h\"\\n#include \"PDFDoc.h\"\\n#include \"Splash.h\"\\n#include \"SplashBitmap.h\"\\n#include \"SplashOutputDev.h\"\\n#include \"Stream.h\"\\n#include \"config.h\"\\n#include \"gfile.h\"\\n#include \"gmem.h\"\\n#include \"gmempp.h\"\\n#include \"parseargs.h\"\\n\\nextern \"C\" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {\\n    if(size<1)\\n        return 0;\\n\\n    // Define variables\\n    FuzzedDataProvider fdp(data, size);\\n    double hdpi = fdp.ConsumeFloatingPoint<double>();\\n    double vdpi = fdp.ConsumeFloatingPoint<double>();\\n    int rotate = fdp.ConsumeIntegral<int>();\\n    bool useMediaBox = fdp.ConsumeBool();\\n    bool crop = fdp.ConsumeBool();\\n    bool printing = fdp.ConsumeBool();\\n    int first_page_index = fdp.ConsumeIntegralInRange<int>(1, 100);\\n    int last_page_index = fdp.ConsumeIntegralInRange<int>(first_page_index, 150); // Ensure the range is always possible to be reached\\n    std::vector<char> payload = fdp.ConsumeRemainingBytes<char>();\\n  \\n    // Check if payload is empty\\n    if (payload.empty())\\n        return 0;\\n\\n    // Create document\\n    char * c_payload = const_cast<char*>(payload.data());\\n    BaseStream *stream = new MemStream(c_payload, 0, payload.size(), 0);\\n    PDFDoc doc(stream);\\n    if (!doc.isOk() || first_page_index > doc.getNumPages() || last_page_index > doc.getNumPages())\\n        return 0;\\n\\n    // Call function under test\\n    SplashColor paperColor = {255, 255, 255};\\n    SplashOutputDev * splashOut = new SplashOutputDev(splashModeRGB8, 1, gFalse, paperColor);\\n    doc.displayPages(splashOut, first_page_index, last_page_index, hdpi, vdpi, rotate, useMediaBox, crop, printing, nullptr, nullptr);\\n\\n    return 0;\\n}",
+        "model": ""
+    }
+
+    ]
+}

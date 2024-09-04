@@ -1,0 +1,1105 @@
+<!doctype html>
+
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Experiment results</title>
+<style>
+* {
+    box-sizing: border-box;
+}
+
+html {
+    line-height: 1.15;
+}
+
+body {
+    font-family: sans-serif;
+    font-size: 16px;
+}
+
+table {
+    border-collapse: collapse;
+    border-spacing: 0;
+}
+
+td, th {
+    border-right: 1px #dedede solid;
+    border-bottom: 1px #dedede solid;
+    padding: 5px;
+    text-align: left;
+}
+td:first-child, th:first-child {
+    border-left: 1px #dedede solid;
+}
+th {
+    border-top: 1px #dedede solid;
+}
+
+tbody tr:nth-child(odd) {
+    background-color: #f4f5ff;
+}
+</style>
+<body>
+    LLM: 
+    
+<h1>output-xpdf-_zn6pdfdoc16displaypagesliceep9outputdeviddiiiiiiiipfipves2_ / 02</h1>
+Bug: False
+<br>
+Crash reason: FP_NEAR_INIT_CRASH
+<br>
+<br>
+
+<h2>Triage</h2>
+<pre>
+Crash is caused by bug in project.
+
+The crash report shows a segmentation fault (SEGV) on an unknown address, hinting at a null pointer dereference. This is confirmed by the &#34;SCARINESS: 10 (null-deref)&#34; line. The crash happens in the Catalog::getPage(int) function, which is a part of the project, not the fuzz driver. The fuzz driver is just passing data to the project&#39;s function. The crash is likely due to the project&#39;s function not properly handling the data or a condition that the data causes.
+</pre>
+<br>
+
+
+
+
+
+<h3>Final code</h3>
+
+<pre>
+#include &#34;PDFDoc.h&#34;
+#include &#34;GlobalParams.h&#34;
+#include &#34;SplashOutputDev.h&#34;
+#include &lt;stdint.h&gt;
+#include &#34;GString.h&#34;
+#include &#34;/src/xpdf-4.05/xpdf/Stream.h&#34;
+#include &#34;Object.h&#34;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  if (size == 0) {
+    return 0;
+  }
+  
+  FuzzedDataProvider dataProvider(data, size);
+
+  static double hDPI = 72.0;
+  static double vDPI = 72.0;
+  static int rotate = 0;
+  static int sliceX = -1;
+  static int sliceY = -1;
+  static int sliceW = -1;
+  static int sliceH = -1;
+  static bool useMediaBox = true;
+  static bool crop = false;
+  static bool printing = false;
+
+  int page = static_cast&lt;int&gt;(dataProvider.ConsumeIntegralInRange(1, 1000));
+  if(!page) page = 1;
+
+  globalParams = new GlobalParams(&#34;&#34;);
+  
+  GString* nonEmptyString = new GString(&#34;non-empty string&#34;); 
+  Object obj;
+  
+  MemStream* memStream = new MemStream((char*)nonEmptyString-&gt;copy(), 0, size, &amp;obj);
+  PDFDoc* doc = new PDFDoc(memStream);
+  
+  SplashColor paperColor = {0xff, 0xff, 0xff}; 
+  SplashOutputDev* splashOut = new SplashOutputDev(splashModeRGB8, 1, false, paperColor);
+  
+  doc-&gt;displayPageSlice(splashOut, 
+                        page,
+                        hDPI,vDPI,
+                        rotate,
+                        useMediaBox,
+                        crop,
+                        printing,
+                        sliceX,
+                        sliceY,
+                        sliceW,
+                        sliceH,
+                        nullptr, 
+                        nullptr);
+                      
+  delete splashOut;                 
+  delete doc;
+  delete globalParams;
+   
+  return 0;
+}
+</pre>
+
+
+<h3>Fixer prompt #1</h3>
+<pre>
+
+Given the following C++ fuzz harness and its build error message, fix the code to make it build for fuzzing.
+
+If there is undeclared identifier or unknown type name error, fix it by finding and including the related libraries.
+
+MUST RETURN THE FULL CODE, INCLUDING UNCHANGED PARTS.
+
+Below is the code needs to be built:
+&lt;code&gt;
+#include &#34;PDFDoc.h&#34;
+#include &#34;GlobalParams.h&#34;
+#include &#34;SplashOutputDev.h&#34;
+#include &lt;stdint.h&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  FuzzedDataProvider stream(data, size);
+
+  // use values within stated ranges
+  static double hDPI = 72.0;
+  static double vDPI = 72.0;
+  static int rotate = 0;
+  static int sliceX = -1;
+  static int sliceY = -1;
+  static int sliceW = -1;
+  static int sliceH = -1;
+  static bool useMediaBox = true;
+  static bool crop = false;
+  static bool printing = false;
+
+  int page = static_cast&lt;int&gt;(stream.ConsumeIntegralInRange(1, 1000));
+  if(!page) page = 1;
+
+  // setup a minimum GlobalParams
+  globalParams = new GlobalParams(&#34;&#34;);
+  
+  GString* emptyString = new GString(&#34;&#34;); 
+  Object obj(emptyString-&gt;copy());
+  
+  // setup an empty PDF stream
+  MemStream* stream = new MemStream((char*)emptyString-&gt;copy(), 0, 0, &amp;obj);
+  PDFDoc* doc = new PDFDoc(stream);
+  
+  // setup a basic output device
+  SplashColor paperColor = {0xff, 0xff, 0xff}; // default paper color to white
+  SplashOutputDev* splashOut = new SplashOutputDev(splashModeRGB8, 1, false, paperColor);
+  
+   // Calling function under test
+  doc-&gt;displayPageSlice(splashOut, 
+                        page,
+                        hDPI,vDPI,
+                        rotate,
+                        useMediaBox,
+                        crop,
+                        printing,
+                        sliceX,
+                        sliceY,
+                        sliceW,
+                        sliceH,
+                        nullptr, // we don&#39;t have any links available
+                        nullptr); // no abort check
+                      
+  delete splashOut;                 
+  delete doc;
+  delete globalParams;
+   
+  return 0;
+}  
+&lt;/code&gt;
+
+Below is the error to fix:
+The code has the following build issues:
+&lt;error&gt;
+fuzz_JBIG2.cc:30:10: error: no matching constructor for initialization of &#39;Object&#39;
+   30 |   Object obj(emptyString-&gt;copy());
+      |          ^   ~~~~~~~~~~~~~~~~~~~
+../xpdf/Object.h:80:7: note: candidate constructor (the implicit copy constructor) not viable: no known conversion from &#39;GString *&#39; to &#39;const Object&#39; for 1st argument
+   80 | class Object {
+      |       ^~~~~~
+../xpdf/Object.h:80:7: note: candidate constructor (the implicit move constructor) not viable: no known conversion from &#39;GString *&#39; to &#39;Object&#39; for 1st argument
+   80 | class Object {
+      |       ^~~~~~
+../xpdf/Object.h:84:3: note: candidate constructor not viable: requires 0 arguments, but 1 was provided
+   84 |   Object():
+      |   ^
+fuzz_JBIG2.cc:33:14: error: redefinition of &#39;stream&#39; with a different type: &#39;MemStream *&#39; vs &#39;FuzzedDataProvider&#39;
+   33 |   MemStream* stream = new MemStream((char*)emptyString-&gt;copy(), 0, 0, &amp;obj);
+      |              ^
+fuzz_JBIG2.cc:9:22: note: previous definition is here
+    9 |   FuzzedDataProvider stream(data, size);
+      |                      ^
+fuzz_JBIG2.cc:34:21: error: no matching constructor for initialization of &#39;PDFDoc&#39;
+   34 |   PDFDoc* doc = new PDFDoc(stream);
+      |                     ^      ~~~~~~
+../xpdf/PDFDoc.h:35:7: note: candidate constructor (the implicit copy constructor) not viable: no known conversion from &#39;FuzzedDataProvider&#39; to &#39;const PDFDoc&#39; for 1st argument
+   35 | class PDFDoc {
+      |       ^~~~~~
+../xpdf/PDFDoc.h:38:3: note: candidate constructor not viable: no known conversion from &#39;FuzzedDataProvider&#39; to &#39;GString *&#39; for 1st argument
+   38 |   PDFDoc(GString *fileNameA, GString *ownerPassword = NULL,
+      |   ^      ~~~~~~~~~~~~~~~~~~
+../xpdf/PDFDoc.h:48:3: note: candidate constructor not viable: no known conversion from &#39;FuzzedDataProvider&#39; to &#39;char *&#39; for 1st argument
+   48 |   PDFDoc(char *fileNameA, GString *ownerPassword = NULL,
+      |   ^      ~~~~~~~~~~~~~~~
+../xpdf/PDFDoc.h:51:3: note: candidate constructor not viable: no known conversion from &#39;FuzzedDataProvider&#39; to &#39;BaseStream *&#39; for 1st argument
+   51 |   PDFDoc(BaseStream *strA, GString *ownerPassword = NULL,
+      |   ^      ~~~~~~~~~~~~~~~~
+&lt;/error&gt;
+
+
+
+
+Fix code:
+1. Consider possible solutions for the issues listed above.
+2. Choose a solution that can maximize fuzzing result, which is utilizing the function under test and feeding it not null input.
+3. Apply the solutions to the original code.
+It&#39;s important to show the complete code, not only the fixed line.
+&lt;solution&gt;
+</pre>
+
+
+
+<h3>Code #1</h3>
+
+<pre>
+&lt;code&gt;
+#include &#34;PDFDoc.h&#34;
+#include &#34;GlobalParams.h&#34;
+#include &#34;SplashOutputDev.h&#34;
+#include &lt;stdint.h&gt;
+#include &#34;GString.h&#34;
+#include &#34;MemStream.h&#34;
+#include &#34;Object.h&#34;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  FuzzedDataProvider dataProvider(data, size);
+
+  // use values within stated ranges
+  static double hDPI = 72.0;
+  static double vDPI = 72.0;
+  static int rotate = 0;
+  static int sliceX = -1;
+  static int sliceY = -1;
+  static int sliceW = -1;
+  static int sliceH = -1;
+  static bool useMediaBox = true;
+  static bool crop = false;
+  static bool printing = false;
+
+  int page = static_cast&lt;int&gt;(dataProvider.ConsumeIntegralInRange(1, 1000));
+  if(!page) page = 1;
+
+  // setup a minimum GlobalParams
+  globalParams = new GlobalParams(&#34;&#34;);
+  
+  GString* emptyString = new GString(&#34;&#34;); 
+  Object obj;
+  
+  // setup an empty PDF stream
+  MemStream* memStream = new MemStream((char*)emptyString-&gt;copy(), 0, 0, &amp;obj);
+  PDFDoc* doc = new PDFDoc(memStream);
+  
+  // setup a basic output device
+  SplashColor paperColor = {0xff, 0xff, 0xff}; // default paper color to white
+  SplashOutputDev* splashOut = new SplashOutputDev(splashModeRGB8, 1, false, paperColor);
+  
+   // Calling function under test
+  doc-&gt;displayPageSlice(splashOut, 
+                        page,
+                        hDPI,vDPI,
+                        rotate,
+                        useMediaBox,
+                        crop,
+                        printing,
+                        sliceX,
+                        sliceY,
+                        sliceW,
+                        sliceH,
+                        nullptr, // we don&#39;t have any links available
+                        nullptr); // no abort check
+                      
+  delete splashOut;                 
+  delete doc;
+  delete globalParams;
+   
+  return 0;
+}  
+&lt;/code&gt;
+&lt;solution&gt;
+</pre>
+
+
+<h3>Fixer prompt #2</h3>
+<pre>
+
+Given the following C++ fuzz harness and its build error message, fix the code to make it build for fuzzing.
+
+If there is undeclared identifier or unknown type name error, fix it by finding and including the related libraries.
+
+MUST RETURN THE FULL CODE, INCLUDING UNCHANGED PARTS.
+
+Below is the code needs to be built:
+&lt;code&gt;
+#include &#34;PDFDoc.h&#34;
+#include &#34;GlobalParams.h&#34;
+#include &#34;SplashOutputDev.h&#34;
+#include &lt;stdint.h&gt;
+#include &#34;GString.h&#34;
+#include &#34;MemStream.h&#34;
+#include &#34;Object.h&#34;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  FuzzedDataProvider dataProvider(data, size);
+
+  // use values within stated ranges
+  static double hDPI = 72.0;
+  static double vDPI = 72.0;
+  static int rotate = 0;
+  static int sliceX = -1;
+  static int sliceY = -1;
+  static int sliceW = -1;
+  static int sliceH = -1;
+  static bool useMediaBox = true;
+  static bool crop = false;
+  static bool printing = false;
+
+  int page = static_cast&lt;int&gt;(dataProvider.ConsumeIntegralInRange(1, 1000));
+  if(!page) page = 1;
+
+  // setup a minimum GlobalParams
+  globalParams = new GlobalParams(&#34;&#34;);
+  
+  GString* emptyString = new GString(&#34;&#34;); 
+  Object obj;
+  
+  // setup an empty PDF stream
+  MemStream* memStream = new MemStream((char*)emptyString-&gt;copy(), 0, 0, &amp;obj);
+  PDFDoc* doc = new PDFDoc(memStream);
+  
+  // setup a basic output device
+  SplashColor paperColor = {0xff, 0xff, 0xff}; // default paper color to white
+  SplashOutputDev* splashOut = new SplashOutputDev(splashModeRGB8, 1, false, paperColor);
+  
+   // Calling function under test
+  doc-&gt;displayPageSlice(splashOut, 
+                        page,
+                        hDPI,vDPI,
+                        rotate,
+                        useMediaBox,
+                        crop,
+                        printing,
+                        sliceX,
+                        sliceY,
+                        sliceW,
+                        sliceH,
+                        nullptr, // we don&#39;t have any links available
+                        nullptr); // no abort check
+                      
+  delete splashOut;                 
+  delete doc;
+  delete globalParams;
+   
+  return 0;
+}  
+&lt;/code&gt;
+
+Below is the error to fix:
+The code has the following build issues:
+&lt;error&gt;
+fuzz_JBIG2.cc:6:10: fatal error: &#39;MemStream.h&#39; file not found
+    6 | #include &#34;MemStream.h&#34;
+      |          ^~~~~~~~~~~~~
+&lt;/error&gt;
+
+
+Below are instructions to assist you in fixing the error.
+&lt;instruction&gt;
+IMPORTANT: DO NOT include the header file MemStream.h in the generated fuzz target again, the file does not exist in the project-under-test.
+If the non-existent &lt;filepath&gt;MemStream.h&lt;/filepath&gt; was included for the declaration of &lt;code&gt;void PDFDoc::displayPageSlice(OutputDev *, int, double, double, int, GBool, GBool, GBool, int, int, int, int, DW_TAG_subroutine_typeInfinite loop *, void *)&lt;/code&gt;, you must replace it with the EXACT path of the actual file &lt;filepath&gt;#include &#34;/src/xpdf-4.05/xpdf/PDFDoc.h&#34;&lt;/filepath&gt;. For example:
+&lt;code&gt;
+#include &#34;#include &#34;/src/xpdf-4.05/xpdf/PDFDoc.h&#34;&#34;
+&lt;/code&gt;
+Otherwise, consider replacing it with some of the following statementsthat may be correct alternatives:
+&lt;code&gt;
+#include &#34;/src/xpdf-4.05/xpdf/Stream.h&#34;
+#include &#34;/src/xpdf-4.05/xpdf/JPXStream.h&#34;
+#include &#34;/src/xpdf-4.05/xpdf/JBIG2Stream.h&#34;
+#include &#34;/src/xpdf-4.05/xpdf/Stream-CCITT.h&#34;
+#include &#34;/src/freetype/src/psaux/psread.h&#34;
+&lt;/code&gt;
+
+&lt;/instruction&gt;
+
+Fix code:
+1. Consider possible solutions for the issues listed above.
+2. Choose a solution that can maximize fuzzing result, which is utilizing the function under test and feeding it not null input.
+3. Apply the solutions to the original code.
+It&#39;s important to show the complete code, not only the fixed line.
+&lt;solution&gt;
+</pre>
+
+
+
+<h3>Code #2</h3>
+
+<pre>
+&lt;code&gt;
+#include &#34;PDFDoc.h&#34;
+#include &#34;GlobalParams.h&#34;
+#include &#34;SplashOutputDev.h&#34;
+#include &lt;stdint.h&gt;
+#include &#34;GString.h&#34;
+#include &#34;/src/xpdf-4.05/xpdf/Stream.h&#34; // Replaced &#34;MemStream.h&#34; with &#34;/src/xpdf-4.05/xpdf/Stream.h&#34;
+#include &#34;Object.h&#34;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  FuzzedDataProvider dataProvider(data, size);
+
+  // use values within stated ranges
+  static double hDPI = 72.0;
+  static double vDPI = 72.0;
+  static int rotate = 0;
+  static int sliceX = -1;
+  static int sliceY = -1;
+  static int sliceW = -1;
+  static int sliceH = -1;
+  static bool useMediaBox = true;
+  static bool crop = false;
+  static bool printing = false;
+
+  int page = static_cast&lt;int&gt;(dataProvider.ConsumeIntegralInRange(1, 1000));
+  if(!page) page = 1;
+
+  // setup a minimum GlobalParams
+  globalParams = new GlobalParams(&#34;&#34;);
+  
+  GString* emptyString = new GString(&#34;&#34;); 
+  Object obj;
+  
+  // setup an empty PDF stream
+  MemStream* memStream = new MemStream((char*)emptyString-&gt;copy(), 0, 0, &amp;obj);
+  PDFDoc* doc = new PDFDoc(memStream);
+  
+  // setup a basic output device
+  SplashColor paperColor = {0xff, 0xff, 0xff}; // default paper color to white
+  SplashOutputDev* splashOut = new SplashOutputDev(splashModeRGB8, 1, false, paperColor);
+  
+   // Calling function under test
+  doc-&gt;displayPageSlice(splashOut, 
+                        page,
+                        hDPI,vDPI,
+                        rotate,
+                        useMediaBox,
+                        crop,
+                        printing,
+                        sliceX,
+                        sliceY,
+                        sliceW,
+                        sliceH,
+                        nullptr, // we don&#39;t have any links available
+                        nullptr); // no abort check
+                      
+  delete splashOut;                 
+  delete doc;
+  delete globalParams;
+   
+  return 0;
+}  
+&lt;/code&gt;
+&lt;/solution&gt;
+</pre>
+
+
+<h3>Fixer prompt #3</h3>
+<pre>
+
+Given the following C++ fuzz harness and its build error message, fix the code to make it build for fuzzing.
+
+If there is undeclared identifier or unknown type name error, fix it by finding and including the related libraries.
+
+MUST RETURN THE FULL CODE, INCLUDING UNCHANGED PARTS.
+
+Below is the code needs to be built:
+&lt;code&gt;
+#include &#34;PDFDoc.h&#34;
+#include &#34;GlobalParams.h&#34;
+#include &#34;SplashOutputDev.h&#34;
+#include &lt;stdint.h&gt;
+#include &#34;GString.h&#34;
+#include &#34;/src/xpdf-4.05/xpdf/Stream.h&#34; // Replaced &#34;MemStream.h&#34; with &#34;/src/xpdf-4.05/xpdf/Stream.h&#34;
+#include &#34;Object.h&#34;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  FuzzedDataProvider dataProvider(data, size);
+
+  // use values within stated ranges
+  static double hDPI = 72.0;
+  static double vDPI = 72.0;
+  static int rotate = 0;
+  static int sliceX = -1;
+  static int sliceY = -1;
+  static int sliceW = -1;
+  static int sliceH = -1;
+  static bool useMediaBox = true;
+  static bool crop = false;
+  static bool printing = false;
+
+  int page = static_cast&lt;int&gt;(dataProvider.ConsumeIntegralInRange(1, 1000));
+  if(!page) page = 1;
+
+  // setup a minimum GlobalParams
+  globalParams = new GlobalParams(&#34;&#34;);
+  
+  GString* emptyString = new GString(&#34;&#34;); 
+  Object obj;
+  
+  // setup an empty PDF stream
+  MemStream* memStream = new MemStream((char*)emptyString-&gt;copy(), 0, 0, &amp;obj);
+  PDFDoc* doc = new PDFDoc(memStream);
+  
+  // setup a basic output device
+  SplashColor paperColor = {0xff, 0xff, 0xff}; // default paper color to white
+  SplashOutputDev* splashOut = new SplashOutputDev(splashModeRGB8, 1, false, paperColor);
+  
+   // Calling function under test
+  doc-&gt;displayPageSlice(splashOut, 
+                        page,
+                        hDPI,vDPI,
+                        rotate,
+                        useMediaBox,
+                        crop,
+                        printing,
+                        sliceX,
+                        sliceY,
+                        sliceW,
+                        sliceH,
+                        nullptr, // we don&#39;t have any links available
+                        nullptr); // no abort check
+                      
+  delete splashOut;                 
+  delete doc;
+  delete globalParams;
+   
+  return 0;
+}  
+&lt;/code&gt;
+
+Below is the error to fix:
+The code can build successfully but has a runtime issue: Fuzzing crashed immediately at runtime (ASAN-ERROR: AddressSanitizer: SEGV on unknown address 0x000000000038 (pc 0x7fd11e912fc4 bp 0x7fffff9edf40 sp 0x7fffff9edf08 T0)), indicating fuzz target code for invoking the function under test is incorrect or unrobust.
+&lt;error&gt;
+Crash stacks:
+Stack 0:
+#0 0x7fd11e912fc4 in __pthread_mutex_lock (/lib/x86_64-linux-gnu/libpthread.so.0+0xafc4) (BuildId: 9a65bb469e45a1c6fbcffae5b82a2fd7a69eb479)
+#1 0x5640eb7e7556 in Catalog::getPage(int) /src/xpdf-4.05/xpdf/Catalog.cc:300:3
+#2 0x5640eb77e19f in PDFDoc::displayPageSlice(OutputDev*, int, double, double, int, int, int, int, int, int, int, int, int (*)(void*), void*) /src/xpdf-4.05/xpdf/PDFDoc.cc:476:12
+#3 0x5640eb760fc1 in LLVMFuzzerTestOneInput /src/xpdf-4.05/build/fuzz_JBIG2.cc:43:8
+#4 0x5640eb613660 in fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:614:13
+#5 0x5640eb614b61 in fuzzer::Fuzzer::ReadAndExecuteSeedCorpora(std::__Fuzzer::vector&lt;fuzzer::SizedFile, std::__Fuzzer::allocator&lt;fuzzer::SizedFile&gt;&gt;&amp;) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:807:3
+#6 0x5640eb615147 in fuzzer::Fuzzer::Loop(std::__Fuzzer::vector&lt;fuzzer::SizedFile, std::__Fuzzer::allocator&lt;fuzzer::SizedFile&gt;&gt;&amp;) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:867:3
+#7 0x5640eb603756 in fuzzer::FuzzerDriver(int*, char***, int (*)(unsigned char const*, unsigned long)) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:914:6
+#8 0x5640eb62fc82 in main /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMain.cpp:20:10
+#9 0x7fd11e6f1082 in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x24082) (BuildId: 0702430aef5fa3dda43986563e9ffcc47efbd75e)
+#10 0x5640eb5f48cd in _start (/out/fuzz_JBIG2+0x29e8cd)
+&lt;/error&gt;
+
+
+
+
+Fix code:
+1. Consider possible solutions for the issues listed above.
+2. Choose a solution that can maximize fuzzing result, which is utilizing the function under test and feeding it not null input.
+3. Apply the solutions to the original code.
+It&#39;s important to show the complete code, not only the fixed line.
+&lt;solution&gt;
+</pre>
+
+
+
+<h3>Code #3</h3>
+
+<pre>
+#include &#34;PDFDoc.h&#34;
+#include &#34;GlobalParams.h&#34;
+#include &#34;SplashOutputDev.h&#34;
+#include &lt;stdint.h&gt;
+#include &#34;GString.h&#34;
+#include &#34;/src/xpdf-4.05/xpdf/Stream.h&#34;
+#include &#34;Object.h&#34;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  if (size == 0) {
+    return 0;
+  }
+  
+  FuzzedDataProvider dataProvider(data, size);
+
+  static double hDPI = 72.0;
+  static double vDPI = 72.0;
+  static int rotate = 0;
+  static int sliceX = -1;
+  static int sliceY = -1;
+  static int sliceW = -1;
+  static int sliceH = -1;
+  static bool useMediaBox = true;
+  static bool crop = false;
+  static bool printing = false;
+
+  int page = static_cast&lt;int&gt;(dataProvider.ConsumeIntegralInRange(1, 1000));
+  if(!page) page = 1;
+
+  globalParams = new GlobalParams(&#34;&#34;);
+  
+  GString* emptyString = new GString(&#34;&#34;); 
+  Object obj;
+  
+  MemStream* memStream = new MemStream((char*)emptyString-&gt;copy(), 0, 0, &amp;obj);
+  PDFDoc* doc = new PDFDoc(memStream);
+  
+  SplashColor paperColor = {0xff, 0xff, 0xff}; 
+  SplashOutputDev* splashOut = new SplashOutputDev(splashModeRGB8, 1, false, paperColor);
+  
+  doc-&gt;displayPageSlice(splashOut, 
+                        page,
+                        hDPI,vDPI,
+                        rotate,
+                        useMediaBox,
+                        crop,
+                        printing,
+                        sliceX,
+                        sliceY,
+                        sliceW,
+                        sliceH,
+                        nullptr, 
+                        nullptr);
+                      
+  delete splashOut;                 
+  delete doc;
+  delete globalParams;
+   
+  return 0;
+}
+</pre>
+
+
+<h3>Fixer prompt #4</h3>
+<pre>
+
+Given the following C++ fuzz harness and its build error message, fix the code to make it build for fuzzing.
+
+If there is undeclared identifier or unknown type name error, fix it by finding and including the related libraries.
+
+MUST RETURN THE FULL CODE, INCLUDING UNCHANGED PARTS.
+
+Below is the code needs to be built:
+&lt;code&gt;
+#include &#34;PDFDoc.h&#34;
+#include &#34;GlobalParams.h&#34;
+#include &#34;SplashOutputDev.h&#34;
+#include &lt;stdint.h&gt;
+#include &#34;GString.h&#34;
+#include &#34;/src/xpdf-4.05/xpdf/Stream.h&#34;
+#include &#34;Object.h&#34;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  if (size == 0) {
+    return 0;
+  }
+  
+  FuzzedDataProvider dataProvider(data, size);
+
+  static double hDPI = 72.0;
+  static double vDPI = 72.0;
+  static int rotate = 0;
+  static int sliceX = -1;
+  static int sliceY = -1;
+  static int sliceW = -1;
+  static int sliceH = -1;
+  static bool useMediaBox = true;
+  static bool crop = false;
+  static bool printing = false;
+
+  int page = static_cast&lt;int&gt;(dataProvider.ConsumeIntegralInRange(1, 1000));
+  if(!page) page = 1;
+
+  globalParams = new GlobalParams(&#34;&#34;);
+  
+  GString* emptyString = new GString(&#34;&#34;); 
+  Object obj;
+  
+  MemStream* memStream = new MemStream((char*)emptyString-&gt;copy(), 0, 0, &amp;obj);
+  PDFDoc* doc = new PDFDoc(memStream);
+  
+  SplashColor paperColor = {0xff, 0xff, 0xff}; 
+  SplashOutputDev* splashOut = new SplashOutputDev(splashModeRGB8, 1, false, paperColor);
+  
+  doc-&gt;displayPageSlice(splashOut, 
+                        page,
+                        hDPI,vDPI,
+                        rotate,
+                        useMediaBox,
+                        crop,
+                        printing,
+                        sliceX,
+                        sliceY,
+                        sliceW,
+                        sliceH,
+                        nullptr, 
+                        nullptr);
+                      
+  delete splashOut;                 
+  delete doc;
+  delete globalParams;
+   
+  return 0;
+}
+&lt;/code&gt;
+
+Below is the error to fix:
+The code can build successfully but has a runtime issue: Fuzzing crashed immediately at runtime (ASAN-ERROR: AddressSanitizer: SEGV on unknown address 0x000000000038 (pc 0x7ff02acebfc4 bp 0x7fff4f3c8ac0 sp 0x7fff4f3c8a88 T0)), indicating fuzz target code for invoking the function under test is incorrect or unrobust.
+&lt;error&gt;
+Crash stacks:
+Stack 0:
+#0 0x7ff02acebfc4 in __pthread_mutex_lock (/lib/x86_64-linux-gnu/libpthread.so.0+0xafc4) (BuildId: 9a65bb469e45a1c6fbcffae5b82a2fd7a69eb479)
+#1 0x5563f9618576 in Catalog::getPage(int) /src/xpdf-4.05/xpdf/Catalog.cc:300:3
+#2 0x5563f95af1bf in PDFDoc::displayPageSlice(OutputDev*, int, double, double, int, int, int, int, int, int, int, int, int (*)(void*), void*) /src/xpdf-4.05/xpdf/PDFDoc.cc:476:12
+#3 0x5563f9591fd1 in LLVMFuzzerTestOneInput /src/xpdf-4.05/build/fuzz_JBIG2.cc:42:8
+#4 0x5563f9444660 in fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:614:13
+#5 0x5563f9443e85 in fuzzer::Fuzzer::RunOne(unsigned char const*, unsigned long, bool, fuzzer::InputInfo*, bool, bool*) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:516:7
+#6 0x5563f9445cd6 in fuzzer::Fuzzer::ReadAndExecuteSeedCorpora(std::__Fuzzer::vector&lt;fuzzer::SizedFile, std::__Fuzzer::allocator&lt;fuzzer::SizedFile&gt;&gt;&amp;) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:812:5
+#7 0x5563f9446147 in fuzzer::Fuzzer::Loop(std::__Fuzzer::vector&lt;fuzzer::SizedFile, std::__Fuzzer::allocator&lt;fuzzer::SizedFile&gt;&gt;&amp;) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:867:3
+#8 0x5563f9434756 in fuzzer::FuzzerDriver(int*, char***, int (*)(unsigned char const*, unsigned long)) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:914:6
+#9 0x5563f9460c82 in main /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMain.cpp:20:10
+#10 0x7ff02aaca082 in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x24082) (BuildId: 0702430aef5fa3dda43986563e9ffcc47efbd75e)
+#11 0x5563f94258cd in _start (/out/fuzz_JBIG2+0x29e8cd)
+&lt;/error&gt;
+
+
+
+
+Fix code:
+1. Consider possible solutions for the issues listed above.
+2. Choose a solution that can maximize fuzzing result, which is utilizing the function under test and feeding it not null input.
+3. Apply the solutions to the original code.
+It&#39;s important to show the complete code, not only the fixed line.
+&lt;solution&gt;
+</pre>
+
+
+
+<h3>Code #4</h3>
+
+<pre>
+&lt;code&gt;
+#include &#34;PDFDoc.h&#34;
+#include &#34;GlobalParams.h&#34;
+#include &#34;SplashOutputDev.h&#34;
+#include &lt;stdint.h&gt;
+#include &#34;GString.h&#34;
+#include &#34;/src/xpdf-4.05/xpdf/Stream.h&#34;
+#include &#34;Object.h&#34;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  if (size == 0) {
+    return 0;
+  }
+  
+  FuzzedDataProvider dataProvider(data, size);
+
+  static double hDPI = 72.0;
+  static double vDPI = 72.0;
+  static int rotate = 0;
+  static int sliceX = -1;
+  static int sliceY = -1;
+  static int sliceW = -1;
+  static int sliceH = -1;
+  static bool useMediaBox = true;
+  static bool crop = false;
+  static bool printing = false;
+
+  int page = static_cast&lt;int&gt;(dataProvider.ConsumeIntegralInRange(1, 1000));
+  if(!page) page = 1;
+
+  globalParams = new GlobalParams(&#34;&#34;);
+  
+  GString* nonEmptyString = new GString(&#34;non-empty string&#34;); 
+  Object obj;
+  
+  MemStream* memStream = new MemStream((char*)nonEmptyString-&gt;copy(), 0, 0, &amp;obj);
+  PDFDoc* doc = new PDFDoc(memStream);
+  
+  SplashColor paperColor = {0xff, 0xff, 0xff}; 
+  SplashOutputDev* splashOut = new SplashOutputDev(splashModeRGB8, 1, false, paperColor);
+  
+  doc-&gt;displayPageSlice(splashOut, 
+                        page,
+                        hDPI,vDPI,
+                        rotate,
+                        useMediaBox,
+                        crop,
+                        printing,
+                        sliceX,
+                        sliceY,
+                        sliceW,
+                        sliceH,
+                        nullptr, 
+                        nullptr);
+                      
+  delete splashOut;                 
+  delete doc;
+  delete globalParams;
+   
+  return 0;
+}
+&lt;/code&gt;
+
+The crash was due to the empty string being passed to the MemStream constructor. This was fixed by replacing the empty string with a non-empty string.
+</pre>
+
+
+<h3>Fixer prompt #5</h3>
+<pre>
+
+Given the following C++ fuzz harness and its build error message, fix the code to make it build for fuzzing.
+
+If there is undeclared identifier or unknown type name error, fix it by finding and including the related libraries.
+
+MUST RETURN THE FULL CODE, INCLUDING UNCHANGED PARTS.
+
+Below is the code needs to be built:
+&lt;code&gt;
+#include &#34;PDFDoc.h&#34;
+#include &#34;GlobalParams.h&#34;
+#include &#34;SplashOutputDev.h&#34;
+#include &lt;stdint.h&gt;
+#include &#34;GString.h&#34;
+#include &#34;/src/xpdf-4.05/xpdf/Stream.h&#34;
+#include &#34;Object.h&#34;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  if (size == 0) {
+    return 0;
+  }
+  
+  FuzzedDataProvider dataProvider(data, size);
+
+  static double hDPI = 72.0;
+  static double vDPI = 72.0;
+  static int rotate = 0;
+  static int sliceX = -1;
+  static int sliceY = -1;
+  static int sliceW = -1;
+  static int sliceH = -1;
+  static bool useMediaBox = true;
+  static bool crop = false;
+  static bool printing = false;
+
+  int page = static_cast&lt;int&gt;(dataProvider.ConsumeIntegralInRange(1, 1000));
+  if(!page) page = 1;
+
+  globalParams = new GlobalParams(&#34;&#34;);
+  
+  GString* nonEmptyString = new GString(&#34;non-empty string&#34;); 
+  Object obj;
+  
+  MemStream* memStream = new MemStream((char*)nonEmptyString-&gt;copy(), 0, 0, &amp;obj);
+  PDFDoc* doc = new PDFDoc(memStream);
+  
+  SplashColor paperColor = {0xff, 0xff, 0xff}; 
+  SplashOutputDev* splashOut = new SplashOutputDev(splashModeRGB8, 1, false, paperColor);
+  
+  doc-&gt;displayPageSlice(splashOut, 
+                        page,
+                        hDPI,vDPI,
+                        rotate,
+                        useMediaBox,
+                        crop,
+                        printing,
+                        sliceX,
+                        sliceY,
+                        sliceW,
+                        sliceH,
+                        nullptr, 
+                        nullptr);
+                      
+  delete splashOut;                 
+  delete doc;
+  delete globalParams;
+   
+  return 0;
+}
+&lt;/code&gt;
+
+Below is the error to fix:
+The code can build successfully but has a runtime issue: Fuzzing crashed immediately at runtime (ASAN-ERROR: AddressSanitizer: SEGV on unknown address 0x000000000038 (pc 0x7f6a1a9bcfc4 bp 0x7fff2fcc2520 sp 0x7fff2fcc24e8 T0)), indicating fuzz target code for invoking the function under test is incorrect or unrobust.
+&lt;error&gt;
+Crash stacks:
+Stack 0:
+#0 0x7f6a1a9bcfc4 in __pthread_mutex_lock (/lib/x86_64-linux-gnu/libpthread.so.0+0xafc4) (BuildId: 9a65bb469e45a1c6fbcffae5b82a2fd7a69eb479)
+#1 0x55c3f99dc576 in Catalog::getPage(int) /src/xpdf-4.05/xpdf/Catalog.cc:300:3
+#2 0x55c3f99731bf in PDFDoc::displayPageSlice(OutputDev*, int, double, double, int, int, int, int, int, int, int, int, int (*)(void*), void*) /src/xpdf-4.05/xpdf/PDFDoc.cc:476:12
+#3 0x55c3f9955fd1 in LLVMFuzzerTestOneInput /src/xpdf-4.05/build/fuzz_JBIG2.cc:42:8
+#4 0x55c3f9808660 in fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:614:13
+#5 0x55c3f9807e85 in fuzzer::Fuzzer::RunOne(unsigned char const*, unsigned long, bool, fuzzer::InputInfo*, bool, bool*) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:516:7
+#6 0x55c3f9809cd6 in fuzzer::Fuzzer::ReadAndExecuteSeedCorpora(std::__Fuzzer::vector&lt;fuzzer::SizedFile, std::__Fuzzer::allocator&lt;fuzzer::SizedFile&gt;&gt;&amp;) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:812:5
+#7 0x55c3f980a147 in fuzzer::Fuzzer::Loop(std::__Fuzzer::vector&lt;fuzzer::SizedFile, std::__Fuzzer::allocator&lt;fuzzer::SizedFile&gt;&gt;&amp;) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:867:3
+#8 0x55c3f97f8756 in fuzzer::FuzzerDriver(int*, char***, int (*)(unsigned char const*, unsigned long)) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:914:6
+#9 0x55c3f9824c82 in main /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMain.cpp:20:10
+#10 0x7f6a1a79b082 in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x24082) (BuildId: 0702430aef5fa3dda43986563e9ffcc47efbd75e)
+#11 0x55c3f97e98cd in _start (/out/fuzz_JBIG2+0x29e8cd)
+&lt;/error&gt;
+
+
+
+
+Fix code:
+1. Consider possible solutions for the issues listed above.
+2. Choose a solution that can maximize fuzzing result, which is utilizing the function under test and feeding it not null input.
+3. Apply the solutions to the original code.
+It&#39;s important to show the complete code, not only the fixed line.
+&lt;solution&gt;
+</pre>
+
+
+
+<h3>Code #5</h3>
+
+<pre>
+&lt;code&gt;
+#include &#34;PDFDoc.h&#34;
+#include &#34;GlobalParams.h&#34;
+#include &#34;SplashOutputDev.h&#34;
+#include &lt;stdint.h&gt;
+#include &#34;GString.h&#34;
+#include &#34;/src/xpdf-4.05/xpdf/Stream.h&#34;
+#include &#34;Object.h&#34;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  if (size == 0) {
+    return 0;
+  }
+  
+  FuzzedDataProvider dataProvider(data, size);
+
+  static double hDPI = 72.0;
+  static double vDPI = 72.0;
+  static int rotate = 0;
+  static int sliceX = -1;
+  static int sliceY = -1;
+  static int sliceW = -1;
+  static int sliceH = -1;
+  static bool useMediaBox = true;
+  static bool crop = false;
+  static bool printing = false;
+
+  int page = static_cast&lt;int&gt;(dataProvider.ConsumeIntegralInRange(1, 1000));
+  if(!page) page = 1;
+
+  globalParams = new GlobalParams(&#34;&#34;);
+  
+  GString* nonEmptyString = new GString(&#34;non-empty string&#34;); 
+  Object obj;
+  
+  MemStream* memStream = new MemStream((char*)nonEmptyString-&gt;copy(), 0, size, &amp;obj);
+  PDFDoc* doc = new PDFDoc(memStream);
+  
+  SplashColor paperColor = {0xff, 0xff, 0xff}; 
+  SplashOutputDev* splashOut = new SplashOutputDev(splashModeRGB8, 1, false, paperColor);
+  
+  doc-&gt;displayPageSlice(splashOut, 
+                        page,
+                        hDPI,vDPI,
+                        rotate,
+                        useMediaBox,
+                        crop,
+                        printing,
+                        sliceX,
+                        sliceY,
+                        sliceW,
+                        sliceH,
+                        nullptr, 
+                        nullptr);
+                      
+  delete splashOut;                 
+  delete doc;
+  delete globalParams;
+   
+  return 0;
+}
+&lt;/code&gt;
+&lt;solution&gt;
+
+The issue was with the MemStream initialization where the length of the stream was set to 0. The length of the stream should be the size of the input data. So, I changed the third parameter of MemStream from 0 to size.
+</pre>
+
+
+<h2>Logs</h2>
+<pre>
+Fixing /home/chyun/oss-fuzz-gen/results7/output-xpdf-_zn6pdfdoc16displaypagesliceep9outputdeviddiiiiiiiipfipves2_/fixed_targets/02.cc with gpt-4, attempt 1.
+Fixing /home/chyun/oss-fuzz-gen/results7/output-xpdf-_zn6pdfdoc16displaypagesliceep9outputdeviddiiiiiiiipfipves2_/fixed_targets/02.cc with gpt-4, attempt 2.
+Fixing /home/chyun/oss-fuzz-gen/results7/output-xpdf-_zn6pdfdoc16displaypagesliceep9outputdeviddiiiiiiiipfipves2_/fixed_targets/02.cc with gpt-4, attempt 3.
+Fixing /home/chyun/oss-fuzz-gen/results7/output-xpdf-_zn6pdfdoc16displaypagesliceep9outputdeviddiiiiiiiipfipves2_/fixed_targets/02.cc with gpt-4, attempt 4.
+Fixing /home/chyun/oss-fuzz-gen/results7/output-xpdf-_zn6pdfdoc16displaypagesliceep9outputdeviddiiiiiiiipfipves2_/fixed_targets/02.cc with gpt-4, attempt 5.
+Successfully built /home/chyun/oss-fuzz-gen/results7/output-xpdf-_zn6pdfdoc16displaypagesliceep9outputdeviddiiiiiiiipfipves2_/fixed_targets/02.cc with gpt-4 in 5 iterations of fixing.
+Triaging the crash related to /home/chyun/oss-fuzz-gen/results7/output-xpdf-_zn6pdfdoc16displaypagesliceep9outputdeviddiiiiiiiipfipves2_/fixed_targets/02.cc with gpt-4.
+Warning: Failed to fix semantic error FP_NEAR_INIT_CRASH in xpdf-zn6pdfdoc16displaypagesliceep9outputdeviddiiiiiiiipfipves2-02.
+
+</pre>
+
+<h2>Run logs</h2>
+<pre>
+INFO:__main__:Running: docker run --privileged --shm-size=2g --platform linux/amd64 --rm -e FUZZING_ENGINE=libfuzzer -e SANITIZER=address -e RUN_FUZZER_MODE=interactive -e HELPER=True -v /home/chyun/oss-fuzz-gen/results7/output-xpdf-_zn6pdfdoc16displaypagesliceep9outputdeviddiiiiiiiipfipves2_/corpora/02.cc:/tmp/fuzz_JBIG2_corpus -v /tmp/tmpfopxn2s_/build/out/xpdf-zn6pdfdoc16displaypagesliceep9outputdeviddiiiiiiiipfipves2-02:/out -t gcr.io/oss-fuzz-base/base-runner run_fuzzer fuzz_JBIG2 -print_final_stats=1 -max_total_time=30 -len_control=0 -timeout=30.
+vm.mmap_rnd_bits = 28
+rm: cannot remove &#39;/tmp/fuzz_JBIG2_corpus&#39;: Device or resource busy
+/out/fuzz_JBIG2 -rss_limit_mb=2560 -timeout=25 -print_final_stats=1 -max_total_time=30 -len_control=0 -timeout=30 /tmp/fuzz_JBIG2_corpus -detect_leaks=0 &lt; /dev/null
+INFO: Running with entropic power schedule (0xFF, 100).
+INFO: Seed: 2693139700
+INFO: Loaded 1 modules   (57716 inline 8-bit counters): 57716 [0x55a79b73ca88, 0x55a79b74abfc), 
+INFO: Loaded 1 PC tables (57716 PCs): 57716 [0x55a79b74ac00,0x55a79b82c340), 
+INFO:        0 files found in /tmp/fuzz_JBIG2_corpus
+INFO: -max_len is not provided; libFuzzer will not generate inputs larger than 4096 bytes
+INFO: A corpus is not provided, starting from an empty corpus
+Syntax Warning: May not be a PDF file (continuing anyway)
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: PDF file is damaged - attempting to reconstruct xref table...
+Syntax Error: Couldn&#39;t find trailer dictionary
+Syntax Error: Couldn&#39;t read xref table
+AddressSanitizer:DEADLYSIGNAL
+=================================================================
+[1m[31m==15==ERROR: AddressSanitizer: SEGV on unknown address 0x000000000038 (pc 0x7f3d944acfc4 bp 0x7ffcff65c1c0 sp 0x7ffcff65c188 T0)
+[1m[0m==15==The signal is caused by a READ memory access.
+==15==Hint: address points to the zero page.
+SCARINESS: 10 (null-deref)
+    #0 0x7f3d944acfc4 in __pthread_mutex_lock (/lib/x86_64-linux-gnu/libpthread.so.0+0xafc4) (BuildId: 9a65bb469e45a1c6fbcffae5b82a2fd7a69eb479)
+    #1 0x55a79b097586 in Catalog::getPage(int) /src/xpdf-4.05/xpdf/Catalog.cc:300:3
+    #2 0x55a79b02e1cf in PDFDoc::displayPageSlice(OutputDev*, int, double, double, int, int, int, int, int, int, int, int, int (*)(void*), void*) /src/xpdf-4.05/xpdf/PDFDoc.cc:476:12
+    #3 0x55a79b010fed in LLVMFuzzerTestOneInput /src/xpdf-4.05/build/fuzz_JBIG2.cc:42:8
+    #4 0x55a79aec3660 in fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:614:13
+    #5 0x55a79aec2e85 in fuzzer::Fuzzer::RunOne(unsigned char const*, unsigned long, bool, fuzzer::InputInfo*, bool, bool*) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:516:7
+    #6 0x55a79aec4cd6 in fuzzer::Fuzzer::ReadAndExecuteSeedCorpora(std::__Fuzzer::vector&lt;fuzzer::SizedFile, std::__Fuzzer::allocator&lt;fuzzer::SizedFile&gt;&gt;&amp;) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:812:5
+    #7 0x55a79aec5147 in fuzzer::Fuzzer::Loop(std::__Fuzzer::vector&lt;fuzzer::SizedFile, std::__Fuzzer::allocator&lt;fuzzer::SizedFile&gt;&gt;&amp;) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:867:3
+    #8 0x55a79aeb3756 in fuzzer::FuzzerDriver(int*, char***, int (*)(unsigned char const*, unsigned long)) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:914:6
+    #9 0x55a79aedfc82 in main /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMain.cpp:20:10
+    #10 0x7f3d9428b082 in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x24082) (BuildId: 0702430aef5fa3dda43986563e9ffcc47efbd75e)
+    #11 0x55a79aea48cd in _start (/out/fuzz_JBIG2+0x29e8cd)
+
+DEDUP_TOKEN: __pthread_mutex_lock--Catalog::getPage(int)--PDFDoc::displayPageSlice(OutputDev*, int, double, double, int, int, int, int, int, int, int, int, int (*)(void*), void*)
+AddressSanitizer can not provide additional info.
+SUMMARY: AddressSanitizer: SEGV (/lib/x86_64-linux-gnu/libpthread.so.0+0xafc4) (BuildId: 9a65bb469e45a1c6fbcffae5b82a2fd7a69eb479) in __pthread_mutex_lock
+==15==ABORTING
+MS: 0 ; base unit: 0000000000000000000000000000000000000000
+0xa,
+\012
+artifact_prefix=&#39;./&#39;; Test unit written to ./crash-adc83b19e793491b1c6ea0fd8b46cd9f32e592fc
+Base64: Cg==
+stat::number_of_executed_units: 2
+stat::average_exec_per_sec:     0
+stat::new_units_added:          0
+stat::slowest_unit_time_sec:    0
+stat::peak_rss_mb:              40
+
+</pre>
+
+
+</body>

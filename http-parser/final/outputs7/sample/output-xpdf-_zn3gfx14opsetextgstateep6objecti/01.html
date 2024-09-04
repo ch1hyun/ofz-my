@@ -1,0 +1,721 @@
+<!doctype html>
+
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Experiment results</title>
+<style>
+* {
+    box-sizing: border-box;
+}
+
+html {
+    line-height: 1.15;
+}
+
+body {
+    font-family: sans-serif;
+    font-size: 16px;
+}
+
+table {
+    border-collapse: collapse;
+    border-spacing: 0;
+}
+
+td, th {
+    border-right: 1px #dedede solid;
+    border-bottom: 1px #dedede solid;
+    padding: 5px;
+    text-align: left;
+}
+td:first-child, th:first-child {
+    border-left: 1px #dedede solid;
+}
+th {
+    border-top: 1px #dedede solid;
+}
+
+tbody tr:nth-child(odd) {
+    background-color: #f4f5ff;
+}
+</style>
+<body>
+    LLM: 
+    
+<h1>output-xpdf-_zn3gfx14opsetextgstateep6objecti / 01</h1>
+Bug: False
+<br>
+Crash reason: -
+<br>
+<br>
+
+<h2>Triage</h2>
+<pre>
+
+</pre>
+<br>
+
+
+
+
+
+<h3>Final code</h3>
+
+<pre>
+#include &lt;stdint.h&gt;
+#include &lt;stdlib.h&gt;
+
+#include &#34;/src/xpdf-4.05/xpdf/Gfx.h&#34; // Include the correct path of Gfx.h
+#include &#34;Object.h&#34;
+
+extern const char *http_errno_name(int);
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+    if (size &lt; sizeof(int)) {
+        return 0;
+    }
+  
+    int num = *(int *)data;
+
+    // Create a new Gfx object with the integer value
+    // The constructor of Gfx requires non-null parameters, so we need to create them
+    PDFDoc* doc = new PDFDoc();
+    OutputDev* out = new OutputDev();
+    Dict* dict = new Dict();
+    PDFRectangle* rect1 = new PDFRectangle();
+    PDFRectangle* rect2 = new PDFRectangle();
+
+    Gfx *gfx = new Gfx(doc, out, dict, rect1, rect2, NULL);
+
+    // The opSetExtGState function is private, so it cannot be called directly
+    // Instead, let&#39;s call a public function that may internally call opSetExtGState
+    gfx-&gt;display(NULL, false);
+
+    delete gfx;
+    delete doc;
+    delete out;
+    delete dict;
+    delete rect1;
+    delete rect2;
+    return 0;
+}
+</pre>
+
+
+<h3>Fixer prompt #1</h3>
+<pre>
+
+Given the following C++ fuzz harness and its build error message, fix the code to make it build for fuzzing.
+
+If there is undeclared identifier or unknown type name error, fix it by finding and including the related libraries.
+
+MUST RETURN THE FULL CODE, INCLUDING UNCHANGED PARTS.
+
+Below is the code needs to be built:
+&lt;code&gt;
+#include &lt;stdint.h&gt;
+#include &lt;stdlib.h&gt;
+
+#include &#34;Gfx.h&#34;
+#include &#34;Object.h&#34;
+
+extern const char *http_errno_name(int);
+
+int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+    if (size &lt; sizeof(int)) {
+        return 0;
+    }
+  
+    int num = *(int *)data;
+
+    Object obj = Object(num);
+
+    Gfx *gfx = new Gfx(NULL, NULL, NULL, &amp;obj, NULL, NULL);
+    gfx-&gt;opSetExtGState(&amp;obj, num);
+
+    delete gfx;
+    return 0;
+}
+&lt;/code&gt;
+
+Below is the error to fix:
+The code has the following build issues:
+&lt;error&gt;
+fuzz_JBIG2.cc:16:18: error: no matching conversion for functional-style cast from &#39;int&#39; to &#39;Object&#39;
+   16 |     Object obj = Object(num);
+      |                  ^~~~~~~~~~
+../xpdf/Object.h:80:7: note: candidate constructor (the implicit copy constructor) not viable: no known conversion from &#39;int&#39; to &#39;const Object&#39; for 1st argument
+   80 | class Object {
+      |       ^~~~~~
+../xpdf/Object.h:80:7: note: candidate constructor (the implicit move constructor) not viable: no known conversion from &#39;int&#39; to &#39;Object&#39; for 1st argument
+   80 | class Object {
+      |       ^~~~~~
+../xpdf/Object.h:84:3: note: candidate constructor not viable: requires 0 arguments, but 1 was provided
+   84 |   Object():
+      |   ^
+fuzz_JBIG2.cc:18:20: error: no matching constructor for initialization of &#39;Gfx&#39;
+   18 |     Gfx *gfx = new Gfx(NULL, NULL, NULL, &amp;obj, NULL, NULL);
+      |                    ^   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+../xpdf/Gfx.h:139:3: note: candidate constructor not viable: no known conversion from &#39;Object *&#39; to &#39;PDFRectangle *&#39; for 4th argument
+  139 |   Gfx(PDFDoc *docA, OutputDev *outA, Dict *resDict,
+      |   ^
+  140 |       PDFRectangle *box, PDFRectangle *cropBox,
+      |       ~~~~~~~~~~~~~~~~~
+../xpdf/Gfx.h:128:7: note: candidate constructor (the implicit copy constructor) not viable: requires 1 argument, but 6 were provided
+  128 | class Gfx {
+      |       ^~~
+../xpdf/Gfx.h:132:3: note: candidate constructor not viable: requires at least 9 arguments, but 6 were provided
+  132 |   Gfx(PDFDoc *docA, OutputDev *outA, int pageNum, Dict *resDict,
+      |   ^   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  133 |       double hDPI, double vDPI, PDFRectangle *box,
+      |       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  134 |       PDFRectangle *cropBox, int rotate,
+      |       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  135 |       GBool (*abortCheckCbkA)(void *data) = NULL,
+      |       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  136 |       void *abortCheckCbkDataA = NULL);
+      |       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+fuzz_JBIG2.cc:19:10: error: &#39;opSetExtGState&#39; is a private member of &#39;Gfx&#39;
+   19 |     gfx-&gt;opSetExtGState(&amp;obj, num);
+      |          ^
+../xpdf/Gfx.h:233:8: note: declared private here
+  233 |   void opSetExtGState(Object args[], int numArgs);
+      |        ^
+&lt;/error&gt;
+
+
+
+
+Fix code:
+1. Consider possible solutions for the issues listed above.
+2. Choose a solution that can maximize fuzzing result, which is utilizing the function under test and feeding it not null input.
+3. Apply the solutions to the original code.
+It&#39;s important to show the complete code, not only the fixed line.
+&lt;solution&gt;
+</pre>
+
+
+
+<h3>Code #1</h3>
+
+<pre>
+&lt;code&gt;
+#include &lt;stdint.h&gt;
+#include &lt;stdlib.h&gt;
+
+#include &#34;Gfx.h&#34;
+#include &#34;Object.h&#34;
+
+extern const char *http_errno_name(int);
+
+int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+    if (size &lt; sizeof(int)) {
+        return 0;
+    }
+  
+    int num = *(int *)data;
+
+    // Create a PDFRectangle object with the integer value
+    PDFRectangle obj = PDFRectangle(num, num, num, num);
+
+    // Create a new Gfx object with the PDFRectangle object
+    Gfx *gfx = new Gfx(NULL, NULL, NULL, &amp;obj, NULL, NULL);
+
+    // The opSetExtGState function is private, so it cannot be called directly
+    // Instead, let&#39;s call a public function that may internally call opSetExtGState
+    gfx-&gt;display(&amp;obj, false);
+
+    delete gfx;
+    return 0;
+}
+&lt;/code&gt;
+</pre>
+
+
+<h3>Fixer prompt #2</h3>
+<pre>
+
+Given the following C++ fuzz harness and its build error message, fix the code to make it build for fuzzing.
+
+If there is undeclared identifier or unknown type name error, fix it by finding and including the related libraries.
+
+MUST RETURN THE FULL CODE, INCLUDING UNCHANGED PARTS.
+
+Below is the code needs to be built:
+&lt;code&gt;
+#include &lt;stdint.h&gt;
+#include &lt;stdlib.h&gt;
+
+#include &#34;Gfx.h&#34;
+#include &#34;Object.h&#34;
+
+extern const char *http_errno_name(int);
+
+int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+    if (size &lt; sizeof(int)) {
+        return 0;
+    }
+  
+    int num = *(int *)data;
+
+    // Create a PDFRectangle object with the integer value
+    PDFRectangle obj = PDFRectangle(num, num, num, num);
+
+    // Create a new Gfx object with the PDFRectangle object
+    Gfx *gfx = new Gfx(NULL, NULL, NULL, &amp;obj, NULL, NULL);
+
+    // The opSetExtGState function is private, so it cannot be called directly
+    // Instead, let&#39;s call a public function that may internally call opSetExtGState
+    gfx-&gt;display(&amp;obj, false);
+
+    delete gfx;
+    return 0;
+}
+&lt;/code&gt;
+
+Below is the error to fix:
+The code has the following build issues:
+&lt;error&gt;
+fuzz_JBIG2.cc:17:24: error: invalid use of incomplete type &#39;PDFRectangle&#39;
+   17 |     PDFRectangle obj = PDFRectangle(num, num, num, num);
+      |                        ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+../xpdf/GfxState.h:20:7: note: forward declaration of &#39;PDFRectangle&#39;
+   20 | class PDFRectangle;
+      |       ^
+fuzz_JBIG2.cc:17:18: error: variable has incomplete type &#39;PDFRectangle&#39;
+   17 |     PDFRectangle obj = PDFRectangle(num, num, num, num);
+      |                  ^
+../xpdf/GfxState.h:20:7: note: forward declaration of &#39;PDFRectangle&#39;
+   20 | class PDFRectangle;
+      |       ^
+&lt;/error&gt;
+
+
+
+
+Fix code:
+1. Consider possible solutions for the issues listed above.
+2. Choose a solution that can maximize fuzzing result, which is utilizing the function under test and feeding it not null input.
+3. Apply the solutions to the original code.
+It&#39;s important to show the complete code, not only the fixed line.
+&lt;solution&gt;
+</pre>
+
+
+
+<h3>Code #2</h3>
+
+<pre>
+The error message indicates that the PDFRectangle class is only forward declared in the included files, but not defined. To fix this, we need to include the header file where the PDFRectangle class is defined.
+
+Here is the corrected code:
+
+```cpp
+#include &lt;stdint.h&gt;
+#include &lt;stdlib.h&gt;
+
+#include &#34;Gfx.h&#34;
+#include &#34;Object.h&#34;
+#include &#34;PDFRectangle.h&#34; // Include the header file for PDFRectangle
+
+extern const char *http_errno_name(int);
+
+int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+    if (size &lt; sizeof(int)) {
+        return 0;
+    }
+  
+    int num = *(int *)data;
+
+    // Create a PDFRectangle object with the integer value
+    PDFRectangle obj = PDFRectangle(num, num, num, num);
+
+    // Create a new Gfx object with the PDFRectangle object
+    Gfx *gfx = new Gfx(NULL, NULL, NULL, &amp;obj, NULL, NULL);
+
+    // The opSetExtGState function is private, so it cannot be called directly
+    // Instead, let&#39;s call a public function that may internally call opSetExtGState
+    gfx-&gt;display(&amp;obj, false);
+
+    delete gfx;
+    return 0;
+}
+```
+
+Please make sure the &#34;PDFRectangle.h&#34; file is in the same directory as your source file or in the directories specified in your include paths.
+</pre>
+
+
+<h3>Fixer prompt #3</h3>
+<pre>
+
+Given the following C++ fuzz harness and its build error message, fix the code to make it build for fuzzing.
+
+If there is undeclared identifier or unknown type name error, fix it by finding and including the related libraries.
+
+MUST RETURN THE FULL CODE, INCLUDING UNCHANGED PARTS.
+
+Below is the code needs to be built:
+&lt;code&gt;
+#include &lt;stdint.h&gt;
+#include &lt;stdlib.h&gt;
+
+#include &#34;Gfx.h&#34;
+#include &#34;Object.h&#34;
+#include &#34;PDFRectangle.h&#34; // Include the header file for PDFRectangle
+
+extern const char *http_errno_name(int);
+
+int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+    if (size &lt; sizeof(int)) {
+        return 0;
+    }
+  
+    int num = *(int *)data;
+
+    // Create a PDFRectangle object with the integer value
+    PDFRectangle obj = PDFRectangle(num, num, num, num);
+
+    // Create a new Gfx object with the PDFRectangle object
+    Gfx *gfx = new Gfx(NULL, NULL, NULL, &amp;obj, NULL, NULL);
+
+    // The opSetExtGState function is private, so it cannot be called directly
+    // Instead, let&#39;s call a public function that may internally call opSetExtGState
+    gfx-&gt;display(&amp;obj, false);
+
+    delete gfx;
+    return 0;
+}
+&lt;/code&gt;
+
+Below is the error to fix:
+The code has the following build issues:
+&lt;error&gt;
+fuzz_JBIG2.cc:6:10: fatal error: &#39;PDFRectangle.h&#39; file not found
+    6 | #include &#34;PDFRectangle.h&#34; // Include the header file for PDFRectangle
+      |          ^~~~~~~~~~~~~~~~
+&lt;/error&gt;
+
+
+Below are instructions to assist you in fixing the error.
+&lt;instruction&gt;
+IMPORTANT: DO NOT include the header file PDFRectangle.h in the generated fuzz target again, the file does not exist in the project-under-test.
+If the non-existent &lt;filepath&gt;PDFRectangle.h&lt;/filepath&gt; was included for the declaration of &lt;code&gt;void Gfx::opSetExtGState(Object *, int)&lt;/code&gt;, you must replace it with the EXACT path of the actual file &lt;filepath&gt;#include &#34;/src/xpdf-4.05/xpdf/Gfx.h&#34;&lt;/filepath&gt;. For example:
+&lt;code&gt;
+#include &#34;#include &#34;/src/xpdf-4.05/xpdf/Gfx.h&#34;&#34;
+&lt;/code&gt;
+Otherwise, consider replacing it with some of the following statementsthat may be correct alternatives:
+&lt;code&gt;
+#include &#34;/src/xpdf-4.05/xpdf/SecurityHandler.h&#34;
+#include &#34;/src/freetype/src/psaux/psglue.h&#34;
+#include &#34;/src/freetype/src/autofit/afblue.h&#34;
+#include &#34;/src/freetype/src/autofit/afmodule.h&#34;
+#include &#34;/src/freetype/src/psnames/pstables.h&#34;
+&lt;/code&gt;
+
+&lt;/instruction&gt;
+
+Fix code:
+1. Consider possible solutions for the issues listed above.
+2. Choose a solution that can maximize fuzzing result, which is utilizing the function under test and feeding it not null input.
+3. Apply the solutions to the original code.
+It&#39;s important to show the complete code, not only the fixed line.
+&lt;solution&gt;
+</pre>
+
+
+
+<h3>Code #3</h3>
+
+<pre>
+#include &lt;stdint.h&gt;
+#include &lt;stdlib.h&gt;
+
+#include &#34;/src/xpdf-4.05/xpdf/Gfx.h&#34; // Include the correct path of Gfx.h
+#include &#34;Object.h&#34;
+
+extern const char *http_errno_name(int);
+
+int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+    if (size &lt; sizeof(int)) {
+        return 0;
+    }
+  
+    int num = *(int *)data;
+
+    // Create a new Gfx object with the integer value
+    Gfx *gfx = new Gfx(NULL, NULL, NULL, NULL, NULL, NULL);
+
+    // The opSetExtGState function is private, so it cannot be called directly
+    // Instead, let&#39;s call a public function that may internally call opSetExtGState
+    gfx-&gt;display(NULL, false);
+
+    delete gfx;
+    return 0;
+}
+</pre>
+
+
+<h3>Fixer prompt #4</h3>
+<pre>
+
+Given the following C++ fuzz harness and its build error message, fix the code to make it build for fuzzing.
+
+If there is undeclared identifier or unknown type name error, fix it by finding and including the related libraries.
+
+MUST RETURN THE FULL CODE, INCLUDING UNCHANGED PARTS.
+
+Below is the code needs to be built:
+&lt;code&gt;
+#include &lt;stdint.h&gt;
+#include &lt;stdlib.h&gt;
+
+#include &#34;/src/xpdf-4.05/xpdf/Gfx.h&#34; // Include the correct path of Gfx.h
+#include &#34;Object.h&#34;
+
+extern const char *http_errno_name(int);
+
+int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+    if (size &lt; sizeof(int)) {
+        return 0;
+    }
+  
+    int num = *(int *)data;
+
+    // Create a new Gfx object with the integer value
+    Gfx *gfx = new Gfx(NULL, NULL, NULL, NULL, NULL, NULL);
+
+    // The opSetExtGState function is private, so it cannot be called directly
+    // Instead, let&#39;s call a public function that may internally call opSetExtGState
+    gfx-&gt;display(NULL, false);
+
+    delete gfx;
+    return 0;
+}
+&lt;/code&gt;
+
+Below is the error to fix:
+The code has the following build issues:
+&lt;error&gt;
+(.text.main+0x12): undefined reference to `LLVMFuzzerTestOneInput&#39;
+&lt;/error&gt;
+
+
+
+
+Fix code:
+1. Consider possible solutions for the issues listed above.
+2. Choose a solution that can maximize fuzzing result, which is utilizing the function under test and feeding it not null input.
+3. Apply the solutions to the original code.
+It&#39;s important to show the complete code, not only the fixed line.
+&lt;solution&gt;
+</pre>
+
+
+
+<h3>Code #4</h3>
+
+<pre>
+#include &lt;stdint.h&gt;
+#include &lt;stdlib.h&gt;
+
+#include &#34;/src/xpdf-4.05/xpdf/Gfx.h&#34; // Include the correct path of Gfx.h
+#include &#34;Object.h&#34;
+
+extern const char *http_errno_name(int);
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+    if (size &lt; sizeof(int)) {
+        return 0;
+    }
+  
+    int num = *(int *)data;
+
+    // Create a new Gfx object with the integer value
+    Gfx *gfx = new Gfx(NULL, NULL, NULL, NULL, NULL, NULL);
+
+    // The opSetExtGState function is private, so it cannot be called directly
+    // Instead, let&#39;s call a public function that may internally call opSetExtGState
+    gfx-&gt;display(NULL, false);
+
+    delete gfx;
+    return 0;
+}
+</pre>
+
+
+<h3>Fixer prompt #5</h3>
+<pre>
+
+Given the following C++ fuzz harness and its build error message, fix the code to make it build for fuzzing.
+
+If there is undeclared identifier or unknown type name error, fix it by finding and including the related libraries.
+
+MUST RETURN THE FULL CODE, INCLUDING UNCHANGED PARTS.
+
+Below is the code needs to be built:
+&lt;code&gt;
+#include &lt;stdint.h&gt;
+#include &lt;stdlib.h&gt;
+
+#include &#34;/src/xpdf-4.05/xpdf/Gfx.h&#34; // Include the correct path of Gfx.h
+#include &#34;Object.h&#34;
+
+extern const char *http_errno_name(int);
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+    if (size &lt; sizeof(int)) {
+        return 0;
+    }
+  
+    int num = *(int *)data;
+
+    // Create a new Gfx object with the integer value
+    Gfx *gfx = new Gfx(NULL, NULL, NULL, NULL, NULL, NULL);
+
+    // The opSetExtGState function is private, so it cannot be called directly
+    // Instead, let&#39;s call a public function that may internally call opSetExtGState
+    gfx-&gt;display(NULL, false);
+
+    delete gfx;
+    return 0;
+}
+&lt;/code&gt;
+
+Below is the error to fix:
+The code can build successfully but has a runtime issue: Fuzzing crashed immediately at runtime (ASAN-ERROR: AddressSanitizer: SEGV on unknown address 0x000000000028 (pc 0x55efece90170 bp 0x7ffc14eacaa0 sp 0x7ffc14eaca40 T0)), indicating fuzz target code for invoking the function under test is incorrect or unrobust.
+&lt;error&gt;
+Crash stacks:
+Stack 0:
+#0 0x55efece90170 in Gfx::Gfx(PDFDoc*, OutputDev*, Dict*, PDFRectangle*, PDFRectangle*, int (*)(void*), void*) /src/xpdf-4.05/xpdf/Gfx.cc:572
+#1 0x55efece72c77 in LLVMFuzzerTestOneInput /src/xpdf-4.05/build/fuzz_JBIG2.cc:17:20
+#2 0x55efecd25600 in fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:614:13
+#3 0x55efecd24e25 in fuzzer::Fuzzer::RunOne(unsigned char const*, unsigned long, bool, fuzzer::InputInfo*, bool, bool*) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:516:7
+#4 0x55efecd265f5 in fuzzer::Fuzzer::MutateAndTestOne() /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:760:19
+#5 0x55efecd273e5 in fuzzer::Fuzzer::Loop(std::__Fuzzer::vector&lt;fuzzer::SizedFile, std::__Fuzzer::allocator&lt;fuzzer::SizedFile&gt;&gt;&amp;) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:905:5
+#6 0x55efecd156f6 in fuzzer::FuzzerDriver(int*, char***, int (*)(unsigned char const*, unsigned long)) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:914:6
+#7 0x55efecd41c22 in main /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMain.cpp:20:10
+#8 0x7f04bde39082 in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x24082) (BuildId: 0702430aef5fa3dda43986563e9ffcc47efbd75e)
+#9 0x55efecd0686d in _start (/out/fuzz_JBIG2+0x19c86d)
+&lt;/error&gt;
+
+
+
+
+Fix code:
+1. Consider possible solutions for the issues listed above.
+2. Choose a solution that can maximize fuzzing result, which is utilizing the function under test and feeding it not null input.
+3. Apply the solutions to the original code.
+It&#39;s important to show the complete code, not only the fixed line.
+&lt;solution&gt;
+</pre>
+
+
+
+<h3>Code #5</h3>
+
+<pre>
+&lt;code&gt;
+#include &lt;stdint.h&gt;
+#include &lt;stdlib.h&gt;
+
+#include &#34;/src/xpdf-4.05/xpdf/Gfx.h&#34; // Include the correct path of Gfx.h
+#include &#34;Object.h&#34;
+
+extern const char *http_errno_name(int);
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+    if (size &lt; sizeof(int)) {
+        return 0;
+    }
+  
+    int num = *(int *)data;
+
+    // Create a new Gfx object with the integer value
+    // The constructor of Gfx requires non-null parameters, so we need to create them
+    PDFDoc* doc = new PDFDoc();
+    OutputDev* out = new OutputDev();
+    Dict* dict = new Dict();
+    PDFRectangle* rect1 = new PDFRectangle();
+    PDFRectangle* rect2 = new PDFRectangle();
+
+    Gfx *gfx = new Gfx(doc, out, dict, rect1, rect2, NULL);
+
+    // The opSetExtGState function is private, so it cannot be called directly
+    // Instead, let&#39;s call a public function that may internally call opSetExtGState
+    gfx-&gt;display(NULL, false);
+
+    delete gfx;
+    delete doc;
+    delete out;
+    delete dict;
+    delete rect1;
+    delete rect2;
+    return 0;
+}
+&lt;/code&gt;
+&lt;solution&gt;
+</pre>
+
+
+<h2>Logs</h2>
+<pre>
+Fixing /home/chyun/oss-fuzz-gen/results7/output-xpdf-_zn3gfx14opsetextgstateep6objecti/fixed_targets/01.cc with gpt-4, attempt 1.
+Fixing /home/chyun/oss-fuzz-gen/results7/output-xpdf-_zn3gfx14opsetextgstateep6objecti/fixed_targets/01.cc with gpt-4, attempt 2.
+Fixing /home/chyun/oss-fuzz-gen/results7/output-xpdf-_zn3gfx14opsetextgstateep6objecti/fixed_targets/01.cc with gpt-4, attempt 3.
+Fixing /home/chyun/oss-fuzz-gen/results7/output-xpdf-_zn3gfx14opsetextgstateep6objecti/fixed_targets/01.cc with gpt-4, attempt 4.
+Fixing /home/chyun/oss-fuzz-gen/results7/output-xpdf-_zn3gfx14opsetextgstateep6objecti/fixed_targets/01.cc with gpt-4, attempt 5.
+Failed to build /home/chyun/oss-fuzz-gen/results7/output-xpdf-_zn3gfx14opsetextgstateep6objecti/fixed_targets/01.cc with gpt-4 in 5 iterations of fixing.
+
+</pre>
+
+<h2>Run logs</h2>
+<pre>
+INFO:__main__:Running: docker run --privileged --shm-size=2g --platform linux/amd64 --rm -e FUZZING_ENGINE=libfuzzer -e SANITIZER=address -e RUN_FUZZER_MODE=interactive -e HELPER=True -v /home/chyun/oss-fuzz-gen/results7/output-xpdf-_zn3gfx14opsetextgstateep6objecti/corpora/01.cc:/tmp/fuzz_JBIG2_corpus -v /tmp/tmpfopxn2s_/build/out/xpdf-zn3gfx14opsetextgstateep6objecti-01:/out -t gcr.io/oss-fuzz-base/base-runner run_fuzzer fuzz_JBIG2 -print_final_stats=1 -max_total_time=30 -len_control=0 -timeout=30.
+vm.mmap_rnd_bits = 28
+rm: cannot remove &#39;/tmp/fuzz_JBIG2_corpus&#39;: Device or resource busy
+/out/fuzz_JBIG2 -rss_limit_mb=2560 -timeout=25 -print_final_stats=1 -max_total_time=30 -len_control=0 -timeout=30 /tmp/fuzz_JBIG2_corpus -detect_leaks=0 &lt; /dev/null
+INFO: Running with entropic power schedule (0xFF, 100).
+INFO: Seed: 758020154
+INFO: Loaded 1 modules   (21742 inline 8-bit counters): 21742 [0x55efed2008f8, 0x55efed205de6), 
+INFO: Loaded 1 PC tables (21742 PCs): 21742 [0x55efed205de8,0x55efed25acc8), 
+INFO:        0 files found in /tmp/fuzz_JBIG2_corpus
+INFO: -max_len is not provided; libFuzzer will not generate inputs larger than 4096 bytes
+INFO: A corpus is not provided, starting from an empty corpus
+#2	INITED cov: 2 ft: 2 corp: 1/1b exec/s: 0 rss: 33Mb
+AddressSanitizer:DEADLYSIGNAL
+=================================================================
+[1m[31m==16==ERROR: AddressSanitizer: SEGV on unknown address 0x000000000028 (pc 0x55efece90170 bp 0x7ffc14eacaa0 sp 0x7ffc14eaca40 T0)
+[1m[0m==16==The signal is caused by a READ memory access.
+==16==Hint: address points to the zero page.
+SCARINESS: 10 (null-deref)
+    #0 0x55efece90170 in Gfx::Gfx(PDFDoc*, OutputDev*, Dict*, PDFRectangle*, PDFRectangle*, int (*)(void*), void*) /src/xpdf-4.05/xpdf/Gfx.cc:572
+    #1 0x55efece72c77 in LLVMFuzzerTestOneInput /src/xpdf-4.05/build/fuzz_JBIG2.cc:17:20
+    #2 0x55efecd25600 in fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:614:13
+    #3 0x55efecd24e25 in fuzzer::Fuzzer::RunOne(unsigned char const*, unsigned long, bool, fuzzer::InputInfo*, bool, bool*) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:516:7
+    #4 0x55efecd265f5 in fuzzer::Fuzzer::MutateAndTestOne() /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:760:19
+    #5 0x55efecd273e5 in fuzzer::Fuzzer::Loop(std::__Fuzzer::vector&lt;fuzzer::SizedFile, std::__Fuzzer::allocator&lt;fuzzer::SizedFile&gt;&gt;&amp;) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:905:5
+    #6 0x55efecd156f6 in fuzzer::FuzzerDriver(int*, char***, int (*)(unsigned char const*, unsigned long)) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:914:6
+    #7 0x55efecd41c22 in main /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMain.cpp:20:10
+    #8 0x7f04bde39082 in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x24082) (BuildId: 0702430aef5fa3dda43986563e9ffcc47efbd75e)
+    #9 0x55efecd0686d in _start (/out/fuzz_JBIG2+0x19c86d)
+
+DEDUP_TOKEN: Gfx::Gfx(PDFDoc*, OutputDev*, Dict*, PDFRectangle*, PDFRectangle*, int (*)(void*), void*)--LLVMFuzzerTestOneInput--fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long)
+AddressSanitizer can not provide additional info.
+SUMMARY: AddressSanitizer: SEGV /src/xpdf-4.05/xpdf/Gfx.cc:572 in Gfx::Gfx(PDFDoc*, OutputDev*, Dict*, PDFRectangle*, PDFRectangle*, int (*)(void*), void*)
+==16==ABORTING
+MS: 2 InsertByte-InsertRepeatedBytes-; base unit: adc83b19e793491b1c6ea0fd8b46cd9f32e592fc
+0xa,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0x9a,
+\012\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\232
+artifact_prefix=&#39;./&#39;; Test unit written to ./crash-16663e29cfc9c51088e746d8732edecf942dab9e
+Base64: Cv////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////+a
+stat::number_of_executed_units: 4
+stat::average_exec_per_sec:     0
+stat::new_units_added:          0
+stat::slowest_unit_time_sec:    0
+stat::peak_rss_mb:              34
+
+</pre>
+
+
+</body>

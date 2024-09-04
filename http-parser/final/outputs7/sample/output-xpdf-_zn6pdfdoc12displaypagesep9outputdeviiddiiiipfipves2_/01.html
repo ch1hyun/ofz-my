@@ -1,0 +1,1884 @@
+<!doctype html>
+
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Experiment results</title>
+<style>
+* {
+    box-sizing: border-box;
+}
+
+html {
+    line-height: 1.15;
+}
+
+body {
+    font-family: sans-serif;
+    font-size: 16px;
+}
+
+table {
+    border-collapse: collapse;
+    border-spacing: 0;
+}
+
+td, th {
+    border-right: 1px #dedede solid;
+    border-bottom: 1px #dedede solid;
+    padding: 5px;
+    text-align: left;
+}
+td:first-child, th:first-child {
+    border-left: 1px #dedede solid;
+}
+th {
+    border-top: 1px #dedede solid;
+}
+
+tbody tr:nth-child(odd) {
+    background-color: #f4f5ff;
+}
+</style>
+<body>
+    LLM: 
+    
+<h1>output-xpdf-_zn6pdfdoc12displaypagesep9outputdeviiddiiiipfipves2_ / 01</h1>
+Bug: False
+<br>
+Crash reason: -
+<br>
+<br>
+
+<h2>Triage</h2>
+<pre>
+
+</pre>
+<br>
+
+
+
+
+
+<h3>Final code</h3>
+
+<pre>
+#include &lt;assert.h&gt;
+#include &lt;stdint.h&gt;
+#include &lt;iostream&gt;
+#include &lt;fstream&gt;
+#include &lt;string&gt;
+
+#include &#34;aconf.h&#34;
+#include &#34;goo/gfile.h&#34;
+#include &#34;/src/xpdf-4.05/goo/GString.h&#34;
+#include &#34;Object.h&#34;
+#include &#34;/src/xpdf-4.05/xpdf/PDFDoc.h&#34;
+#include &#34;Page.h&#34;
+#include &#34;Catalog.h&#34;
+#include &#34;SplashOutputDev.h&#34;
+#include &#34;fuzzer/FuzzedDataProvider.h&#34;
+#include &#34;GlobalParams.h&#34;
+#include &#34;UnicodeMap.h&#34;
+
+#ifdef MULTITHREADED
+#include &#34;/src/xpdf-4.05/goo/GMutex.h&#34;
+GMutex* mutex;
+#endif
+
+class FuzzerOutputDev : public OutputDev {
+public:
+  void drawChar(GfxState *state, double x, double y,
+                        double dx, double dy,
+                        double originX, double originY,
+                        CharCode code, int nBytes, Unicode *u, int uLen) { }
+  GBool upsideDown() { return gTrue; }
+  GBool useDrawChar() { return gTrue; }
+  GBool interpretType3Chars() { return gTrue; }
+};
+
+extern &#34;C&#34; void LLVMFuzzerInitialize(int *argc, char ***argv) {
+  globalParams = new GlobalParams(nullptr);
+
+#ifdef MULTITHREADED
+    mutex=new GMutex();
+#endif
+}
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  if (size &lt; 100) {
+    return 0;
+  }
+
+  FuzzedDataProvider fuzzed_data(data, size);
+
+  // Define dev
+  FuzzerOutputDev dev;
+
+  // Define input data
+  std::string test_data(reinterpret_cast&lt;const char*&gt;(data), size);
+  std::string test_data_file = std::string(getenv(&#34;FUZZER_TEMP_DIR&#34;)) + &#34;/doc.pdf&#34;;
+  std::ofstream f(test_data_file, std::ios::out | std::ios::binary);
+  f &lt;&lt; test_data;
+  f.close();
+  GString fileName(test_data_file.c_str());
+  PDFDoc doc(&amp;fileName, nullptr, nullptr);
+
+  if (!doc.isOk() || doc.getNumPages() == 0) {
+    return 0;
+  }
+
+  Catalog *catalog = doc.getCatalog();
+
+  int pgh, pgw;
+  doc.getPage(1)-&gt;getCropBox(&amp;pgw, &amp;pgh);
+  double hDPI = 150.0;
+  double vDPI = 150.0;
+  int rotate = 0; 
+  GBool useMediaBox = false; 
+  GBool crop = false; 
+  GBool doLinks = true;
+  GBool printing = false;
+  int firstPage = 1;
+  int lastPage = doc.getNumPages(); 
+  double yBottom = 0; 
+  double yTop = pgh;
+  double xRight = pgw+10; 
+  double xLeft = -10;
+  int sliceX = -1; 
+  int sliceY = -1; 
+  int sliceW = pgw*2; 
+  int sliceH = pgh*2;
+
+  catalog-&gt;getPage(1)-&gt;display(&amp;dev, hDPI, vDPI, rotate, 
+                               doLinks, useMediaBox, crop, 
+                               printing, nullptr, nullptr);
+  
+  // Fill the parameters
+  OutputDev* outputDev = &amp;dev;
+  firstPage = fuzzed_data.ConsumeIntegralInRange&lt;int&gt;(1, doc.getNumPages());
+  lastPage = fuzzed_data.ConsumeIntegralInRange&lt;int&gt;(firstPage, doc.getNumPages());
+  hDPI = fuzzed_data.ConsumeFloatingPoint&lt;double&gt;();
+  vDPI = fuzzed_data.ConsumeFloatingPoint&lt;double&gt;();
+  rotate = fuzzed_data.ConsumeIntegralInRange&lt;int&gt;(-360, 360);
+  useMediaBox = fuzzed_data.ConsumeBool();
+  crop = fuzzed_data.ConsumeBool();
+  printing = fuzzed_data.ConsumeBool();
+  GBool (*abortCheckCbk)(void *data) = nullptr;
+  void *abortCheckCbkData = nullptr;
+
+  doc.displayPages(outputDev, firstPage, lastPage, hDPI, vDPI, rotate, useMediaBox, crop, printing, abortCheckCbk, abortCheckCbkData);
+  
+  return 0;
+}
+</pre>
+
+
+<h3>Fixer prompt #1</h3>
+<pre>
+
+Given the following C++ fuzz harness and its build error message, fix the code to make it build for fuzzing.
+
+If there is undeclared identifier or unknown type name error, fix it by finding and including the related libraries.
+
+MUST RETURN THE FULL CODE, INCLUDING UNCHANGED PARTS.
+
+Below is the code needs to be built:
+&lt;code&gt;
+#include &#34;aconf.h&#34;
+#include &#34;goo/gfile.h&#34;
+#include &#34;goo/GooString.h&#34;
+#include &#34;Object.h&#34;
+#include &#34;PDFDocFactory.h&#34;
+#include &#34;Page.h&#34;
+#include &#34;Catalog.h&#34;
+#include &#34;SplashOutputDev.h&#34;
+#include &#34;fuzzer/FuzzedDataProvider.h&#34;
+#include &lt;assert.h&gt;
+#include &lt;stdint.h&gt;
+#include &lt;iostream&gt;
+#include &lt;fstream&gt;
+#include &lt;string&gt;
+
+#ifdef MULTITHREADED
+#include &lt;goo/GooMutex.h&gt;
+GooMutex* mutex;
+#endif
+
+class FuzzerOutputDev : public OutputDev {
+public:
+  void drawChar(GfxState *state, double x, double y,
+                        double dx, double dy,
+                        double originX, double originY,
+                        CharCode code, int nBytes, Unicode *u, int uLen) { }
+  GBool upsideDown() { return gTrue; }
+  GBool useDrawChar() { return gTrue; }
+};
+
+extern &#34;C&#34; void LLVMFuzzerInitialize(int *argc, char ***argv) {
+  delete globalParams;
+  char *newargv[] = {
+    strdup((*argv)[0]),
+    strdup(&#34;-d&#34;),
+    strdup(&#34;all&#34;),
+  };
+  char *envp[] = {
+    strdup(&#34;POPPLER_DEBUG=1&#34;),
+    NULL,
+  };
+  assert(nullptr != execve((*argv)[0], newargv, envp));
+
+  std::string popplerData = getenv(&#34;POPPLER_FONT_PATH&#34;);
+  if (!popplerData.empty()) {
+    popplerData += &#34;/nameToUnicode&#34;;
+    std::ifstream f(popplerData.c_str());
+    if (f.good()) {
+      globalParams = new GlobalParams;
+      globalParams-&gt;setIconv(IS_LITTLE_ENDIAN ? &#34;UTF16LE&#34; : &#34;UTF16BE&#34;);
+      globalParams-&gt;addPopplerDataRAToUnicodeItem(UnicodeMap::newUnicodeMap(&#34;Adobe-CNS1-UCS2&#34;, &#34;unicodeMap&#34;, &#34;Adobe-CNS1&#34;, true, new GooString(popplerData.c_str())));
+    }
+  }
+
+#ifdef MULTITHREADED
+    mutex=new GooMutex();
+#endif
+}
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  if (size &lt; 100) {
+    return 0;
+  }
+
+  FuzzedDataProvider fuzzed_data(data, size);
+
+  // Define dev
+  FuzzerOutputDev dev;
+
+  // Define input data
+  std::string test_data(reinterpret_cast&lt;const char*&gt;(data), size);
+  std::string test_data_file = std::string(getenv(&#34;FUZZER_TEMP_DIR&#34;)) + &#34;/doc.pdf&#34;;
+  std::ofstream f(test_data_file, std::ios::out | std::ios::binary);
+  f &lt;&lt; test_data;
+  f.close();
+  GooString *fileName = new GooString(test_data_file.c_str());
+  PDFDoc *doc = PDFDocFactory().createPDFDoc(*fileName, nullptr, nullptr);
+
+  if (!doc-&gt;isOk() || doc-&gt;getNumPages() == 0) {
+    delete doc;
+    delete fileName;
+    return 0;
+  }
+
+  Catalog *catalog = doc-&gt;getCatalog();
+
+  int pgh, pgw;
+  doc-&gt;getPageCropBox(1, &amp;pgw, &amp;pgh);
+  double hDPI = 150.0;
+  double vDPI = 150.0;
+  int rotate = 0; 
+  GBool useMediaBox = false; 
+  GBool crop = false; 
+  GBool doLinks = true;
+  GBool printing = false;
+  int firstPage = 1;
+  int lastPage = doc-&gt;getNumPages(); 
+  double yBottom = 0; 
+  double yTop = pgh;
+  double xRight = pgw+10; 
+  double xLeft = -10;
+  int sliceX = -1; 
+  int sliceY = -1; 
+  int sliceW = pgw*2; 
+  int sliceH = pgh*2;
+
+  catalog-&gt;getPage(1)-&gt;display(&amp;dev, hDPI, vDPI, rotate, 
+                               doLinks, useMediaBox, crop, 
+                               printing, sliceX, sliceY, sliceW, sliceH, nullptr, nullptr);
+  
+  // Fill the parameters
+  OutputDev* outputDev = &amp;dev;
+  int firstPage = fuzzer::ConsumeIntegralInRange&lt;int&gt;(1, doc-&gt;getNumPages());
+  int lastPage = fuzzer::ConsumeIntegralInRange&lt;int&gt;(firstPage, doc-&gt;getNumPages());
+  double hDPI = fuzzer::ConsumeFloatingPoint&lt;double&gt;();
+  double vDPI = fuzzer::ConsumeFloatingPoint&lt;double&gt;();
+  int rotate = fuzzer::ConsumeIntegralInRange&lt;int&gt;(-360, 360);
+  GBool useMediaBox = fuzzer::ConsumeBool();
+  GBool crop = fuzzer::ConsumeBool();
+  GBool printing = fuzzer::ConsumeBool();
+  void* slice = nullptr;
+  DW_TAG_subroutine_typeInfinite loop_ = nullptr;
+  void* op = nullptr;
+
+  doc-&gt;displayPages(outputDev, firstPage, lastPage, hDPI, vDPI, rotate, useMediaBox, crop, printing, loop_, op);
+  
+  delete doc;
+  delete fileName;
+  return 0;
+}
+&lt;/code&gt;
+
+Below is the error to fix:
+The code has the following build issues:
+&lt;error&gt;
+fuzz_JBIG2.cc:3:10: fatal error: &#39;goo/GooString.h&#39; file not found
+    3 | #include &#34;goo/GooString.h&#34;
+      |          ^~~~~~~~~~~~~~~~~
+&lt;/error&gt;
+
+
+Below are instructions to assist you in fixing the error.
+&lt;instruction&gt;
+IMPORTANT: DO NOT include the header file goo/GooString.h in the generated fuzz target again, the file does not exist in the project-under-test.
+If the non-existent &lt;filepath&gt;goo/GooString.h&lt;/filepath&gt; was included for the declaration of &lt;code&gt;void PDFDoc::displayPages(OutputDev *, int, int, double, double, int, GBool, GBool, GBool, DW_TAG_subroutine_typeInfinite loop *, void *)&lt;/code&gt;, you must replace it with the EXACT path of the actual file &lt;filepath&gt;#include &#34;/src/xpdf-4.05/xpdf/PDFDoc.h&#34;&lt;/filepath&gt;. For example:
+&lt;code&gt;
+#include &#34;#include &#34;/src/xpdf-4.05/xpdf/PDFDoc.h&#34;&#34;
+&lt;/code&gt;
+Otherwise, consider replacing it with some of the following statementsthat may be correct alternatives:
+&lt;code&gt;
+#include &#34;/src/xpdf-4.05/goo/GString.h&#34;
+#include &#34;/src/xpdf-4.05/goo/GList.h&#34;
+#include &#34;/src/xpdf-4.05/goo/GMutex.h&#34;
+#include &#34;/src/xpdf-4.05/goo/gmem.h&#34;
+#include &#34;/src/xpdf-4.05/goo/Trace.h&#34;
+&lt;/code&gt;
+
+&lt;/instruction&gt;
+
+Fix code:
+1. Consider possible solutions for the issues listed above.
+2. Choose a solution that can maximize fuzzing result, which is utilizing the function under test and feeding it not null input.
+3. Apply the solutions to the original code.
+It&#39;s important to show the complete code, not only the fixed line.
+&lt;solution&gt;
+</pre>
+
+
+
+<h3>Code #1</h3>
+
+<pre>
+&lt;code&gt;
+#include &#34;aconf.h&#34;
+#include &#34;goo/gfile.h&#34;
+#include &#34;/src/xpdf-4.05/goo/GString.h&#34;
+#include &#34;Object.h&#34;
+#include &#34;PDFDocFactory.h&#34;
+#include &#34;Page.h&#34;
+#include &#34;Catalog.h&#34;
+#include &#34;SplashOutputDev.h&#34;
+#include &#34;fuzzer/FuzzedDataProvider.h&#34;
+#include &lt;assert.h&gt;
+#include &lt;stdint.h&gt;
+#include &lt;iostream&gt;
+#include &lt;fstream&gt;
+#include &lt;string&gt;
+
+#ifdef MULTITHREADED
+#include &lt;goo/GooMutex.h&gt;
+GooMutex* mutex;
+#endif
+
+class FuzzerOutputDev : public OutputDev {
+public:
+  void drawChar(GfxState *state, double x, double y,
+                        double dx, double dy,
+                        double originX, double originY,
+                        CharCode code, int nBytes, Unicode *u, int uLen) { }
+  GBool upsideDown() { return gTrue; }
+  GBool useDrawChar() { return gTrue; }
+};
+
+extern &#34;C&#34; void LLVMFuzzerInitialize(int *argc, char ***argv) {
+  delete globalParams;
+  char *newargv[] = {
+    strdup((*argv)[0]),
+    strdup(&#34;-d&#34;),
+    strdup(&#34;all&#34;),
+  };
+  char *envp[] = {
+    strdup(&#34;POPPLER_DEBUG=1&#34;),
+    NULL,
+  };
+  assert(nullptr != execve((*argv)[0], newargv, envp));
+
+  std::string popplerData = getenv(&#34;POPPLER_FONT_PATH&#34;);
+  if (!popplerData.empty()) {
+    popplerData += &#34;/nameToUnicode&#34;;
+    std::ifstream f(popplerData.c_str());
+    if (f.good()) {
+      globalParams = new GlobalParams;
+      globalParams-&gt;setIconv(IS_LITTLE_ENDIAN ? &#34;UTF16LE&#34; : &#34;UTF16BE&#34;);
+      globalParams-&gt;addPopplerDataRAToUnicodeItem(UnicodeMap::newUnicodeMap(&#34;Adobe-CNS1-UCS2&#34;, &#34;unicodeMap&#34;, &#34;Adobe-CNS1&#34;, true, new GString(popplerData.c_str())));
+    }
+  }
+
+#ifdef MULTITHREADED
+    mutex=new GooMutex();
+#endif
+}
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  if (size &lt; 100) {
+    return 0;
+  }
+
+  FuzzedDataProvider fuzzed_data(data, size);
+
+  // Define dev
+  FuzzerOutputDev dev;
+
+  // Define input data
+  std::string test_data(reinterpret_cast&lt;const char*&gt;(data), size);
+  std::string test_data_file = std::string(getenv(&#34;FUZZER_TEMP_DIR&#34;)) + &#34;/doc.pdf&#34;;
+  std::ofstream f(test_data_file, std::ios::out | std::ios::binary);
+  f &lt;&lt; test_data;
+  f.close();
+  GString *fileName = new GString(test_data_file.c_str());
+  PDFDoc *doc = PDFDocFactory().createPDFDoc(*fileName, nullptr, nullptr);
+
+  if (!doc-&gt;isOk() || doc-&gt;getNumPages() == 0) {
+    delete doc;
+    delete fileName;
+    return 0;
+  }
+
+  Catalog *catalog = doc-&gt;getCatalog();
+
+  int pgh, pgw;
+  doc-&gt;getPageCropBox(1, &amp;pgw, &amp;pgh);
+  double hDPI = 150.0;
+  double vDPI = 150.0;
+  int rotate = 0; 
+  GBool useMediaBox = false; 
+  GBool crop = false; 
+  GBool doLinks = true;
+  GBool printing = false;
+  int firstPage = 1;
+  int lastPage = doc-&gt;getNumPages(); 
+  double yBottom = 0; 
+  double yTop = pgh;
+  double xRight = pgw+10; 
+  double xLeft = -10;
+  int sliceX = -1; 
+  int sliceY = -1; 
+  int sliceW = pgw*2; 
+  int sliceH = pgh*2;
+
+  catalog-&gt;getPage(1)-&gt;display(&amp;dev, hDPI, vDPI, rotate, 
+                               doLinks, useMediaBox, crop, 
+                               printing, sliceX, sliceY, sliceW, sliceH, nullptr, nullptr);
+  
+  // Fill the parameters
+  OutputDev* outputDev = &amp;dev;
+  int firstPage = fuzzer::ConsumeIntegralInRange&lt;int&gt;(1, doc-&gt;getNumPages());
+  int lastPage = fuzzer::ConsumeIntegralInRange&lt;int&gt;(firstPage, doc-&gt;getNumPages());
+  double hDPI = fuzzer::ConsumeFloatingPoint&lt;double&gt;();
+  double vDPI = fuzzer::ConsumeFloatingPoint&lt;double&gt;();
+  int rotate = fuzzer::ConsumeIntegralInRange&lt;int&gt;(-360, 360);
+  GBool useMediaBox = fuzzer::ConsumeBool();
+  GBool crop = fuzzer::ConsumeBool();
+  GBool printing = fuzzer::ConsumeBool();
+  void* slice = nullptr;
+  DW_TAG_subroutine_typeInfinite loop_ = nullptr;
+  void* op = nullptr;
+
+  doc-&gt;displayPages(outputDev, firstPage, lastPage, hDPI, vDPI, rotate, useMediaBox, crop, printing, loop_, op);
+  
+  delete doc;
+  delete fileName;
+  return 0;
+}
+&lt;/code&gt;
+&lt;/solution&gt;
+</pre>
+
+
+<h3>Fixer prompt #2</h3>
+<pre>
+
+Given the following C++ fuzz harness and its build error message, fix the code to make it build for fuzzing.
+
+If there is undeclared identifier or unknown type name error, fix it by finding and including the related libraries.
+
+MUST RETURN THE FULL CODE, INCLUDING UNCHANGED PARTS.
+
+Below is the code needs to be built:
+&lt;code&gt;
+#include &#34;aconf.h&#34;
+#include &#34;goo/gfile.h&#34;
+#include &#34;/src/xpdf-4.05/goo/GString.h&#34;
+#include &#34;Object.h&#34;
+#include &#34;PDFDocFactory.h&#34;
+#include &#34;Page.h&#34;
+#include &#34;Catalog.h&#34;
+#include &#34;SplashOutputDev.h&#34;
+#include &#34;fuzzer/FuzzedDataProvider.h&#34;
+#include &lt;assert.h&gt;
+#include &lt;stdint.h&gt;
+#include &lt;iostream&gt;
+#include &lt;fstream&gt;
+#include &lt;string&gt;
+
+#ifdef MULTITHREADED
+#include &lt;goo/GooMutex.h&gt;
+GooMutex* mutex;
+#endif
+
+class FuzzerOutputDev : public OutputDev {
+public:
+  void drawChar(GfxState *state, double x, double y,
+                        double dx, double dy,
+                        double originX, double originY,
+                        CharCode code, int nBytes, Unicode *u, int uLen) { }
+  GBool upsideDown() { return gTrue; }
+  GBool useDrawChar() { return gTrue; }
+};
+
+extern &#34;C&#34; void LLVMFuzzerInitialize(int *argc, char ***argv) {
+  delete globalParams;
+  char *newargv[] = {
+    strdup((*argv)[0]),
+    strdup(&#34;-d&#34;),
+    strdup(&#34;all&#34;),
+  };
+  char *envp[] = {
+    strdup(&#34;POPPLER_DEBUG=1&#34;),
+    NULL,
+  };
+  assert(nullptr != execve((*argv)[0], newargv, envp));
+
+  std::string popplerData = getenv(&#34;POPPLER_FONT_PATH&#34;);
+  if (!popplerData.empty()) {
+    popplerData += &#34;/nameToUnicode&#34;;
+    std::ifstream f(popplerData.c_str());
+    if (f.good()) {
+      globalParams = new GlobalParams;
+      globalParams-&gt;setIconv(IS_LITTLE_ENDIAN ? &#34;UTF16LE&#34; : &#34;UTF16BE&#34;);
+      globalParams-&gt;addPopplerDataRAToUnicodeItem(UnicodeMap::newUnicodeMap(&#34;Adobe-CNS1-UCS2&#34;, &#34;unicodeMap&#34;, &#34;Adobe-CNS1&#34;, true, new GString(popplerData.c_str())));
+    }
+  }
+
+#ifdef MULTITHREADED
+    mutex=new GooMutex();
+#endif
+}
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  if (size &lt; 100) {
+    return 0;
+  }
+
+  FuzzedDataProvider fuzzed_data(data, size);
+
+  // Define dev
+  FuzzerOutputDev dev;
+
+  // Define input data
+  std::string test_data(reinterpret_cast&lt;const char*&gt;(data), size);
+  std::string test_data_file = std::string(getenv(&#34;FUZZER_TEMP_DIR&#34;)) + &#34;/doc.pdf&#34;;
+  std::ofstream f(test_data_file, std::ios::out | std::ios::binary);
+  f &lt;&lt; test_data;
+  f.close();
+  GString *fileName = new GString(test_data_file.c_str());
+  PDFDoc *doc = PDFDocFactory().createPDFDoc(*fileName, nullptr, nullptr);
+
+  if (!doc-&gt;isOk() || doc-&gt;getNumPages() == 0) {
+    delete doc;
+    delete fileName;
+    return 0;
+  }
+
+  Catalog *catalog = doc-&gt;getCatalog();
+
+  int pgh, pgw;
+  doc-&gt;getPageCropBox(1, &amp;pgw, &amp;pgh);
+  double hDPI = 150.0;
+  double vDPI = 150.0;
+  int rotate = 0; 
+  GBool useMediaBox = false; 
+  GBool crop = false; 
+  GBool doLinks = true;
+  GBool printing = false;
+  int firstPage = 1;
+  int lastPage = doc-&gt;getNumPages(); 
+  double yBottom = 0; 
+  double yTop = pgh;
+  double xRight = pgw+10; 
+  double xLeft = -10;
+  int sliceX = -1; 
+  int sliceY = -1; 
+  int sliceW = pgw*2; 
+  int sliceH = pgh*2;
+
+  catalog-&gt;getPage(1)-&gt;display(&amp;dev, hDPI, vDPI, rotate, 
+                               doLinks, useMediaBox, crop, 
+                               printing, sliceX, sliceY, sliceW, sliceH, nullptr, nullptr);
+  
+  // Fill the parameters
+  OutputDev* outputDev = &amp;dev;
+  int firstPage = fuzzer::ConsumeIntegralInRange&lt;int&gt;(1, doc-&gt;getNumPages());
+  int lastPage = fuzzer::ConsumeIntegralInRange&lt;int&gt;(firstPage, doc-&gt;getNumPages());
+  double hDPI = fuzzer::ConsumeFloatingPoint&lt;double&gt;();
+  double vDPI = fuzzer::ConsumeFloatingPoint&lt;double&gt;();
+  int rotate = fuzzer::ConsumeIntegralInRange&lt;int&gt;(-360, 360);
+  GBool useMediaBox = fuzzer::ConsumeBool();
+  GBool crop = fuzzer::ConsumeBool();
+  GBool printing = fuzzer::ConsumeBool();
+  void* slice = nullptr;
+  DW_TAG_subroutine_typeInfinite loop_ = nullptr;
+  void* op = nullptr;
+
+  doc-&gt;displayPages(outputDev, firstPage, lastPage, hDPI, vDPI, rotate, useMediaBox, crop, printing, loop_, op);
+  
+  delete doc;
+  delete fileName;
+  return 0;
+}
+&lt;/code&gt;
+
+Below is the error to fix:
+The code has the following build issues:
+&lt;error&gt;
+fuzz_JBIG2.cc:5:10: fatal error: &#39;PDFDocFactory.h&#39; file not found
+    5 | #include &#34;PDFDocFactory.h&#34;
+      |          ^~~~~~~~~~~~~~~~~
+&lt;/error&gt;
+
+
+Below are instructions to assist you in fixing the error.
+&lt;instruction&gt;
+IMPORTANT: DO NOT include the header file PDFDocFactory.h in the generated fuzz target again, the file does not exist in the project-under-test.
+If the non-existent &lt;filepath&gt;PDFDocFactory.h&lt;/filepath&gt; was included for the declaration of &lt;code&gt;void PDFDoc::displayPages(OutputDev *, int, int, double, double, int, GBool, GBool, GBool, DW_TAG_subroutine_typeInfinite loop *, void *)&lt;/code&gt;, you must replace it with the EXACT path of the actual file &lt;filepath&gt;#include &#34;/src/xpdf-4.05/xpdf/PDFDoc.h&#34;&lt;/filepath&gt;. For example:
+&lt;code&gt;
+#include &#34;#include &#34;/src/xpdf-4.05/xpdf/PDFDoc.h&#34;&#34;
+&lt;/code&gt;
+Otherwise, consider replacing it with some of the following statementsthat may be correct alternatives:
+&lt;code&gt;
+#include &#34;/src/xpdf-4.05/xpdf/PDFDoc.h&#34;
+#include &#34;/src/xpdf-4.05/fofi/FoFiTrueType.h&#34;
+#include &#34;/src/freetype/src/autofit/aftypes.h&#34;
+#include &#34;/src/xpdf-4.05/fofi/FoFiIdentifier.h&#34;
+#include &#34;/src/freetype/src/autofit/afloader.h&#34;
+&lt;/code&gt;
+
+&lt;/instruction&gt;
+
+Fix code:
+1. Consider possible solutions for the issues listed above.
+2. Choose a solution that can maximize fuzzing result, which is utilizing the function under test and feeding it not null input.
+3. Apply the solutions to the original code.
+It&#39;s important to show the complete code, not only the fixed line.
+&lt;solution&gt;
+</pre>
+
+
+
+<h3>Code #2</h3>
+
+<pre>
+&lt;code&gt;
+#include &#34;aconf.h&#34;
+#include &#34;goo/gfile.h&#34;
+#include &#34;/src/xpdf-4.05/goo/GString.h&#34;
+#include &#34;Object.h&#34;
+#include &#34;/src/xpdf-4.05/xpdf/PDFDoc.h&#34;
+#include &#34;Page.h&#34;
+#include &#34;Catalog.h&#34;
+#include &#34;SplashOutputDev.h&#34;
+#include &#34;fuzzer/FuzzedDataProvider.h&#34;
+#include &lt;assert.h&gt;
+#include &lt;stdint.h&gt;
+#include &lt;iostream&gt;
+#include &lt;fstream&gt;
+#include &lt;string&gt;
+
+#ifdef MULTITHREADED
+#include &lt;goo/GooMutex.h&gt;
+GooMutex* mutex;
+#endif
+
+class FuzzerOutputDev : public OutputDev {
+public:
+  void drawChar(GfxState *state, double x, double y,
+                        double dx, double dy,
+                        double originX, double originY,
+                        CharCode code, int nBytes, Unicode *u, int uLen) { }
+  GBool upsideDown() { return gTrue; }
+  GBool useDrawChar() { return gTrue; }
+};
+
+extern &#34;C&#34; void LLVMFuzzerInitialize(int *argc, char ***argv) {
+  delete globalParams;
+  char *newargv[] = {
+    strdup((*argv)[0]),
+    strdup(&#34;-d&#34;),
+    strdup(&#34;all&#34;),
+  };
+  char *envp[] = {
+    strdup(&#34;POPPLER_DEBUG=1&#34;),
+    NULL,
+  };
+  assert(nullptr != execve((*argv)[0], newargv, envp));
+
+  std::string popplerData = getenv(&#34;POPPLER_FONT_PATH&#34;);
+  if (!popplerData.empty()) {
+    popplerData += &#34;/nameToUnicode&#34;;
+    std::ifstream f(popplerData.c_str());
+    if (f.good()) {
+      globalParams = new GlobalParams;
+      globalParams-&gt;setIconv(IS_LITTLE_ENDIAN ? &#34;UTF16LE&#34; : &#34;UTF16BE&#34;);
+      globalParams-&gt;addPopplerDataRAToUnicodeItem(UnicodeMap::newUnicodeMap(&#34;Adobe-CNS1-UCS2&#34;, &#34;unicodeMap&#34;, &#34;Adobe-CNS1&#34;, true, new GString(popplerData.c_str())));
+    }
+  }
+
+#ifdef MULTITHREADED
+    mutex=new GooMutex();
+#endif
+}
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  if (size &lt; 100) {
+    return 0;
+  }
+
+  FuzzedDataProvider fuzzed_data(data, size);
+
+  // Define dev
+  FuzzerOutputDev dev;
+
+  // Define input data
+  std::string test_data(reinterpret_cast&lt;const char*&gt;(data), size);
+  std::string test_data_file = std::string(getenv(&#34;FUZZER_TEMP_DIR&#34;)) + &#34;/doc.pdf&#34;;
+  std::ofstream f(test_data_file, std::ios::out | std::ios::binary);
+  f &lt;&lt; test_data;
+  f.close();
+  GString *fileName = new GString(test_data_file.c_str());
+  PDFDoc *doc = new PDFDoc(*fileName, nullptr, nullptr);
+
+  if (!doc-&gt;isOk() || doc-&gt;getNumPages() == 0) {
+    delete doc;
+    delete fileName;
+    return 0;
+  }
+
+  Catalog *catalog = doc-&gt;getCatalog();
+
+  int pgh, pgw;
+  doc-&gt;getPageCropBox(1, &amp;pgw, &amp;pgh);
+  double hDPI = 150.0;
+  double vDPI = 150.0;
+  int rotate = 0; 
+  GBool useMediaBox = false; 
+  GBool crop = false; 
+  GBool doLinks = true;
+  GBool printing = false;
+  int firstPage = 1;
+  int lastPage = doc-&gt;getNumPages(); 
+  double yBottom = 0; 
+  double yTop = pgh;
+  double xRight = pgw+10; 
+  double xLeft = -10;
+  int sliceX = -1; 
+  int sliceY = -1; 
+  int sliceW = pgw*2; 
+  int sliceH = pgh*2;
+
+  catalog-&gt;getPage(1)-&gt;display(&amp;dev, hDPI, vDPI, rotate, 
+                               doLinks, useMediaBox, crop, 
+                               printing, sliceX, sliceY, sliceW, sliceH, nullptr, nullptr);
+  
+  // Fill the parameters
+  OutputDev* outputDev = &amp;dev;
+  int firstPage = fuzzer::ConsumeIntegralInRange&lt;int&gt;(1, doc-&gt;getNumPages());
+  int lastPage = fuzzer::ConsumeIntegralInRange&lt;int&gt;(firstPage, doc-&gt;getNumPages());
+  double hDPI = fuzzer::ConsumeFloatingPoint&lt;double&gt;();
+  double vDPI = fuzzer::ConsumeFloatingPoint&lt;double&gt;();
+  int rotate = fuzzer::ConsumeIntegralInRange&lt;int&gt;(-360, 360);
+  GBool useMediaBox = fuzzer::ConsumeBool();
+  GBool crop = fuzzer::ConsumeBool();
+  GBool printing = fuzzer::ConsumeBool();
+  void* slice = nullptr;
+  DW_TAG_subroutine_typeInfinite loop_ = nullptr;
+  void* op = nullptr;
+
+  doc-&gt;displayPages(outputDev, firstPage, lastPage, hDPI, vDPI, rotate, useMediaBox, crop, printing, loop_, op);
+  
+  delete doc;
+  delete fileName;
+  return 0;
+}
+&lt;/code&gt;
+&lt;/solution&gt;
+</pre>
+
+
+<h3>Fixer prompt #3</h3>
+<pre>
+
+Given the following C++ fuzz harness and its build error message, fix the code to make it build for fuzzing.
+
+If there is undeclared identifier or unknown type name error, fix it by finding and including the related libraries.
+
+MUST RETURN THE FULL CODE, INCLUDING UNCHANGED PARTS.
+
+Below is the code needs to be built:
+&lt;code&gt;
+#include &#34;aconf.h&#34;
+#include &#34;goo/gfile.h&#34;
+#include &#34;/src/xpdf-4.05/goo/GString.h&#34;
+#include &#34;Object.h&#34;
+#include &#34;/src/xpdf-4.05/xpdf/PDFDoc.h&#34;
+#include &#34;Page.h&#34;
+#include &#34;Catalog.h&#34;
+#include &#34;SplashOutputDev.h&#34;
+#include &#34;fuzzer/FuzzedDataProvider.h&#34;
+#include &lt;assert.h&gt;
+#include &lt;stdint.h&gt;
+#include &lt;iostream&gt;
+#include &lt;fstream&gt;
+#include &lt;string&gt;
+
+#ifdef MULTITHREADED
+#include &lt;goo/GooMutex.h&gt;
+GooMutex* mutex;
+#endif
+
+class FuzzerOutputDev : public OutputDev {
+public:
+  void drawChar(GfxState *state, double x, double y,
+                        double dx, double dy,
+                        double originX, double originY,
+                        CharCode code, int nBytes, Unicode *u, int uLen) { }
+  GBool upsideDown() { return gTrue; }
+  GBool useDrawChar() { return gTrue; }
+};
+
+extern &#34;C&#34; void LLVMFuzzerInitialize(int *argc, char ***argv) {
+  delete globalParams;
+  char *newargv[] = {
+    strdup((*argv)[0]),
+    strdup(&#34;-d&#34;),
+    strdup(&#34;all&#34;),
+  };
+  char *envp[] = {
+    strdup(&#34;POPPLER_DEBUG=1&#34;),
+    NULL,
+  };
+  assert(nullptr != execve((*argv)[0], newargv, envp));
+
+  std::string popplerData = getenv(&#34;POPPLER_FONT_PATH&#34;);
+  if (!popplerData.empty()) {
+    popplerData += &#34;/nameToUnicode&#34;;
+    std::ifstream f(popplerData.c_str());
+    if (f.good()) {
+      globalParams = new GlobalParams;
+      globalParams-&gt;setIconv(IS_LITTLE_ENDIAN ? &#34;UTF16LE&#34; : &#34;UTF16BE&#34;);
+      globalParams-&gt;addPopplerDataRAToUnicodeItem(UnicodeMap::newUnicodeMap(&#34;Adobe-CNS1-UCS2&#34;, &#34;unicodeMap&#34;, &#34;Adobe-CNS1&#34;, true, new GString(popplerData.c_str())));
+    }
+  }
+
+#ifdef MULTITHREADED
+    mutex=new GooMutex();
+#endif
+}
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  if (size &lt; 100) {
+    return 0;
+  }
+
+  FuzzedDataProvider fuzzed_data(data, size);
+
+  // Define dev
+  FuzzerOutputDev dev;
+
+  // Define input data
+  std::string test_data(reinterpret_cast&lt;const char*&gt;(data), size);
+  std::string test_data_file = std::string(getenv(&#34;FUZZER_TEMP_DIR&#34;)) + &#34;/doc.pdf&#34;;
+  std::ofstream f(test_data_file, std::ios::out | std::ios::binary);
+  f &lt;&lt; test_data;
+  f.close();
+  GString *fileName = new GString(test_data_file.c_str());
+  PDFDoc *doc = new PDFDoc(*fileName, nullptr, nullptr);
+
+  if (!doc-&gt;isOk() || doc-&gt;getNumPages() == 0) {
+    delete doc;
+    delete fileName;
+    return 0;
+  }
+
+  Catalog *catalog = doc-&gt;getCatalog();
+
+  int pgh, pgw;
+  doc-&gt;getPageCropBox(1, &amp;pgw, &amp;pgh);
+  double hDPI = 150.0;
+  double vDPI = 150.0;
+  int rotate = 0; 
+  GBool useMediaBox = false; 
+  GBool crop = false; 
+  GBool doLinks = true;
+  GBool printing = false;
+  int firstPage = 1;
+  int lastPage = doc-&gt;getNumPages(); 
+  double yBottom = 0; 
+  double yTop = pgh;
+  double xRight = pgw+10; 
+  double xLeft = -10;
+  int sliceX = -1; 
+  int sliceY = -1; 
+  int sliceW = pgw*2; 
+  int sliceH = pgh*2;
+
+  catalog-&gt;getPage(1)-&gt;display(&amp;dev, hDPI, vDPI, rotate, 
+                               doLinks, useMediaBox, crop, 
+                               printing, sliceX, sliceY, sliceW, sliceH, nullptr, nullptr);
+  
+  // Fill the parameters
+  OutputDev* outputDev = &amp;dev;
+  int firstPage = fuzzer::ConsumeIntegralInRange&lt;int&gt;(1, doc-&gt;getNumPages());
+  int lastPage = fuzzer::ConsumeIntegralInRange&lt;int&gt;(firstPage, doc-&gt;getNumPages());
+  double hDPI = fuzzer::ConsumeFloatingPoint&lt;double&gt;();
+  double vDPI = fuzzer::ConsumeFloatingPoint&lt;double&gt;();
+  int rotate = fuzzer::ConsumeIntegralInRange&lt;int&gt;(-360, 360);
+  GBool useMediaBox = fuzzer::ConsumeBool();
+  GBool crop = fuzzer::ConsumeBool();
+  GBool printing = fuzzer::ConsumeBool();
+  void* slice = nullptr;
+  DW_TAG_subroutine_typeInfinite loop_ = nullptr;
+  void* op = nullptr;
+
+  doc-&gt;displayPages(outputDev, firstPage, lastPage, hDPI, vDPI, rotate, useMediaBox, crop, printing, loop_, op);
+  
+  delete doc;
+  delete fileName;
+  return 0;
+}
+&lt;/code&gt;
+
+Below is the error to fix:
+The code has the following build issues:
+&lt;error&gt;
+fuzz_JBIG2.cc:17:10: fatal error: &#39;goo/GooMutex.h&#39; file not found
+   17 | #include &lt;goo/GooMutex.h&gt;
+      |          ^~~~~~~~~~~~~~~~
+&lt;/error&gt;
+
+
+Below are instructions to assist you in fixing the error.
+&lt;instruction&gt;
+IMPORTANT: DO NOT include the header file goo/GooMutex.h in the generated fuzz target again, the file does not exist in the project-under-test.
+If the non-existent &lt;filepath&gt;goo/GooMutex.h&lt;/filepath&gt; was included for the declaration of &lt;code&gt;void PDFDoc::displayPages(OutputDev *, int, int, double, double, int, GBool, GBool, GBool, DW_TAG_subroutine_typeInfinite loop *, void *)&lt;/code&gt;, you must replace it with the EXACT path of the actual file &lt;filepath&gt;#include &#34;/src/xpdf-4.05/xpdf/PDFDoc.h&#34;&lt;/filepath&gt;. For example:
+&lt;code&gt;
+#include &#34;#include &#34;/src/xpdf-4.05/xpdf/PDFDoc.h&#34;&#34;
+&lt;/code&gt;
+Otherwise, consider replacing it with some of the following statementsthat may be correct alternatives:
+&lt;code&gt;
+#include &#34;/src/xpdf-4.05/goo/GMutex.h&#34;
+#include &#34;/src/xpdf-4.05/goo/GList.h&#34;
+#include &#34;/src/xpdf-4.05/goo/gtypes.h&#34;
+#include &#34;/src/xpdf-4.05/goo/GString.h&#34;
+#include &#34;/src/xpdf-4.05/goo/gmem.h&#34;
+&lt;/code&gt;
+
+&lt;/instruction&gt;
+
+Fix code:
+1. Consider possible solutions for the issues listed above.
+2. Choose a solution that can maximize fuzzing result, which is utilizing the function under test and feeding it not null input.
+3. Apply the solutions to the original code.
+It&#39;s important to show the complete code, not only the fixed line.
+&lt;solution&gt;
+</pre>
+
+
+
+<h3>Code #3</h3>
+
+<pre>
+&lt;code&gt;
+#include &#34;aconf.h&#34;
+#include &#34;goo/gfile.h&#34;
+#include &#34;/src/xpdf-4.05/goo/GString.h&#34;
+#include &#34;Object.h&#34;
+#include &#34;/src/xpdf-4.05/xpdf/PDFDoc.h&#34;
+#include &#34;Page.h&#34;
+#include &#34;Catalog.h&#34;
+#include &#34;SplashOutputDev.h&#34;
+#include &#34;fuzzer/FuzzedDataProvider.h&#34;
+#include &lt;assert.h&gt;
+#include &lt;stdint.h&gt;
+#include &lt;iostream&gt;
+#include &lt;fstream&gt;
+#include &lt;string&gt;
+
+#ifdef MULTITHREADED
+#include &#34;/src/xpdf-4.05/goo/GMutex.h&#34;
+GMutex* mutex;
+#endif
+
+class FuzzerOutputDev : public OutputDev {
+public:
+  void drawChar(GfxState *state, double x, double y,
+                        double dx, double dy,
+                        double originX, double originY,
+                        CharCode code, int nBytes, Unicode *u, int uLen) { }
+  GBool upsideDown() { return gTrue; }
+  GBool useDrawChar() { return gTrue; }
+};
+
+extern &#34;C&#34; void LLVMFuzzerInitialize(int *argc, char ***argv) {
+  delete globalParams;
+  char *newargv[] = {
+    strdup((*argv)[0]),
+    strdup(&#34;-d&#34;),
+    strdup(&#34;all&#34;),
+  };
+  char *envp[] = {
+    strdup(&#34;POPPLER_DEBUG=1&#34;),
+    NULL,
+  };
+  assert(nullptr != execve((*argv)[0], newargv, envp));
+
+  std::string popplerData = getenv(&#34;POPPLER_FONT_PATH&#34;);
+  if (!popplerData.empty()) {
+    popplerData += &#34;/nameToUnicode&#34;;
+    std::ifstream f(popplerData.c_str());
+    if (f.good()) {
+      globalParams = new GlobalParams;
+      globalParams-&gt;setIconv(IS_LITTLE_ENDIAN ? &#34;UTF16LE&#34; : &#34;UTF16BE&#34;);
+      globalParams-&gt;addPopplerDataRAToUnicodeItem(UnicodeMap::newUnicodeMap(&#34;Adobe-CNS1-UCS2&#34;, &#34;unicodeMap&#34;, &#34;Adobe-CNS1&#34;, true, new GString(popplerData.c_str())));
+    }
+  }
+
+#ifdef MULTITHREADED
+    mutex=new GMutex();
+#endif
+}
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  if (size &lt; 100) {
+    return 0;
+  }
+
+  FuzzedDataProvider fuzzed_data(data, size);
+
+  // Define dev
+  FuzzerOutputDev dev;
+
+  // Define input data
+  std::string test_data(reinterpret_cast&lt;const char*&gt;(data), size);
+  std::string test_data_file = std::string(getenv(&#34;FUZZER_TEMP_DIR&#34;)) + &#34;/doc.pdf&#34;;
+  std::ofstream f(test_data_file, std::ios::out | std::ios::binary);
+  f &lt;&lt; test_data;
+  f.close();
+  GString *fileName = new GString(test_data_file.c_str());
+  PDFDoc *doc = new PDFDoc(*fileName, nullptr, nullptr);
+
+  if (!doc-&gt;isOk() || doc-&gt;getNumPages() == 0) {
+    delete doc;
+    delete fileName;
+    return 0;
+  }
+
+  Catalog *catalog = doc-&gt;getCatalog();
+
+  int pgh, pgw;
+  doc-&gt;getPageCropBox(1, &amp;pgw, &amp;pgh);
+  double hDPI = 150.0;
+  double vDPI = 150.0;
+  int rotate = 0; 
+  GBool useMediaBox = false; 
+  GBool crop = false; 
+  GBool doLinks = true;
+  GBool printing = false;
+  int firstPage = 1;
+  int lastPage = doc-&gt;getNumPages(); 
+  double yBottom = 0; 
+  double yTop = pgh;
+  double xRight = pgw+10; 
+  double xLeft = -10;
+  int sliceX = -1; 
+  int sliceY = -1; 
+  int sliceW = pgw*2; 
+  int sliceH = pgh*2;
+
+  catalog-&gt;getPage(1)-&gt;display(&amp;dev, hDPI, vDPI, rotate, 
+                               doLinks, useMediaBox, crop, 
+                               printing, sliceX, sliceY, sliceW, sliceH, nullptr, nullptr);
+  
+  // Fill the parameters
+  OutputDev* outputDev = &amp;dev;
+  int firstPage = fuzzer::ConsumeIntegralInRange&lt;int&gt;(1, doc-&gt;getNumPages());
+  int lastPage = fuzzer::ConsumeIntegralInRange&lt;int&gt;(firstPage, doc-&gt;getNumPages());
+  double hDPI = fuzzer::ConsumeFloatingPoint&lt;double&gt;();
+  double vDPI = fuzzer::ConsumeFloatingPoint&lt;double&gt;();
+  int rotate = fuzzer::ConsumeIntegralInRange&lt;int&gt;(-360, 360);
+  GBool useMediaBox = fuzzer::ConsumeBool();
+  GBool crop = fuzzer::ConsumeBool();
+  GBool printing = fuzzer::ConsumeBool();
+  void* slice = nullptr;
+  DW_TAG_subroutine_typeInfinite loop_ = nullptr;
+  void* op = nullptr;
+
+  doc-&gt;displayPages(outputDev, firstPage, lastPage, hDPI, vDPI, rotate, useMediaBox, crop, printing, loop_, op);
+  
+  delete doc;
+  delete fileName;
+  return 0;
+}
+&lt;/code&gt;
+&lt;/solution&gt;
+</pre>
+
+
+<h3>Fixer prompt #4</h3>
+<pre>
+
+Given the following C++ fuzz harness and its build error message, fix the code to make it build for fuzzing.
+
+If there is undeclared identifier or unknown type name error, fix it by finding and including the related libraries.
+
+MUST RETURN THE FULL CODE, INCLUDING UNCHANGED PARTS.
+
+Below is the code needs to be built:
+&lt;code&gt;
+#include &#34;aconf.h&#34;
+#include &#34;goo/gfile.h&#34;
+#include &#34;/src/xpdf-4.05/goo/GString.h&#34;
+#include &#34;Object.h&#34;
+#include &#34;/src/xpdf-4.05/xpdf/PDFDoc.h&#34;
+#include &#34;Page.h&#34;
+#include &#34;Catalog.h&#34;
+#include &#34;SplashOutputDev.h&#34;
+#include &#34;fuzzer/FuzzedDataProvider.h&#34;
+#include &lt;assert.h&gt;
+#include &lt;stdint.h&gt;
+#include &lt;iostream&gt;
+#include &lt;fstream&gt;
+#include &lt;string&gt;
+
+#ifdef MULTITHREADED
+#include &#34;/src/xpdf-4.05/goo/GMutex.h&#34;
+GMutex* mutex;
+#endif
+
+class FuzzerOutputDev : public OutputDev {
+public:
+  void drawChar(GfxState *state, double x, double y,
+                        double dx, double dy,
+                        double originX, double originY,
+                        CharCode code, int nBytes, Unicode *u, int uLen) { }
+  GBool upsideDown() { return gTrue; }
+  GBool useDrawChar() { return gTrue; }
+};
+
+extern &#34;C&#34; void LLVMFuzzerInitialize(int *argc, char ***argv) {
+  delete globalParams;
+  char *newargv[] = {
+    strdup((*argv)[0]),
+    strdup(&#34;-d&#34;),
+    strdup(&#34;all&#34;),
+  };
+  char *envp[] = {
+    strdup(&#34;POPPLER_DEBUG=1&#34;),
+    NULL,
+  };
+  assert(nullptr != execve((*argv)[0], newargv, envp));
+
+  std::string popplerData = getenv(&#34;POPPLER_FONT_PATH&#34;);
+  if (!popplerData.empty()) {
+    popplerData += &#34;/nameToUnicode&#34;;
+    std::ifstream f(popplerData.c_str());
+    if (f.good()) {
+      globalParams = new GlobalParams;
+      globalParams-&gt;setIconv(IS_LITTLE_ENDIAN ? &#34;UTF16LE&#34; : &#34;UTF16BE&#34;);
+      globalParams-&gt;addPopplerDataRAToUnicodeItem(UnicodeMap::newUnicodeMap(&#34;Adobe-CNS1-UCS2&#34;, &#34;unicodeMap&#34;, &#34;Adobe-CNS1&#34;, true, new GString(popplerData.c_str())));
+    }
+  }
+
+#ifdef MULTITHREADED
+    mutex=new GMutex();
+#endif
+}
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  if (size &lt; 100) {
+    return 0;
+  }
+
+  FuzzedDataProvider fuzzed_data(data, size);
+
+  // Define dev
+  FuzzerOutputDev dev;
+
+  // Define input data
+  std::string test_data(reinterpret_cast&lt;const char*&gt;(data), size);
+  std::string test_data_file = std::string(getenv(&#34;FUZZER_TEMP_DIR&#34;)) + &#34;/doc.pdf&#34;;
+  std::ofstream f(test_data_file, std::ios::out | std::ios::binary);
+  f &lt;&lt; test_data;
+  f.close();
+  GString *fileName = new GString(test_data_file.c_str());
+  PDFDoc *doc = new PDFDoc(*fileName, nullptr, nullptr);
+
+  if (!doc-&gt;isOk() || doc-&gt;getNumPages() == 0) {
+    delete doc;
+    delete fileName;
+    return 0;
+  }
+
+  Catalog *catalog = doc-&gt;getCatalog();
+
+  int pgh, pgw;
+  doc-&gt;getPageCropBox(1, &amp;pgw, &amp;pgh);
+  double hDPI = 150.0;
+  double vDPI = 150.0;
+  int rotate = 0; 
+  GBool useMediaBox = false; 
+  GBool crop = false; 
+  GBool doLinks = true;
+  GBool printing = false;
+  int firstPage = 1;
+  int lastPage = doc-&gt;getNumPages(); 
+  double yBottom = 0; 
+  double yTop = pgh;
+  double xRight = pgw+10; 
+  double xLeft = -10;
+  int sliceX = -1; 
+  int sliceY = -1; 
+  int sliceW = pgw*2; 
+  int sliceH = pgh*2;
+
+  catalog-&gt;getPage(1)-&gt;display(&amp;dev, hDPI, vDPI, rotate, 
+                               doLinks, useMediaBox, crop, 
+                               printing, sliceX, sliceY, sliceW, sliceH, nullptr, nullptr);
+  
+  // Fill the parameters
+  OutputDev* outputDev = &amp;dev;
+  int firstPage = fuzzer::ConsumeIntegralInRange&lt;int&gt;(1, doc-&gt;getNumPages());
+  int lastPage = fuzzer::ConsumeIntegralInRange&lt;int&gt;(firstPage, doc-&gt;getNumPages());
+  double hDPI = fuzzer::ConsumeFloatingPoint&lt;double&gt;();
+  double vDPI = fuzzer::ConsumeFloatingPoint&lt;double&gt;();
+  int rotate = fuzzer::ConsumeIntegralInRange&lt;int&gt;(-360, 360);
+  GBool useMediaBox = fuzzer::ConsumeBool();
+  GBool crop = fuzzer::ConsumeBool();
+  GBool printing = fuzzer::ConsumeBool();
+  void* slice = nullptr;
+  DW_TAG_subroutine_typeInfinite loop_ = nullptr;
+  void* op = nullptr;
+
+  doc-&gt;displayPages(outputDev, firstPage, lastPage, hDPI, vDPI, rotate, useMediaBox, crop, printing, loop_, op);
+  
+  delete doc;
+  delete fileName;
+  return 0;
+}
+&lt;/code&gt;
+
+Below is the error to fix:
+The code has the following build issues:
+&lt;error&gt;
+fuzz_JBIG2.cc:32:10: error: use of undeclared identifier &#39;globalParams&#39;
+   32 |   delete globalParams;
+      |          ^
+fuzz_JBIG2.cc:42:18: error: invalid operands to binary expression (&#39;std::nullptr_t&#39; and &#39;int&#39;)
+   42 |   assert(nullptr != execve((*argv)[0], newargv, envp));
+      |          ~~~~~~~ ^  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/usr/include/assert.h:93:27: note: expanded from macro &#39;assert&#39;
+   93 |      (static_cast &lt;bool&gt; (expr)                                         \
+      |                           ^~~~
+fuzz_JBIG2.cc:49:7: error: use of undeclared identifier &#39;globalParams&#39;
+   49 |       globalParams = new GlobalParams;
+      |       ^
+fuzz_JBIG2.cc:49:26: error: unknown type name &#39;GlobalParams&#39;
+   49 |       globalParams = new GlobalParams;
+      |                          ^
+fuzz_JBIG2.cc:50:7: error: use of undeclared identifier &#39;globalParams&#39;
+   50 |       globalParams-&gt;setIconv(IS_LITTLE_ENDIAN ? &#34;UTF16LE&#34; : &#34;UTF16BE&#34;);
+      |       ^
+fuzz_JBIG2.cc:50:30: error: use of undeclared identifier &#39;IS_LITTLE_ENDIAN&#39;
+   50 |       globalParams-&gt;setIconv(IS_LITTLE_ENDIAN ? &#34;UTF16LE&#34; : &#34;UTF16BE&#34;);
+      |                              ^
+fuzz_JBIG2.cc:51:7: error: use of undeclared identifier &#39;globalParams&#39;
+   51 |       globalParams-&gt;addPopplerDataRAToUnicodeItem(UnicodeMap::newUnicodeMap(&#34;Adobe-CNS1-UCS2&#34;, &#34;unicodeMap&#34;, &#34;Adobe-CNS1&#34;, true, new GString(popplerData.c_str())));
+      |       ^
+fuzz_JBIG2.cc:51:51: error: use of undeclared identifier &#39;UnicodeMap&#39;
+   51 |       globalParams-&gt;addPopplerDataRAToUnicodeItem(UnicodeMap::newUnicodeMap(&#34;Adobe-CNS1-UCS2&#34;, &#34;unicodeMap&#34;, &#34;Adobe-CNS1&#34;, true, new GString(popplerData.c_str())));
+      |                                                   ^
+fuzz_JBIG2.cc:68:19: error: variable type &#39;FuzzerOutputDev&#39; is an abstract class
+   68 |   FuzzerOutputDev dev;
+      |                   ^
+../xpdf/OutputDev.h:64:17: note: unimplemented pure virtual method &#39;interpretType3Chars&#39; in &#39;FuzzerOutputDev&#39;
+   64 |   virtual GBool interpretType3Chars() = 0;
+      |                 ^
+fuzz_JBIG2.cc:77:21: error: no matching constructor for initialization of &#39;PDFDoc&#39;
+   77 |   PDFDoc *doc = new PDFDoc(*fileName, nullptr, nullptr);
+      |                     ^      ~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/src/xpdf-4.05/xpdf/PDFDoc.h:38:3: note: candidate constructor not viable: no known conversion from &#39;GString&#39; to &#39;GString *&#39; for 1st argument; remove *
+   38 |   PDFDoc(GString *fileNameA, GString *ownerPassword = NULL,
+      |   ^      ~~~~~~~~~~~~~~~~~~
+/src/xpdf-4.05/xpdf/PDFDoc.h:48:3: note: candidate constructor not viable: no known conversion from &#39;GString&#39; to &#39;char *&#39; for 1st argument
+   48 |   PDFDoc(char *fileNameA, GString *ownerPassword = NULL,
+      |   ^      ~~~~~~~~~~~~~~~
+/src/xpdf-4.05/xpdf/PDFDoc.h:51:3: note: candidate constructor not viable: no known conversion from &#39;GString&#39; to &#39;BaseStream *&#39; for 1st argument
+   51 |   PDFDoc(BaseStream *strA, GString *ownerPassword = NULL,
+      |   ^      ~~~~~~~~~~~~~~~~
+/src/xpdf-4.05/xpdf/PDFDoc.h:35:7: note: candidate constructor (the implicit copy constructor) not viable: requires 1 argument, but 3 were provided
+   35 | class PDFDoc {
+      |       ^~~~~~
+fuzz_JBIG2.cc:88:8: error: no member named &#39;getPageCropBox&#39; in &#39;PDFDoc&#39;
+   88 |   doc-&gt;getPageCropBox(1, &amp;pgw, &amp;pgh);
+      |   ~~~  ^
+fuzz_JBIG2.cc:113:7: error: redefinition of &#39;firstPage&#39;
+  113 |   int firstPage = fuzzer::ConsumeIntegralInRange&lt;int&gt;(1, doc-&gt;getNumPages());
+      |       ^
+fuzz_JBIG2.cc:96:7: note: previous definition is here
+   96 |   int firstPage = 1;
+      |       ^
+fuzz_JBIG2.cc:113:19: error: use of undeclared identifier &#39;fuzzer&#39;
+  113 |   int firstPage = fuzzer::ConsumeIntegralInRange&lt;int&gt;(1, doc-&gt;getNumPages());
+      |                   ^
+fuzz_JBIG2.cc:113:53: error: expected &#39;(&#39; for function-style cast or type construction
+  113 |   int firstPage = fuzzer::ConsumeIntegralInRange&lt;int&gt;(1, doc-&gt;getNumPages());
+      |                                                  ~~~^
+fuzz_JBIG2.cc:114:7: error: redefinition of &#39;lastPage&#39;
+  114 |   int lastPage = fuzzer::ConsumeIntegralInRange&lt;int&gt;(firstPage, doc-&gt;getNumPages());
+      |       ^
+fuzz_JBIG2.cc:97:7: note: previous definition is here
+   97 |   int lastPage = doc-&gt;getNumPages();
+      |       ^
+fuzz_JBIG2.cc:114:18: error: use of undeclared identifier &#39;fuzzer&#39;
+  114 |   int lastPage = fuzzer::ConsumeIntegralInRange&lt;int&gt;(firstPage, doc-&gt;getNumPages());
+      |                  ^
+fuzz_JBIG2.cc:114:52: error: expected &#39;(&#39; for function-style cast or type construction
+  114 |   int lastPage = fuzzer::ConsumeIntegralInRange&lt;int&gt;(firstPage, doc-&gt;getNumPages());
+      |                                                 ~~~^
+fuzz_JBIG2.cc:115:10: error: redefinition of &#39;hDPI&#39;
+  115 |   double hDPI = fuzzer::ConsumeFloatingPoint&lt;double&gt;();
+      |          ^
+fuzz_JBIG2.cc:89:10: note: previous definition is here
+   89 |   double hDPI = 150.0;
+      |          ^
+fuzz_JBIG2.cc:115:17: error: use of undeclared identifier &#39;fuzzer&#39;
+  115 |   double hDPI = fuzzer::ConsumeFloatingPoint&lt;double&gt;();
+      |                 ^
+fatal error: too many errors emitted, stopping now [-ferror-limit=]
+&lt;/error&gt;
+
+
+Below are instructions to assist you in fixing the error.
+&lt;instruction&gt;
+IMPORTANT: ALWAYS INCLUDE STANDARD LIBRARIES BEFORE PROJECT-SPECIFIC (xpdf) LIBRARIES. This order prevents errors like &#34;unknown type name&#34; for basic types. Additionally, include project-specific libraries that contain declarations before those thatuse these declared symbols.
+&lt;/instruction&gt;
+
+Fix code:
+1. Consider possible solutions for the issues listed above.
+2. Choose a solution that can maximize fuzzing result, which is utilizing the function under test and feeding it not null input.
+3. Apply the solutions to the original code.
+It&#39;s important to show the complete code, not only the fixed line.
+&lt;solution&gt;
+</pre>
+
+
+
+<h3>Code #4</h3>
+
+<pre>
+Here is the corrected code:
+
+```cpp
+#include &lt;assert.h&gt;
+#include &lt;stdint.h&gt;
+#include &lt;iostream&gt;
+#include &lt;fstream&gt;
+#include &lt;string&gt;
+
+#include &#34;aconf.h&#34;
+#include &#34;goo/gfile.h&#34;
+#include &#34;/src/xpdf-4.05/goo/GString.h&#34;
+#include &#34;Object.h&#34;
+#include &#34;/src/xpdf-4.05/xpdf/PDFDoc.h&#34;
+#include &#34;Page.h&#34;
+#include &#34;Catalog.h&#34;
+#include &#34;SplashOutputDev.h&#34;
+#include &#34;fuzzer/FuzzedDataProvider.h&#34;
+#include &#34;GlobalParams.h&#34;
+#include &#34;UnicodeMap.h&#34;
+
+#ifdef MULTITHREADED
+#include &#34;/src/xpdf-4.05/goo/GMutex.h&#34;
+GMutex* mutex;
+#endif
+
+class FuzzerOutputDev : public OutputDev {
+public:
+  void drawChar(GfxState *state, double x, double y,
+                        double dx, double dy,
+                        double originX, double originY,
+                        CharCode code, int nBytes, Unicode *u, int uLen) { }
+  GBool upsideDown() { return gTrue; }
+  GBool useDrawChar() { return gTrue; }
+  GBool interpretType3Chars() { return gTrue; }
+};
+
+extern &#34;C&#34; void LLVMFuzzerInitialize(int *argc, char ***argv) {
+  globalParams = new GlobalParams;
+  char *newargv[] = {
+    strdup((*argv)[0]),
+    strdup(&#34;-d&#34;),
+    strdup(&#34;all&#34;),
+  };
+  char *envp[] = {
+    strdup(&#34;POPPLER_DEBUG=1&#34;),
+    NULL,
+  };
+  execve((*argv)[0], newargv, envp);
+
+  std::string popplerData = getenv(&#34;POPPLER_FONT_PATH&#34;);
+  if (!popplerData.empty()) {
+    popplerData += &#34;/nameToUnicode&#34;;
+    std::ifstream f(popplerData.c_str());
+    if (f.good()) {
+      globalParams-&gt;setIconv(&#34;UTF16LE&#34;);
+      globalParams-&gt;addPopplerDataRAToUnicodeItem(UnicodeMap::newUnicodeMap(&#34;Adobe-CNS1-UCS2&#34;, &#34;unicodeMap&#34;, &#34;Adobe-CNS1&#34;, true, new GString(popplerData.c_str())));
+    }
+  }
+
+#ifdef MULTITHREADED
+    mutex=new GMutex();
+#endif
+}
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  if (size &lt; 100) {
+    return 0;
+  }
+
+  FuzzedDataProvider fuzzed_data(data, size);
+
+  // Define dev
+  FuzzerOutputDev dev;
+
+  // Define input data
+  std::string test_data(reinterpret_cast&lt;const char*&gt;(data), size);
+  std::string test_data_file = std::string(getenv(&#34;FUZZER_TEMP_DIR&#34;)) + &#34;/doc.pdf&#34;;
+  std::ofstream f(test_data_file, std::ios::out | std::ios::binary);
+  f &lt;&lt; test_data;
+  f.close();
+  GString fileName(test_data_file.c_str());
+  PDFDoc doc(fileName, nullptr, nullptr);
+
+  if (!doc.isOk() || doc.getNumPages() == 0) {
+    return 0;
+  }
+
+  Catalog *catalog = doc.getCatalog();
+
+  int pgh, pgw;
+  doc.getPageCropBox(1, &amp;pgw, &amp;pgh);
+  double hDPI = 150.0;
+  double vDPI = 150.0;
+  int rotate = 0; 
+  GBool useMediaBox = false; 
+  GBool crop = false; 
+  GBool doLinks = true;
+  GBool printing = false;
+  int firstPage = 1;
+  int lastPage = doc.getNumPages(); 
+  double yBottom = 0; 
+  double yTop = pgh;
+  double xRight = pgw+10; 
+  double xLeft = -10;
+  int sliceX = -1; 
+  int sliceY = -1; 
+  int sliceW = pgw*2; 
+  int sliceH = pgh*2;
+
+  catalog-&gt;getPage(1)-&gt;display(&amp;dev, hDPI, vDPI, rotate, 
+                               doLinks, useMediaBox, crop, 
+                               printing, sliceX, sliceY, sliceW, sliceH, nullptr, nullptr);
+  
+  // Fill the parameters
+  OutputDev* outputDev = &amp;dev;
+  firstPage = fuzzed_data.ConsumeIntegralInRange&lt;int&gt;(1, doc.getNumPages());
+  lastPage = fuzzed_data.ConsumeIntegralInRange&lt;int&gt;(firstPage, doc.getNumPages());
+  hDPI = fuzzed_data.ConsumeFloatingPoint&lt;double&gt;();
+  vDPI = fuzzed_data.ConsumeFloatingPoint&lt;double&gt;();
+  rotate = fuzzed_data.ConsumeIntegralInRange&lt;int&gt;(-360, 360);
+  useMediaBox = fuzzed_data.ConsumeBool();
+  crop = fuzzed_data.ConsumeBool();
+  printing = fuzzed_data.ConsumeBool();
+  void* slice = nullptr;
+  void* loop_ = nullptr;
+  void* op = nullptr;
+
+  doc.displayPages(outputDev, firstPage, lastPage, hDPI, vDPI, rotate, useMediaBox, crop, printing, loop_, op);
+  
+  return 0;
+}
+```
+
+The major changes are:
+
+1. Included &#34;GlobalParams.h&#34; and &#34;UnicodeMap.h&#34; to fix undeclared identifier errors.
+2. Implemented the pure virtual function &#39;interpretType3Chars&#39; in &#39;FuzzerOutputDev&#39;.
+3. Removed the assert statement as execve does not return nullptr.
+4. Changed the PDFDoc initialization to use GString instead of GString pointer.
+5. Removed the redefinition of variables by reusing the existing variables.
+6. Changed the fuzzer namespace to fuzzed_data object to consume data.
+7. Removed the delete statements as we are not using new to allocate memory.
+</pre>
+
+
+<h3>Fixer prompt #5</h3>
+<pre>
+
+Given the following C++ fuzz harness and its build error message, fix the code to make it build for fuzzing.
+
+If there is undeclared identifier or unknown type name error, fix it by finding and including the related libraries.
+
+MUST RETURN THE FULL CODE, INCLUDING UNCHANGED PARTS.
+
+Below is the code needs to be built:
+&lt;code&gt;
+#include &lt;assert.h&gt;
+#include &lt;stdint.h&gt;
+#include &lt;iostream&gt;
+#include &lt;fstream&gt;
+#include &lt;string&gt;
+
+#include &#34;aconf.h&#34;
+#include &#34;goo/gfile.h&#34;
+#include &#34;/src/xpdf-4.05/goo/GString.h&#34;
+#include &#34;Object.h&#34;
+#include &#34;/src/xpdf-4.05/xpdf/PDFDoc.h&#34;
+#include &#34;Page.h&#34;
+#include &#34;Catalog.h&#34;
+#include &#34;SplashOutputDev.h&#34;
+#include &#34;fuzzer/FuzzedDataProvider.h&#34;
+#include &#34;GlobalParams.h&#34;
+#include &#34;UnicodeMap.h&#34;
+
+#ifdef MULTITHREADED
+#include &#34;/src/xpdf-4.05/goo/GMutex.h&#34;
+GMutex* mutex;
+#endif
+
+class FuzzerOutputDev : public OutputDev {
+public:
+  void drawChar(GfxState *state, double x, double y,
+                        double dx, double dy,
+                        double originX, double originY,
+                        CharCode code, int nBytes, Unicode *u, int uLen) { }
+  GBool upsideDown() { return gTrue; }
+  GBool useDrawChar() { return gTrue; }
+  GBool interpretType3Chars() { return gTrue; }
+};
+
+extern &#34;C&#34; void LLVMFuzzerInitialize(int *argc, char ***argv) {
+  globalParams = new GlobalParams;
+  char *newargv[] = {
+    strdup((*argv)[0]),
+    strdup(&#34;-d&#34;),
+    strdup(&#34;all&#34;),
+  };
+  char *envp[] = {
+    strdup(&#34;POPPLER_DEBUG=1&#34;),
+    NULL,
+  };
+  execve((*argv)[0], newargv, envp);
+
+  std::string popplerData = getenv(&#34;POPPLER_FONT_PATH&#34;);
+  if (!popplerData.empty()) {
+    popplerData += &#34;/nameToUnicode&#34;;
+    std::ifstream f(popplerData.c_str());
+    if (f.good()) {
+      globalParams-&gt;setIconv(&#34;UTF16LE&#34;);
+      globalParams-&gt;addPopplerDataRAToUnicodeItem(UnicodeMap::newUnicodeMap(&#34;Adobe-CNS1-UCS2&#34;, &#34;unicodeMap&#34;, &#34;Adobe-CNS1&#34;, true, new GString(popplerData.c_str())));
+    }
+  }
+
+#ifdef MULTITHREADED
+    mutex=new GMutex();
+#endif
+}
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  if (size &lt; 100) {
+    return 0;
+  }
+
+  FuzzedDataProvider fuzzed_data(data, size);
+
+  // Define dev
+  FuzzerOutputDev dev;
+
+  // Define input data
+  std::string test_data(reinterpret_cast&lt;const char*&gt;(data), size);
+  std::string test_data_file = std::string(getenv(&#34;FUZZER_TEMP_DIR&#34;)) + &#34;/doc.pdf&#34;;
+  std::ofstream f(test_data_file, std::ios::out | std::ios::binary);
+  f &lt;&lt; test_data;
+  f.close();
+  GString fileName(test_data_file.c_str());
+  PDFDoc doc(fileName, nullptr, nullptr);
+
+  if (!doc.isOk() || doc.getNumPages() == 0) {
+    return 0;
+  }
+
+  Catalog *catalog = doc.getCatalog();
+
+  int pgh, pgw;
+  doc.getPageCropBox(1, &amp;pgw, &amp;pgh);
+  double hDPI = 150.0;
+  double vDPI = 150.0;
+  int rotate = 0; 
+  GBool useMediaBox = false; 
+  GBool crop = false; 
+  GBool doLinks = true;
+  GBool printing = false;
+  int firstPage = 1;
+  int lastPage = doc.getNumPages(); 
+  double yBottom = 0; 
+  double yTop = pgh;
+  double xRight = pgw+10; 
+  double xLeft = -10;
+  int sliceX = -1; 
+  int sliceY = -1; 
+  int sliceW = pgw*2; 
+  int sliceH = pgh*2;
+
+  catalog-&gt;getPage(1)-&gt;display(&amp;dev, hDPI, vDPI, rotate, 
+                               doLinks, useMediaBox, crop, 
+                               printing, sliceX, sliceY, sliceW, sliceH, nullptr, nullptr);
+  
+  // Fill the parameters
+  OutputDev* outputDev = &amp;dev;
+  firstPage = fuzzed_data.ConsumeIntegralInRange&lt;int&gt;(1, doc.getNumPages());
+  lastPage = fuzzed_data.ConsumeIntegralInRange&lt;int&gt;(firstPage, doc.getNumPages());
+  hDPI = fuzzed_data.ConsumeFloatingPoint&lt;double&gt;();
+  vDPI = fuzzed_data.ConsumeFloatingPoint&lt;double&gt;();
+  rotate = fuzzed_data.ConsumeIntegralInRange&lt;int&gt;(-360, 360);
+  useMediaBox = fuzzed_data.ConsumeBool();
+  crop = fuzzed_data.ConsumeBool();
+  printing = fuzzed_data.ConsumeBool();
+  void* slice = nullptr;
+  void* loop_ = nullptr;
+  void* op = nullptr;
+
+  doc.displayPages(outputDev, firstPage, lastPage, hDPI, vDPI, rotate, useMediaBox, crop, printing, loop_, op);
+  
+  return 0;
+}
+&lt;/code&gt;
+
+Below is the error to fix:
+The code has the following build issues:
+&lt;error&gt;
+fuzz_JBIG2.cc:36:22: error: no matching constructor for initialization of &#39;GlobalParams&#39;
+   36 |   globalParams = new GlobalParams;
+      |                      ^
+../xpdf/GlobalParams.h:236:3: note: candidate constructor not viable: requires single argument &#39;cfgFileName&#39;, but no arguments were provided
+  236 |   GlobalParams(const char *cfgFileName);
+      |   ^            ~~~~~~~~~~~~~~~~~~~~~~~
+../xpdf/GlobalParams.h:231:7: note: candidate constructor (the implicit copy constructor) not viable: requires 1 argument, but 0 were provided
+  231 | class GlobalParams {
+      |       ^~~~~~~~~~~~
+fuzz_JBIG2.cc:53:21: error: no member named &#39;setIconv&#39; in &#39;GlobalParams&#39;
+   53 |       globalParams-&gt;setIconv(&#34;UTF16LE&#34;);
+      |       ~~~~~~~~~~~~  ^
+fuzz_JBIG2.cc:54:21: error: no member named &#39;addPopplerDataRAToUnicodeItem&#39; in &#39;GlobalParams&#39;
+   54 |       globalParams-&gt;addPopplerDataRAToUnicodeItem(UnicodeMap::newUnicodeMap(&#34;Adobe-CNS1-UCS2&#34;, &#34;unicodeMap&#34;, &#34;Adobe-CNS1&#34;, true, new GString(popplerData.c_str())));
+      |       ~~~~~~~~~~~~  ^
+fuzz_JBIG2.cc:54:63: error: no member named &#39;newUnicodeMap&#39; in &#39;UnicodeMap&#39;
+   54 |       globalParams-&gt;addPopplerDataRAToUnicodeItem(UnicodeMap::newUnicodeMap(&#34;Adobe-CNS1-UCS2&#34;, &#34;unicodeMap&#34;, &#34;Adobe-CNS1&#34;, true, new GString(popplerData.c_str())));
+      |                                                   ~~~~~~~~~~~~^
+fuzz_JBIG2.cc:80:10: error: no matching constructor for initialization of &#39;PDFDoc&#39;
+   80 |   PDFDoc doc(fileName, nullptr, nullptr);
+      |          ^   ~~~~~~~~~~~~~~~~~~~~~~~~~~
+/src/xpdf-4.05/xpdf/PDFDoc.h:38:3: note: candidate constructor not viable: no known conversion from &#39;GString&#39; to &#39;GString *&#39; for 1st argument; take the address of the argument with &amp;
+   38 |   PDFDoc(GString *fileNameA, GString *ownerPassword = NULL,
+      |   ^      ~~~~~~~~~~~~~~~~~~
+/src/xpdf-4.05/xpdf/PDFDoc.h:48:3: note: candidate constructor not viable: no known conversion from &#39;GString&#39; to &#39;char *&#39; for 1st argument
+   48 |   PDFDoc(char *fileNameA, GString *ownerPassword = NULL,
+      |   ^      ~~~~~~~~~~~~~~~
+/src/xpdf-4.05/xpdf/PDFDoc.h:51:3: note: candidate constructor not viable: no known conversion from &#39;GString&#39; to &#39;BaseStream *&#39; for 1st argument
+   51 |   PDFDoc(BaseStream *strA, GString *ownerPassword = NULL,
+      |   ^      ~~~~~~~~~~~~~~~~
+/src/xpdf-4.05/xpdf/PDFDoc.h:35:7: note: candidate constructor (the implicit copy constructor) not viable: requires 1 argument, but 3 were provided
+   35 | class PDFDoc {
+      |       ^~~~~~
+fuzz_JBIG2.cc:89:7: error: no member named &#39;getPageCropBox&#39; in &#39;PDFDoc&#39;
+   89 |   doc.getPageCropBox(1, &amp;pgw, &amp;pgh);
+      |   ~~~ ^
+fuzz_JBIG2.cc:110:50: error: too many arguments to function call, expected at most 9, have 14
+  108 |   catalog-&gt;getPage(1)-&gt;display(&amp;dev, hDPI, vDPI, rotate,
+      |   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  109 |                                doLinks, useMediaBox, crop,
+  110 |                                printing, sliceX, sliceY, sliceW, sliceH, nullptr, nullptr);
+      |                                                  ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/src/xpdf-4.05/xpdf/Page.h:166:8: note: &#39;display&#39; declared here
+  166 |   void display(OutputDev *out, double hDPI, double vDPI,
+      |        ^       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  167 |                int rotate, GBool useMediaBox, GBool crop,
+      |                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  168 |                GBool printing,
+      |                ~~~~~~~~~~~~~~~
+  169 |                GBool (*abortCheckCbk)(void *data) = NULL,
+      |                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  170 |                void *abortCheckCbkData = NULL);
+      |                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+fuzz_JBIG2.cc:126:101: error: cannot initialize a parameter of type &#39;GBool (*)(void *)&#39; (aka &#39;int (*)(void *)&#39;) with an lvalue of type &#39;void *&#39;
+  126 |   doc.displayPages(outputDev, firstPage, lastPage, hDPI, vDPI, rotate, useMediaBox, crop, printing, loop_, op);
+      |                                                                                                     ^~~~~
+/src/xpdf-4.05/xpdf/PDFDoc.h:113:15: note: passing argument to parameter &#39;abortCheckCbk&#39; here
+  113 |                     GBool (*abortCheckCbk)(void *data) = NULL,
+      |                             ^
+&lt;/error&gt;
+
+
+
+
+Fix code:
+1. Consider possible solutions for the issues listed above.
+2. Choose a solution that can maximize fuzzing result, which is utilizing the function under test and feeding it not null input.
+3. Apply the solutions to the original code.
+It&#39;s important to show the complete code, not only the fixed line.
+&lt;solution&gt;
+</pre>
+
+
+
+<h3>Code #5</h3>
+
+<pre>
+&lt;code&gt;
+#include &lt;assert.h&gt;
+#include &lt;stdint.h&gt;
+#include &lt;iostream&gt;
+#include &lt;fstream&gt;
+#include &lt;string&gt;
+
+#include &#34;aconf.h&#34;
+#include &#34;goo/gfile.h&#34;
+#include &#34;/src/xpdf-4.05/goo/GString.h&#34;
+#include &#34;Object.h&#34;
+#include &#34;/src/xpdf-4.05/xpdf/PDFDoc.h&#34;
+#include &#34;Page.h&#34;
+#include &#34;Catalog.h&#34;
+#include &#34;SplashOutputDev.h&#34;
+#include &#34;fuzzer/FuzzedDataProvider.h&#34;
+#include &#34;GlobalParams.h&#34;
+#include &#34;UnicodeMap.h&#34;
+
+#ifdef MULTITHREADED
+#include &#34;/src/xpdf-4.05/goo/GMutex.h&#34;
+GMutex* mutex;
+#endif
+
+class FuzzerOutputDev : public OutputDev {
+public:
+  void drawChar(GfxState *state, double x, double y,
+                        double dx, double dy,
+                        double originX, double originY,
+                        CharCode code, int nBytes, Unicode *u, int uLen) { }
+  GBool upsideDown() { return gTrue; }
+  GBool useDrawChar() { return gTrue; }
+  GBool interpretType3Chars() { return gTrue; }
+};
+
+extern &#34;C&#34; void LLVMFuzzerInitialize(int *argc, char ***argv) {
+  globalParams = new GlobalParams(nullptr);
+
+#ifdef MULTITHREADED
+    mutex=new GMutex();
+#endif
+}
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  if (size &lt; 100) {
+    return 0;
+  }
+
+  FuzzedDataProvider fuzzed_data(data, size);
+
+  // Define dev
+  FuzzerOutputDev dev;
+
+  // Define input data
+  std::string test_data(reinterpret_cast&lt;const char*&gt;(data), size);
+  std::string test_data_file = std::string(getenv(&#34;FUZZER_TEMP_DIR&#34;)) + &#34;/doc.pdf&#34;;
+  std::ofstream f(test_data_file, std::ios::out | std::ios::binary);
+  f &lt;&lt; test_data;
+  f.close();
+  GString fileName(test_data_file.c_str());
+  PDFDoc doc(&amp;fileName, nullptr, nullptr);
+
+  if (!doc.isOk() || doc.getNumPages() == 0) {
+    return 0;
+  }
+
+  Catalog *catalog = doc.getCatalog();
+
+  int pgh, pgw;
+  doc.getPage(1)-&gt;getCropBox(&amp;pgw, &amp;pgh);
+  double hDPI = 150.0;
+  double vDPI = 150.0;
+  int rotate = 0; 
+  GBool useMediaBox = false; 
+  GBool crop = false; 
+  GBool doLinks = true;
+  GBool printing = false;
+  int firstPage = 1;
+  int lastPage = doc.getNumPages(); 
+  double yBottom = 0; 
+  double yTop = pgh;
+  double xRight = pgw+10; 
+  double xLeft = -10;
+  int sliceX = -1; 
+  int sliceY = -1; 
+  int sliceW = pgw*2; 
+  int sliceH = pgh*2;
+
+  catalog-&gt;getPage(1)-&gt;display(&amp;dev, hDPI, vDPI, rotate, 
+                               doLinks, useMediaBox, crop, 
+                               printing, nullptr, nullptr);
+  
+  // Fill the parameters
+  OutputDev* outputDev = &amp;dev;
+  firstPage = fuzzed_data.ConsumeIntegralInRange&lt;int&gt;(1, doc.getNumPages());
+  lastPage = fuzzed_data.ConsumeIntegralInRange&lt;int&gt;(firstPage, doc.getNumPages());
+  hDPI = fuzzed_data.ConsumeFloatingPoint&lt;double&gt;();
+  vDPI = fuzzed_data.ConsumeFloatingPoint&lt;double&gt;();
+  rotate = fuzzed_data.ConsumeIntegralInRange&lt;int&gt;(-360, 360);
+  useMediaBox = fuzzed_data.ConsumeBool();
+  crop = fuzzed_data.ConsumeBool();
+  printing = fuzzed_data.ConsumeBool();
+  GBool (*abortCheckCbk)(void *data) = nullptr;
+  void *abortCheckCbkData = nullptr;
+
+  doc.displayPages(outputDev, firstPage, lastPage, hDPI, vDPI, rotate, useMediaBox, crop, printing, abortCheckCbk, abortCheckCbkData);
+  
+  return 0;
+}
+&lt;/code&gt;
+&lt;/solution&gt;
+</pre>
+
+
+<h2>Logs</h2>
+<pre>
+Fixing /home/chyun/oss-fuzz-gen/results7/output-xpdf-_zn6pdfdoc12displaypagesep9outputdeviiddiiiipfipves2_/fixed_targets/01.cc with gpt-4, attempt 1.
+Fixing /home/chyun/oss-fuzz-gen/results7/output-xpdf-_zn6pdfdoc12displaypagesep9outputdeviiddiiiipfipves2_/fixed_targets/01.cc with gpt-4, attempt 2.
+Fixing /home/chyun/oss-fuzz-gen/results7/output-xpdf-_zn6pdfdoc12displaypagesep9outputdeviiddiiiipfipves2_/fixed_targets/01.cc with gpt-4, attempt 3.
+Fixing /home/chyun/oss-fuzz-gen/results7/output-xpdf-_zn6pdfdoc12displaypagesep9outputdeviiddiiiipfipves2_/fixed_targets/01.cc with gpt-4, attempt 4.
+Fixing /home/chyun/oss-fuzz-gen/results7/output-xpdf-_zn6pdfdoc12displaypagesep9outputdeviiddiiiipfipves2_/fixed_targets/01.cc with gpt-4, attempt 5.
+Failed to build /home/chyun/oss-fuzz-gen/results7/output-xpdf-_zn6pdfdoc12displaypagesep9outputdeviiddiiiipfipves2_/fixed_targets/01.cc with gpt-4 in 5 iterations of fixing.
+
+</pre>
+
+<h2>Run logs</h2>
+<pre>
+
+</pre>
+
+
+</body>

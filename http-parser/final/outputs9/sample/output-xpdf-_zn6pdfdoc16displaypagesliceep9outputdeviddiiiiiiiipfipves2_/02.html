@@ -1,0 +1,1166 @@
+<!doctype html>
+
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Experiment results</title>
+<style>
+* {
+    box-sizing: border-box;
+}
+
+html {
+    line-height: 1.15;
+}
+
+body {
+    font-family: sans-serif;
+    font-size: 16px;
+}
+
+table {
+    border-collapse: collapse;
+    border-spacing: 0;
+}
+
+td, th {
+    border-right: 1px #dedede solid;
+    border-bottom: 1px #dedede solid;
+    padding: 5px;
+    text-align: left;
+}
+td:first-child, th:first-child {
+    border-left: 1px #dedede solid;
+}
+th {
+    border-top: 1px #dedede solid;
+}
+
+tbody tr:nth-child(odd) {
+    background-color: #f4f5ff;
+}
+</style>
+<body>
+    LLM: 
+    
+<h1>output-xpdf-_zn6pdfdoc16displaypagesliceep9outputdeviddiiiiiiiipfipves2_ / 02</h1>
+Bug: True
+<br>
+Crash reason: NO_SEMANTIC_ERR
+<br>
+<br>
+
+<h2>Triage</h2>
+<pre>
+The crash is caused by a bug in the fuzz driver.
+
+The memory leak is originating from the fuzz driver code, specifically the LLVMFuzzerTestOneInput function. The MemStream object is being created using the &#39;new&#39; keyword which allocates memory on the heap, but there is no corresponding &#39;delete&#39; to deallocate this memory, leading to a memory leak.
+</pre>
+<br>
+
+
+
+
+
+<h3>Final code</h3>
+
+<pre>
+#include &#34;/src/xpdf-4.05/xpdf/PDFDoc.h&#34;
+#include &#34;/src/xpdf-4.05/xpdf/Stream.h&#34;
+#include &#34;/src/xpdf-4.05/xpdf/Object.h&#34;
+#include &#34;/src/xpdf-4.05/goo/GString.h&#34;
+#include &#34;OutputDev.h&#34;
+#include &lt;cstddef&gt;
+#include &lt;cstdint&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(uint8_t *data, size_t size) {
+    if ( size == 0 )
+        return 0;
+
+    Object obj;
+    MemStream *memStream = new MemStream((char*)data, 0, size, &amp;obj);
+    GString *fileName = new GString(&#34;dummy&#34;);
+    PDFDoc *doc = new PDFDoc(fileName, NULL, NULL);
+
+    if (doc-&gt;isOk()) {
+        FuzzedDataProvider fdp(data, size);
+
+        int pageNum = fdp.ConsumeIntegralInRange&lt;int&gt;(1, doc-&gt;getNumPages());
+        double hDPI = fdp.ConsumeFloatingPoint&lt;double&gt;();
+        double vDPI = fdp.ConsumeFloatingPoint&lt;double&gt;();
+        int rotate = fdp.ConsumeIntegral&lt;int&gt;();
+        GBool useMediaBox = fdp.ConsumeBool();
+        GBool crop = fdp.ConsumeBool();
+        GBool printing = fdp.ConsumeBool();
+        GBool doLinks = fdp.ConsumeBool();
+        int sliceX = fdp.ConsumeIntegral&lt;int&gt;();
+        int sliceY = fdp.ConsumeIntegral&lt;int&gt;();
+        int sliceW = fdp.ConsumeIntegral&lt;int&gt;();
+        int sliceH = fdp.ConsumeIntegral&lt;int&gt;();
+        void *profileData = 0;
+        GBool (*abortCheckCbk)(void *data) = NULL;
+
+        doc-&gt;displayPageSlice(nullptr, pageNum, hDPI, vDPI, rotate, useMediaBox, crop, printing, sliceX, sliceY, sliceW, sliceH, abortCheckCbk, profileData);
+    }
+
+    delete doc;
+
+    return 0;
+}
+</pre>
+
+
+<h3>Fixer prompt #1</h3>
+<pre>
+
+Given the following C++ fuzz harness and its build error message, fix the code to make it build for fuzzing.
+
+If there is undeclared identifier or unknown type name error, fix it by finding and including the related libraries.
+
+MUST RETURN THE FULL CODE, INCLUDING UNCHANGED PARTS.
+
+Below is the code needs to be built:
+&lt;code&gt;
+#include &#34;PDFDoc.h&#34;
+#include &#34;PDFDocFactory.h&#34;
+#include &#34;OutputDev.h&#34;
+#include &lt;cstddef&gt;
+#include &lt;cstdint&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(uint8_t *data, size_t size) {
+    if ( size == 0 )
+        return 0;
+
+    PDFDocFactory pdfDocFactory;
+    MemStream *memStream = new MemStream((char*)data, 0, size, Object(objNull));
+    PDFDoc *doc = pdfDocFactory.createPDFDoc(*memStream-&gt;getDict(), memStream);
+
+    FuzzedDataProvider fdp(data, size);
+
+    int pageNum = fdp.ConsumeIntegralInRange&lt;int&gt;(1, doc-&gt;getNumPages());
+    double hDPI = fdp.ConsumeFloatingPoint&lt;double&gt;();
+    double vDPI = fdp.ConsumeFloatingPoint&lt;double&gt;();
+    int rotate = fdp.ConsumeIntegral&lt;int&gt;();
+    GBool useMediaBox = fdp.ConsumeBool();
+    GBool crop = fdp.ConsumeBool();
+    GBool doLinks = fdp.ConsumeBool();
+    int sliceX = fdp.ConsumeIntegral&lt;int&gt;();
+    int sliceY = fdp.ConsumeIntegral&lt;int&gt;();
+    int sliceW = fdp.ConsumeIntegral&lt;int&gt;();
+    int sliceH = fdp.ConsumeIntegral&lt;int&gt;();
+    void *profileData = 0;
+    GBool (*abortCheckCbk)(void *data) = NULL;
+
+    doc-&gt;displayPageSlice(nullptr, pageNum, hDPI, vDPI, rotate, useMediaBox, crop, printing, sliceX, sliceY, sliceW, sliceH, abortCheckCbk, profileData);
+
+    delete doc;
+
+    return 0;
+}
+&lt;/code&gt;
+
+Below is the error to fix:
+The code has the following build issues:
+&lt;error&gt;
+fuzz_JBIG2.cc:2:10: fatal error: &#39;PDFDocFactory.h&#39; file not found
+    2 | #include &#34;PDFDocFactory.h&#34;
+      |          ^~~~~~~~~~~~~~~~~
+&lt;/error&gt;
+
+
+Below are instructions to assist you in fixing the error.
+&lt;instruction&gt;
+IMPORTANT: DO NOT include the header file PDFDocFactory.h in the generated fuzz target again, the file does not exist in the project-under-test.
+If the non-existent &lt;filepath&gt;PDFDocFactory.h&lt;/filepath&gt; was included for the declaration of &lt;code&gt;void PDFDoc::displayPageSlice(OutputDev *, int, double, double, int, GBool, GBool, GBool, int, int, int, int, DW_TAG_subroutine_typeInfinite loop *, void *)&lt;/code&gt;, you must replace it with the EXACT path of the actual file &lt;filepath&gt;#include &#34;/src/xpdf-4.05/xpdf/PDFDoc.h&#34;&lt;/filepath&gt;. For example:
+&lt;code&gt;
+#include &#34;#include &#34;/src/xpdf-4.05/xpdf/PDFDoc.h&#34;&#34;
+&lt;/code&gt;
+Otherwise, consider replacing it with some of the following statementsthat may be correct alternatives:
+&lt;code&gt;
+#include &#34;/src/xpdf-4.05/xpdf/PDFDoc.h&#34;
+#include &#34;/src/xpdf-4.05/fofi/FoFiTrueType.h&#34;
+#include &#34;/src/freetype/src/autofit/aftypes.h&#34;
+#include &#34;/src/xpdf-4.05/fofi/FoFiIdentifier.h&#34;
+#include &#34;/src/freetype/src/autofit/afloader.h&#34;
+&lt;/code&gt;
+
+&lt;/instruction&gt;
+
+Fix code:
+1. Consider possible solutions for the issues listed above.
+2. Choose a solution that can maximize fuzzing result, which is utilizing the function under test and feeding it not null input.
+3. Apply the solutions to the original code.
+It&#39;s important to show the complete code, not only the fixed line.
+&lt;solution&gt;
+</pre>
+
+
+
+<h3>Code #1</h3>
+
+<pre>
+&lt;code&gt;
+#include &#34;/src/xpdf-4.05/xpdf/PDFDoc.h&#34;
+#include &#34;OutputDev.h&#34;
+#include &lt;cstddef&gt;
+#include &lt;cstdint&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(uint8_t *data, size_t size) {
+    if ( size == 0 )
+        return 0;
+
+    MemStream *memStream = new MemStream((char*)data, 0, size, Object(objNull));
+    PDFDoc *doc = new PDFDoc(*memStream-&gt;getDict(), memStream);
+
+    FuzzedDataProvider fdp(data, size);
+
+    int pageNum = fdp.ConsumeIntegralInRange&lt;int&gt;(1, doc-&gt;getNumPages());
+    double hDPI = fdp.ConsumeFloatingPoint&lt;double&gt;();
+    double vDPI = fdp.ConsumeFloatingPoint&lt;double&gt;();
+    int rotate = fdp.ConsumeIntegral&lt;int&gt;();
+    GBool useMediaBox = fdp.ConsumeBool();
+    GBool crop = fdp.ConsumeBool();
+    GBool doLinks = fdp.ConsumeBool();
+    int sliceX = fdp.ConsumeIntegral&lt;int&gt;();
+    int sliceY = fdp.ConsumeIntegral&lt;int&gt;();
+    int sliceW = fdp.ConsumeIntegral&lt;int&gt;();
+    int sliceH = fdp.ConsumeIntegral&lt;int&gt;();
+    void *profileData = 0;
+    GBool (*abortCheckCbk)(void *data) = NULL;
+
+    doc-&gt;displayPageSlice(nullptr, pageNum, hDPI, vDPI, rotate, useMediaBox, crop, printing, sliceX, sliceY, sliceW, sliceH, abortCheckCbk, profileData);
+
+    delete doc;
+
+    return 0;
+}
+&lt;/code&gt;
+</pre>
+
+
+<h3>Fixer prompt #2</h3>
+<pre>
+
+Given the following C++ fuzz harness and its build error message, fix the code to make it build for fuzzing.
+
+If there is undeclared identifier or unknown type name error, fix it by finding and including the related libraries.
+
+MUST RETURN THE FULL CODE, INCLUDING UNCHANGED PARTS.
+
+Below is the code needs to be built:
+&lt;code&gt;
+#include &#34;/src/xpdf-4.05/xpdf/PDFDoc.h&#34;
+#include &#34;OutputDev.h&#34;
+#include &lt;cstddef&gt;
+#include &lt;cstdint&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(uint8_t *data, size_t size) {
+    if ( size == 0 )
+        return 0;
+
+    MemStream *memStream = new MemStream((char*)data, 0, size, Object(objNull));
+    PDFDoc *doc = new PDFDoc(*memStream-&gt;getDict(), memStream);
+
+    FuzzedDataProvider fdp(data, size);
+
+    int pageNum = fdp.ConsumeIntegralInRange&lt;int&gt;(1, doc-&gt;getNumPages());
+    double hDPI = fdp.ConsumeFloatingPoint&lt;double&gt;();
+    double vDPI = fdp.ConsumeFloatingPoint&lt;double&gt;();
+    int rotate = fdp.ConsumeIntegral&lt;int&gt;();
+    GBool useMediaBox = fdp.ConsumeBool();
+    GBool crop = fdp.ConsumeBool();
+    GBool doLinks = fdp.ConsumeBool();
+    int sliceX = fdp.ConsumeIntegral&lt;int&gt;();
+    int sliceY = fdp.ConsumeIntegral&lt;int&gt;();
+    int sliceW = fdp.ConsumeIntegral&lt;int&gt;();
+    int sliceH = fdp.ConsumeIntegral&lt;int&gt;();
+    void *profileData = 0;
+    GBool (*abortCheckCbk)(void *data) = NULL;
+
+    doc-&gt;displayPageSlice(nullptr, pageNum, hDPI, vDPI, rotate, useMediaBox, crop, printing, sliceX, sliceY, sliceW, sliceH, abortCheckCbk, profileData);
+
+    delete doc;
+
+    return 0;
+}
+&lt;/code&gt;
+
+Below is the error to fix:
+The code has the following build issues:
+&lt;error&gt;
+fuzz_JBIG2.cc:11:64: error: no matching conversion for functional-style cast from &#39;ObjType&#39; to &#39;Object&#39;
+   11 |     MemStream *memStream = new MemStream((char*)data, 0, size, Object(objNull));
+      |                                                                ^~~~~~~~~~~~~~
+/src/xpdf-4.05/xpdf/Object.h:80:7: note: candidate constructor (the implicit copy constructor) not viable: no known conversion from &#39;ObjType&#39; to &#39;const Object&#39; for 1st argument
+   80 | class Object {
+      |       ^~~~~~
+/src/xpdf-4.05/xpdf/Object.h:80:7: note: candidate constructor (the implicit move constructor) not viable: no known conversion from &#39;ObjType&#39; to &#39;Object&#39; for 1st argument
+   80 | class Object {
+      |       ^~~~~~
+/src/xpdf-4.05/xpdf/Object.h:84:3: note: candidate constructor not viable: requires 0 arguments, but 1 was provided
+   84 |   Object():
+      |   ^
+fuzz_JBIG2.cc:11:32: error: no matching constructor for initialization of &#39;MemStream&#39;
+   11 |     MemStream *memStream = new MemStream((char*)data, 0, size, Object(objNull));
+      |                                ^         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/src/xpdf-4.05/xpdf/Stream.h:356:3: note: candidate constructor not viable: no known conversion from &#39;Object&#39; to &#39;Object *&#39; for 4th argument
+  356 |   MemStream(char *bufA, Guint startA, Guint lengthA, Object *dictA);
+      |   ^                                                  ~~~~~~~~~~~~~
+/src/xpdf-4.05/xpdf/Stream.h:353:7: note: candidate constructor (the implicit copy constructor) not viable: requires 1 argument, but 4 were provided
+  353 | class MemStream: public BaseStream {
+      |       ^~~~~~~~~
+fuzz_JBIG2.cc:12:23: error: no matching constructor for initialization of &#39;PDFDoc&#39;
+   12 |     PDFDoc *doc = new PDFDoc(*memStream-&gt;getDict(), memStream);
+      |                       ^      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/src/xpdf-4.05/xpdf/PDFDoc.h:38:3: note: candidate constructor not viable: no known conversion from &#39;Dict&#39; to &#39;GString *&#39; for 1st argument
+   38 |   PDFDoc(GString *fileNameA, GString *ownerPassword = NULL,
+      |   ^      ~~~~~~~~~~~~~~~~~~
+/src/xpdf-4.05/xpdf/PDFDoc.h:48:3: note: candidate constructor not viable: no known conversion from &#39;Dict&#39; to &#39;char *&#39; for 1st argument
+   48 |   PDFDoc(char *fileNameA, GString *ownerPassword = NULL,
+      |   ^      ~~~~~~~~~~~~~~~
+/src/xpdf-4.05/xpdf/PDFDoc.h:51:3: note: candidate constructor not viable: no known conversion from &#39;Dict&#39; to &#39;BaseStream *&#39; for 1st argument
+   51 |   PDFDoc(BaseStream *strA, GString *ownerPassword = NULL,
+      |   ^      ~~~~~~~~~~~~~~~~
+/src/xpdf-4.05/xpdf/PDFDoc.h:35:7: note: candidate constructor (the implicit copy constructor) not viable: requires 1 argument, but 2 were provided
+   35 | class PDFDoc {
+      |       ^~~~~~
+fuzz_JBIG2.cc:30:84: error: use of undeclared identifier &#39;printing&#39;
+   30 |     doc-&gt;displayPageSlice(nullptr, pageNum, hDPI, vDPI, rotate, useMediaBox, crop, printing, sliceX, sliceY, sliceW, sliceH, abortCheckCbk, profileData);
+      |                                                                                    ^
+&lt;/error&gt;
+
+
+
+
+Fix code:
+1. Consider possible solutions for the issues listed above.
+2. Choose a solution that can maximize fuzzing result, which is utilizing the function under test and feeding it not null input.
+3. Apply the solutions to the original code.
+It&#39;s important to show the complete code, not only the fixed line.
+&lt;solution&gt;
+</pre>
+
+
+
+<h3>Code #2</h3>
+
+<pre>
+Here is the fixed code:
+
+```cpp
+#include &#34;/src/xpdf-4.05/xpdf/PDFDoc.h&#34;
+#include &#34;/src/xpdf-4.05/xpdf/Stream.h&#34;
+#include &#34;/src/xpdf-4.05/xpdf/Object.h&#34;
+#include &#34;OutputDev.h&#34;
+#include &lt;cstddef&gt;
+#include &lt;cstdint&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(uint8_t *data, size_t size) {
+    if ( size == 0 )
+        return 0;
+
+    Object obj = Object(objNull);
+    MemStream *memStream = new MemStream((char*)data, 0, size, &amp;obj);
+    GString *fileName = new GString(&#34;dummy&#34;);
+    PDFDoc *doc = new PDFDoc(fileName, NULL, NULL, memStream);
+
+    FuzzedDataProvider fdp(data, size);
+
+    int pageNum = fdp.ConsumeIntegralInRange&lt;int&gt;(1, doc-&gt;getNumPages());
+    double hDPI = fdp.ConsumeFloatingPoint&lt;double&gt;();
+    double vDPI = fdp.ConsumeFloatingPoint&lt;double&gt;();
+    int rotate = fdp.ConsumeIntegral&lt;int&gt;();
+    GBool useMediaBox = fdp.ConsumeBool();
+    GBool crop = fdp.ConsumeBool();
+    GBool printing = fdp.ConsumeBool();
+    GBool doLinks = fdp.ConsumeBool();
+    int sliceX = fdp.ConsumeIntegral&lt;int&gt;();
+    int sliceY = fdp.ConsumeIntegral&lt;int&gt;();
+    int sliceW = fdp.ConsumeIntegral&lt;int&gt;();
+    int sliceH = fdp.ConsumeIntegral&lt;int&gt;();
+    void *profileData = 0;
+    GBool (*abortCheckCbk)(void *data) = NULL;
+
+    doc-&gt;displayPageSlice(nullptr, pageNum, hDPI, vDPI, rotate, useMediaBox, crop, printing, sliceX, sliceY, sliceW, sliceH, abortCheckCbk, profileData);
+
+    delete doc;
+
+    return 0;
+}
+```
+
+The changes made are:
+
+1. Included the missing libraries &#34;/src/xpdf-4.05/xpdf/Stream.h&#34; and &#34;/src/xpdf-4.05/xpdf/Object.h&#34;.
+2. Changed the &#34;Object&#34; initialization to create an &#34;Object&#34; instance and then pass its address to the &#34;MemStream&#34; constructor.
+3. Changed the &#34;PDFDoc&#34; initialization to use a constructor that takes a &#34;GString&#34; and a &#34;MemStream&#34;.
+4. Added a line to initialize the &#34;printing&#34; variable using the &#34;FuzzedDataProvider&#34; object.
+</pre>
+
+
+<h3>Fixer prompt #3</h3>
+<pre>
+
+Given the following C++ fuzz harness and its build error message, fix the code to make it build for fuzzing.
+
+If there is undeclared identifier or unknown type name error, fix it by finding and including the related libraries.
+
+MUST RETURN THE FULL CODE, INCLUDING UNCHANGED PARTS.
+
+Below is the code needs to be built:
+&lt;code&gt;
+#include &#34;/src/xpdf-4.05/xpdf/PDFDoc.h&#34;
+#include &#34;/src/xpdf-4.05/xpdf/Stream.h&#34;
+#include &#34;/src/xpdf-4.05/xpdf/Object.h&#34;
+#include &#34;OutputDev.h&#34;
+#include &lt;cstddef&gt;
+#include &lt;cstdint&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(uint8_t *data, size_t size) {
+    if ( size == 0 )
+        return 0;
+
+    Object obj = Object(objNull);
+    MemStream *memStream = new MemStream((char*)data, 0, size, &amp;obj);
+    GString *fileName = new GString(&#34;dummy&#34;);
+    PDFDoc *doc = new PDFDoc(fileName, NULL, NULL, memStream);
+
+    FuzzedDataProvider fdp(data, size);
+
+    int pageNum = fdp.ConsumeIntegralInRange&lt;int&gt;(1, doc-&gt;getNumPages());
+    double hDPI = fdp.ConsumeFloatingPoint&lt;double&gt;();
+    double vDPI = fdp.ConsumeFloatingPoint&lt;double&gt;();
+    int rotate = fdp.ConsumeIntegral&lt;int&gt;();
+    GBool useMediaBox = fdp.ConsumeBool();
+    GBool crop = fdp.ConsumeBool();
+    GBool printing = fdp.ConsumeBool();
+    GBool doLinks = fdp.ConsumeBool();
+    int sliceX = fdp.ConsumeIntegral&lt;int&gt;();
+    int sliceY = fdp.ConsumeIntegral&lt;int&gt;();
+    int sliceW = fdp.ConsumeIntegral&lt;int&gt;();
+    int sliceH = fdp.ConsumeIntegral&lt;int&gt;();
+    void *profileData = 0;
+    GBool (*abortCheckCbk)(void *data) = NULL;
+
+    doc-&gt;displayPageSlice(nullptr, pageNum, hDPI, vDPI, rotate, useMediaBox, crop, printing, sliceX, sliceY, sliceW, sliceH, abortCheckCbk, profileData);
+
+    delete doc;
+
+    return 0;
+}
+&lt;/code&gt;
+
+Below is the error to fix:
+The code has the following build issues:
+&lt;error&gt;
+fuzz_JBIG2.cc:13:18: error: no matching conversion for functional-style cast from &#39;ObjType&#39; to &#39;Object&#39;
+   13 |     Object obj = Object(objNull);
+      |                  ^~~~~~~~~~~~~~
+/src/xpdf-4.05/xpdf/Object.h:80:7: note: candidate constructor (the implicit copy constructor) not viable: no known conversion from &#39;ObjType&#39; to &#39;const Object&#39; for 1st argument
+   80 | class Object {
+      |       ^~~~~~
+/src/xpdf-4.05/xpdf/Object.h:80:7: note: candidate constructor (the implicit move constructor) not viable: no known conversion from &#39;ObjType&#39; to &#39;Object&#39; for 1st argument
+   80 | class Object {
+      |       ^~~~~~
+/src/xpdf-4.05/xpdf/Object.h:84:3: note: candidate constructor not viable: requires 0 arguments, but 1 was provided
+   84 |   Object():
+      |   ^
+fuzz_JBIG2.cc:16:23: error: no matching constructor for initialization of &#39;PDFDoc&#39;
+   16 |     PDFDoc *doc = new PDFDoc(fileName, NULL, NULL, memStream);
+      |                       ^      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/src/xpdf-4.05/xpdf/PDFDoc.h:38:3: note: candidate constructor not viable: no known conversion from &#39;MemStream *&#39; to &#39;PDFCore *&#39; for 4th argument
+   38 |   PDFDoc(GString *fileNameA, GString *ownerPassword = NULL,
+      |   ^
+   39 |          GString *userPassword = NULL, PDFCore *coreA = NULL);
+      |                                        ~~~~~~~~~~~~~~~~~~~~~
+/src/xpdf-4.05/xpdf/PDFDoc.h:48:3: note: candidate constructor not viable: no known conversion from &#39;GString *&#39; to &#39;char *&#39; for 1st argument
+   48 |   PDFDoc(char *fileNameA, GString *ownerPassword = NULL,
+      |   ^      ~~~~~~~~~~~~~~~
+/src/xpdf-4.05/xpdf/PDFDoc.h:51:3: note: candidate constructor not viable: no known conversion from &#39;GString *&#39; to &#39;BaseStream *&#39; for 1st argument
+   51 |   PDFDoc(BaseStream *strA, GString *ownerPassword = NULL,
+      |   ^      ~~~~~~~~~~~~~~~~
+/src/xpdf-4.05/xpdf/PDFDoc.h:35:7: note: candidate constructor (the implicit copy constructor) not viable: requires 1 argument, but 4 were provided
+   35 | class PDFDoc {
+      |       ^~~~~~
+&lt;/error&gt;
+
+
+
+
+Fix code:
+1. Consider possible solutions for the issues listed above.
+2. Choose a solution that can maximize fuzzing result, which is utilizing the function under test and feeding it not null input.
+3. Apply the solutions to the original code.
+It&#39;s important to show the complete code, not only the fixed line.
+&lt;solution&gt;
+</pre>
+
+
+
+<h3>Code #3</h3>
+
+<pre>
+&lt;code&gt;
+#include &#34;/src/xpdf-4.05/xpdf/PDFDoc.h&#34;
+#include &#34;/src/xpdf-4.05/xpdf/Stream.h&#34;
+#include &#34;/src/xpdf-4.05/xpdf/Object.h&#34;
+#include &#34;/src/xpdf-4.05/xpdf/GString.h&#34;
+#include &#34;OutputDev.h&#34;
+#include &lt;cstddef&gt;
+#include &lt;cstdint&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(uint8_t *data, size_t size) {
+    if ( size == 0 )
+        return 0;
+
+    Object obj;
+    MemStream *memStream = new MemStream((char*)data, 0, size, &amp;obj);
+    GString *fileName = new GString(&#34;dummy&#34;);
+    PDFDoc *doc = new PDFDoc(fileName, NULL, NULL);
+
+    FuzzedDataProvider fdp(data, size);
+
+    int pageNum = fdp.ConsumeIntegralInRange&lt;int&gt;(1, doc-&gt;getNumPages());
+    double hDPI = fdp.ConsumeFloatingPoint&lt;double&gt;();
+    double vDPI = fdp.ConsumeFloatingPoint&lt;double&gt;();
+    int rotate = fdp.ConsumeIntegral&lt;int&gt;();
+    GBool useMediaBox = fdp.ConsumeBool();
+    GBool crop = fdp.ConsumeBool();
+    GBool printing = fdp.ConsumeBool();
+    GBool doLinks = fdp.ConsumeBool();
+    int sliceX = fdp.ConsumeIntegral&lt;int&gt;();
+    int sliceY = fdp.ConsumeIntegral&lt;int&gt;();
+    int sliceW = fdp.ConsumeIntegral&lt;int&gt;();
+    int sliceH = fdp.ConsumeIntegral&lt;int&gt;();
+    void *profileData = 0;
+    GBool (*abortCheckCbk)(void *data) = NULL;
+
+    doc-&gt;displayPageSlice(nullptr, pageNum, hDPI, vDPI, rotate, useMediaBox, crop, printing, sliceX, sliceY, sliceW, sliceH, abortCheckCbk, profileData);
+
+    delete doc;
+
+    return 0;
+}
+&lt;/code&gt;
+</pre>
+
+
+<h3>Fixer prompt #4</h3>
+<pre>
+
+Given the following C++ fuzz harness and its build error message, fix the code to make it build for fuzzing.
+
+If there is undeclared identifier or unknown type name error, fix it by finding and including the related libraries.
+
+MUST RETURN THE FULL CODE, INCLUDING UNCHANGED PARTS.
+
+Below is the code needs to be built:
+&lt;code&gt;
+#include &#34;/src/xpdf-4.05/xpdf/PDFDoc.h&#34;
+#include &#34;/src/xpdf-4.05/xpdf/Stream.h&#34;
+#include &#34;/src/xpdf-4.05/xpdf/Object.h&#34;
+#include &#34;/src/xpdf-4.05/xpdf/GString.h&#34;
+#include &#34;OutputDev.h&#34;
+#include &lt;cstddef&gt;
+#include &lt;cstdint&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(uint8_t *data, size_t size) {
+    if ( size == 0 )
+        return 0;
+
+    Object obj;
+    MemStream *memStream = new MemStream((char*)data, 0, size, &amp;obj);
+    GString *fileName = new GString(&#34;dummy&#34;);
+    PDFDoc *doc = new PDFDoc(fileName, NULL, NULL);
+
+    FuzzedDataProvider fdp(data, size);
+
+    int pageNum = fdp.ConsumeIntegralInRange&lt;int&gt;(1, doc-&gt;getNumPages());
+    double hDPI = fdp.ConsumeFloatingPoint&lt;double&gt;();
+    double vDPI = fdp.ConsumeFloatingPoint&lt;double&gt;();
+    int rotate = fdp.ConsumeIntegral&lt;int&gt;();
+    GBool useMediaBox = fdp.ConsumeBool();
+    GBool crop = fdp.ConsumeBool();
+    GBool printing = fdp.ConsumeBool();
+    GBool doLinks = fdp.ConsumeBool();
+    int sliceX = fdp.ConsumeIntegral&lt;int&gt;();
+    int sliceY = fdp.ConsumeIntegral&lt;int&gt;();
+    int sliceW = fdp.ConsumeIntegral&lt;int&gt;();
+    int sliceH = fdp.ConsumeIntegral&lt;int&gt;();
+    void *profileData = 0;
+    GBool (*abortCheckCbk)(void *data) = NULL;
+
+    doc-&gt;displayPageSlice(nullptr, pageNum, hDPI, vDPI, rotate, useMediaBox, crop, printing, sliceX, sliceY, sliceW, sliceH, abortCheckCbk, profileData);
+
+    delete doc;
+
+    return 0;
+}
+&lt;/code&gt;
+
+Below is the error to fix:
+The code has the following build issues:
+&lt;error&gt;
+fuzz_JBIG2.cc:4:10: fatal error: &#39;/src/xpdf-4.05/xpdf/GString.h&#39; file not found
+    4 | #include &#34;/src/xpdf-4.05/xpdf/GString.h&#34;
+      |          ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+&lt;/error&gt;
+
+
+Below are instructions to assist you in fixing the error.
+&lt;instruction&gt;
+IMPORTANT: DO NOT include the header file /src/xpdf-4.05/xpdf/GString.h in the generated fuzz target again, the file does not exist in the project-under-test.
+Replace the non-existent &lt;filepath&gt;/src/xpdf-4.05/xpdf/GString.h&lt;/filepath&gt; with the following statement, which share the same file name but exists under the correct path in the project-under-test:
+&lt;code&gt;
+#include &#34;/src/xpdf-4.05/goo/GString.h&#34;
+&lt;/code&gt;
+
+&lt;/instruction&gt;
+
+Fix code:
+1. Consider possible solutions for the issues listed above.
+2. Choose a solution that can maximize fuzzing result, which is utilizing the function under test and feeding it not null input.
+3. Apply the solutions to the original code.
+It&#39;s important to show the complete code, not only the fixed line.
+&lt;solution&gt;
+</pre>
+
+
+
+<h3>Code #4</h3>
+
+<pre>
+&lt;code&gt;
+#include &#34;/src/xpdf-4.05/xpdf/PDFDoc.h&#34;
+#include &#34;/src/xpdf-4.05/xpdf/Stream.h&#34;
+#include &#34;/src/xpdf-4.05/xpdf/Object.h&#34;
+#include &#34;/src/xpdf-4.05/goo/GString.h&#34;
+#include &#34;OutputDev.h&#34;
+#include &lt;cstddef&gt;
+#include &lt;cstdint&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(uint8_t *data, size_t size) {
+    if ( size == 0 )
+        return 0;
+
+    Object obj;
+    MemStream *memStream = new MemStream((char*)data, 0, size, &amp;obj);
+    GString *fileName = new GString(&#34;dummy&#34;);
+    PDFDoc *doc = new PDFDoc(fileName, NULL, NULL);
+
+    FuzzedDataProvider fdp(data, size);
+
+    int pageNum = fdp.ConsumeIntegralInRange&lt;int&gt;(1, doc-&gt;getNumPages());
+    double hDPI = fdp.ConsumeFloatingPoint&lt;double&gt;();
+    double vDPI = fdp.ConsumeFloatingPoint&lt;double&gt;();
+    int rotate = fdp.ConsumeIntegral&lt;int&gt;();
+    GBool useMediaBox = fdp.ConsumeBool();
+    GBool crop = fdp.ConsumeBool();
+    GBool printing = fdp.ConsumeBool();
+    GBool doLinks = fdp.ConsumeBool();
+    int sliceX = fdp.ConsumeIntegral&lt;int&gt;();
+    int sliceY = fdp.ConsumeIntegral&lt;int&gt;();
+    int sliceW = fdp.ConsumeIntegral&lt;int&gt;();
+    int sliceH = fdp.ConsumeIntegral&lt;int&gt;();
+    void *profileData = 0;
+    GBool (*abortCheckCbk)(void *data) = NULL;
+
+    doc-&gt;displayPageSlice(nullptr, pageNum, hDPI, vDPI, rotate, useMediaBox, crop, printing, sliceX, sliceY, sliceW, sliceH, abortCheckCbk, profileData);
+
+    delete doc;
+
+    return 0;
+}
+&lt;/code&gt;
+&lt;/solution&gt;
+</pre>
+
+
+<h3>Fixer prompt #5</h3>
+<pre>
+
+Given the following C++ fuzz harness and its build error message, fix the code to make it build for fuzzing.
+
+If there is undeclared identifier or unknown type name error, fix it by finding and including the related libraries.
+
+MUST RETURN THE FULL CODE, INCLUDING UNCHANGED PARTS.
+
+Below is the code needs to be built:
+&lt;code&gt;
+#include &#34;/src/xpdf-4.05/xpdf/PDFDoc.h&#34;
+#include &#34;/src/xpdf-4.05/xpdf/Stream.h&#34;
+#include &#34;/src/xpdf-4.05/xpdf/Object.h&#34;
+#include &#34;/src/xpdf-4.05/goo/GString.h&#34;
+#include &#34;OutputDev.h&#34;
+#include &lt;cstddef&gt;
+#include &lt;cstdint&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(uint8_t *data, size_t size) {
+    if ( size == 0 )
+        return 0;
+
+    Object obj;
+    MemStream *memStream = new MemStream((char*)data, 0, size, &amp;obj);
+    GString *fileName = new GString(&#34;dummy&#34;);
+    PDFDoc *doc = new PDFDoc(fileName, NULL, NULL);
+
+    FuzzedDataProvider fdp(data, size);
+
+    int pageNum = fdp.ConsumeIntegralInRange&lt;int&gt;(1, doc-&gt;getNumPages());
+    double hDPI = fdp.ConsumeFloatingPoint&lt;double&gt;();
+    double vDPI = fdp.ConsumeFloatingPoint&lt;double&gt;();
+    int rotate = fdp.ConsumeIntegral&lt;int&gt;();
+    GBool useMediaBox = fdp.ConsumeBool();
+    GBool crop = fdp.ConsumeBool();
+    GBool printing = fdp.ConsumeBool();
+    GBool doLinks = fdp.ConsumeBool();
+    int sliceX = fdp.ConsumeIntegral&lt;int&gt;();
+    int sliceY = fdp.ConsumeIntegral&lt;int&gt;();
+    int sliceW = fdp.ConsumeIntegral&lt;int&gt;();
+    int sliceH = fdp.ConsumeIntegral&lt;int&gt;();
+    void *profileData = 0;
+    GBool (*abortCheckCbk)(void *data) = NULL;
+
+    doc-&gt;displayPageSlice(nullptr, pageNum, hDPI, vDPI, rotate, useMediaBox, crop, printing, sliceX, sliceY, sliceW, sliceH, abortCheckCbk, profileData);
+
+    delete doc;
+
+    return 0;
+}
+&lt;/code&gt;
+
+Below is the error to fix:
+The code can build successfully but has a runtime issue: Fuzzing crashed immediately at runtime (ASAN-ERROR: AddressSanitizer: SEGV on unknown address 0x000000000050 (pc 0x55f94841eda5 bp 0x7ffdd0ecafb0 sp 0x7ffdd0ecaec0 T0)), indicating fuzz target code for invoking the function under test is incorrect or unrobust.
+&lt;error&gt;
+Crash stacks:
+Stack 0:
+#0 0x55f94841eda5 in getNumPages /src/xpdf-4.05/xpdf/Catalog.h:49:30
+#1 0x55f94841eda5 in getNumPages /src/xpdf-4.05/xpdf/PDFDoc.h:93:39
+#2 0x55f94841eda5 in LLVMFuzzerTestOneInput /src/xpdf-4.05/build/fuzz_JBIG2.cc:21:59
+#3 0x55f9482d1600 in fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:614:13
+#4 0x55f9482d0e25 in fuzzer::Fuzzer::RunOne(unsigned char const*, unsigned long, bool, fuzzer::InputInfo*, bool, bool*) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:516:7
+#5 0x55f9482d2c76 in fuzzer::Fuzzer::ReadAndExecuteSeedCorpora(std::__Fuzzer::vector&lt;fuzzer::SizedFile, std::__Fuzzer::allocator&lt;fuzzer::SizedFile&gt;&gt;&amp;) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:812:5
+#6 0x55f9482d30e7 in fuzzer::Fuzzer::Loop(std::__Fuzzer::vector&lt;fuzzer::SizedFile, std::__Fuzzer::allocator&lt;fuzzer::SizedFile&gt;&gt;&amp;) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:867:3
+#7 0x55f9482c16f6 in fuzzer::FuzzerDriver(int*, char***, int (*)(unsigned char const*, unsigned long)) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:914:6
+#8 0x55f9482edc22 in main /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMain.cpp:20:10
+#9 0x7ffa53343082 in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x24082) (BuildId: 0702430aef5fa3dda43986563e9ffcc47efbd75e)
+#10 0x55f9482b286d in _start (/out/fuzz_JBIG2+0x1c986d)
+&lt;/error&gt;
+
+
+
+
+Fix code:
+1. Consider possible solutions for the issues listed above.
+2. Choose a solution that can maximize fuzzing result, which is utilizing the function under test and feeding it not null input.
+3. Apply the solutions to the original code.
+It&#39;s important to show the complete code, not only the fixed line.
+&lt;solution&gt;
+</pre>
+
+
+
+<h3>Code #5</h3>
+
+<pre>
+&lt;code&gt;
+#include &#34;/src/xpdf-4.05/xpdf/PDFDoc.h&#34;
+#include &#34;/src/xpdf-4.05/xpdf/Stream.h&#34;
+#include &#34;/src/xpdf-4.05/xpdf/Object.h&#34;
+#include &#34;/src/xpdf-4.05/goo/GString.h&#34;
+#include &#34;OutputDev.h&#34;
+#include &lt;cstddef&gt;
+#include &lt;cstdint&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(uint8_t *data, size_t size) {
+    if ( size == 0 )
+        return 0;
+
+    Object obj;
+    MemStream *memStream = new MemStream((char*)data, 0, size, &amp;obj);
+    GString *fileName = new GString(&#34;dummy&#34;);
+    PDFDoc *doc = new PDFDoc(fileName, NULL, NULL);
+
+    if (doc-&gt;isOk()) {
+        FuzzedDataProvider fdp(data, size);
+
+        int pageNum = fdp.ConsumeIntegralInRange&lt;int&gt;(1, doc-&gt;getNumPages());
+        double hDPI = fdp.ConsumeFloatingPoint&lt;double&gt;();
+        double vDPI = fdp.ConsumeFloatingPoint&lt;double&gt;();
+        int rotate = fdp.ConsumeIntegral&lt;int&gt;();
+        GBool useMediaBox = fdp.ConsumeBool();
+        GBool crop = fdp.ConsumeBool();
+        GBool printing = fdp.ConsumeBool();
+        GBool doLinks = fdp.ConsumeBool();
+        int sliceX = fdp.ConsumeIntegral&lt;int&gt;();
+        int sliceY = fdp.ConsumeIntegral&lt;int&gt;();
+        int sliceW = fdp.ConsumeIntegral&lt;int&gt;();
+        int sliceH = fdp.ConsumeIntegral&lt;int&gt;();
+        void *profileData = 0;
+        GBool (*abortCheckCbk)(void *data) = NULL;
+
+        doc-&gt;displayPageSlice(nullptr, pageNum, hDPI, vDPI, rotate, useMediaBox, crop, printing, sliceX, sliceY, sliceW, sliceH, abortCheckCbk, profileData);
+    }
+
+    delete doc;
+
+    return 0;
+}
+&lt;/code&gt;
+&lt;solution&gt;
+
+The fix here is to add a check to see if the PDFDoc object is valid before trying to use it. This is done by calling the isOk() method on the doc object. If the document is not valid, the function will return immediately, avoiding any potential crashes when trying to use an invalid document.
+</pre>
+
+
+<h2>Logs</h2>
+<pre>
+Fixing /home/chyun/oss-fuzz-gen/results9/output-xpdf-_zn6pdfdoc16displaypagesliceep9outputdeviddiiiiiiiipfipves2_/fixed_targets/02.cc with gpt-4, attempt 1.
+Fixing /home/chyun/oss-fuzz-gen/results9/output-xpdf-_zn6pdfdoc16displaypagesliceep9outputdeviddiiiiiiiipfipves2_/fixed_targets/02.cc with gpt-4, attempt 2.
+Fixing /home/chyun/oss-fuzz-gen/results9/output-xpdf-_zn6pdfdoc16displaypagesliceep9outputdeviddiiiiiiiipfipves2_/fixed_targets/02.cc with gpt-4, attempt 3.
+Fixing /home/chyun/oss-fuzz-gen/results9/output-xpdf-_zn6pdfdoc16displaypagesliceep9outputdeviddiiiiiiiipfipves2_/fixed_targets/02.cc with gpt-4, attempt 4.
+Fixing /home/chyun/oss-fuzz-gen/results9/output-xpdf-_zn6pdfdoc16displaypagesliceep9outputdeviddiiiiiiiipfipves2_/fixed_targets/02.cc with gpt-4, attempt 5.
+Successfully built /home/chyun/oss-fuzz-gen/results9/output-xpdf-_zn6pdfdoc16displaypagesliceep9outputdeviddiiiiiiiipfipves2_/fixed_targets/02.cc with gpt-4 in 5 iterations of fixing.
+Triaging the crash related to /home/chyun/oss-fuzz-gen/results9/output-xpdf-_zn6pdfdoc16displaypagesliceep9outputdeviddiiiiiiiipfipves2_/fixed_targets/02.cc with gpt-4.
+Result for xpdf-zn6pdfdoc16displaypagesliceep9outputdeviddiiiiiiiipfipves2-02: crashes=True, coverage=0.0030137292108494253 (81/26877), coverage diff=0.0 (0/124731)
+
+</pre>
+
+<h2>Run logs</h2>
+<pre>
+INFO:__main__:Running: docker run --privileged --shm-size=2g --platform linux/amd64 --rm -e FUZZING_ENGINE=libfuzzer -e SANITIZER=address -e RUN_FUZZER_MODE=interactive -e HELPER=True -v /home/chyun/oss-fuzz-gen/results9/output-xpdf-_zn6pdfdoc16displaypagesliceep9outputdeviddiiiiiiiipfipves2_/corpora/02.cc:/tmp/fuzz_JBIG2_corpus -v /tmp/tmpu_tkzy6r/build/out/xpdf-zn6pdfdoc16displaypagesliceep9outputdeviddiiiiiiiipfipves2-02:/out -t gcr.io/oss-fuzz-base/base-runner run_fuzzer fuzz_JBIG2 -print_final_stats=1 -max_total_time=30 -len_control=0 -timeout=30.
+vm.mmap_rnd_bits = 28
+rm: cannot remove &#39;/tmp/fuzz_JBIG2_corpus&#39;: Device or resource busy
+/out/fuzz_JBIG2 -rss_limit_mb=2560 -timeout=25 -print_final_stats=1 -max_total_time=30 -len_control=0 -timeout=30 /tmp/fuzz_JBIG2_corpus -detect_leaks=0 &lt; /dev/null
+INFO: Running with entropic power schedule (0xFF, 100).
+INFO: Seed: 1537249692
+INFO: Loaded 1 modules   (26877 inline 8-bit counters): 26877 [0x564f346c0458, 0x564f346c6d55), 
+INFO: Loaded 1 PC tables (26877 PCs): 26877 [0x564f346c6d58,0x564f3472fd28), 
+INFO:        0 files found in /tmp/fuzz_JBIG2_corpus
+INFO: -max_len is not provided; libFuzzer will not generate inputs larger than 4096 bytes
+INFO: A corpus is not provided, starting from an empty corpus
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+#2	INITED cov: 81 ft: 82 corp: 1/1b exec/s: 0 rss: 34Mb
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t ope
+...truncated...
+e &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy&#39;
+#461977	DONE   cov: 81 ft: 82 corp: 1/1b lim: 4096 exec/s: 14902 rss: 100Mb
+Done 461977 runs in 31 second(s)
+stat::number_of_executed_units: 461977
+stat::average_exec_per_sec:     14902
+stat::new_units_added:          0
+stat::slowest_unit_time_sec:    0
+stat::peak_rss_mb:              100
+
+=================================================================
+[1m[31m==15==ERROR: LeakSanitizer: detected memory leaks
+[1m[0m
+[1m[34mDirect leak of 28473408 byte(s) in 444897 object(s) allocated from:
+[1m[0m    #0 0x564f342a792d in operator new(unsigned long) /src/llvm-project/compiler-rt/lib/asan/asan_new_delete.cpp:95:3
+    #1 0x564f342a9d17 in LLVMFuzzerTestOneInput /src/xpdf-4.05/build/fuzz_JBIG2.cc:15:28
+    #2 0x564f3415c600 in fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:614:13
+    #3 0x564f3415be25 in fuzzer::Fuzzer::RunOne(unsigned char const*, unsigned long, bool, fuzzer::InputInfo*, bool, bool*) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:516:7
+    #4 0x564f3415d5f5 in fuzzer::Fuzzer::MutateAndTestOne() /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:760:19
+    #5 0x564f3415e3e5 in fuzzer::Fuzzer::Loop(std::__Fuzzer::vector&lt;fuzzer::SizedFile, std::__Fuzzer::allocator&lt;fuzzer::SizedFile&gt;&gt;&amp;) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:905:5
+    #6 0x564f3414c6f6 in fuzzer::FuzzerDriver(int*, char***, int (*)(unsigned char const*, unsigned long)) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:914:6
+    #7 0x564f34178c22 in main /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMain.cpp:20:10
+    #8 0x7f1e3c0d5082 in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x24082) (BuildId: 0702430aef5fa3dda43986563e9ffcc47efbd75e)
+
+DEDUP_TOKEN: operator new(unsigned long)--LLVMFuzzerTestOneInput--fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long)
+[1m[34mDirect leak of 64 byte(s) in 1 object(s) allocated from:
+[1m[0m    #0 0x564f342a792d in operator new(unsigned long) /src/llvm-project/compiler-rt/lib/asan/asan_new_delete.cpp:95:3
+    #1 0x564f342a9d17 in LLVMFuzzerTestOneInput /src/xpdf-4.05/build/fuzz_JBIG2.cc:15:28
+    #2 0x564f3415c600 in fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:614:13
+    #3 0x564f3415be25 in fuzzer::Fuzzer::RunOne(unsigned char const*, unsigned long, bool, fuzzer::InputInfo*, bool, bool*) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:516:7
+    #4 0x564f3415dc76 in fuzzer::Fuzzer::ReadAndExecuteSeedCorpora(std::__Fuzzer::vector&lt;fuzzer::SizedFile, std::__Fuzzer::allocator&lt;fuzzer::SizedFile&gt;&gt;&amp;) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:812:5
+    #5 0x564f3415e0e7 in fuzzer::Fuzzer::Loop(std::__Fuzzer::vector&lt;fuzzer::SizedFile, std::__Fuzzer::allocator&lt;fuzzer::SizedFile&gt;&gt;&amp;) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:867:3
+    #6 0x564f3414c6f6 in fuzzer::FuzzerDriver(int*, char***, int (*)(unsigned char const*, unsigned long)) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:914:6
+    #7 0x564f34178c22 in main /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMain.cpp:20:10
+    #8 0x7f1e3c0d5082 in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x24082) (BuildId: 0702430aef5fa3dda43986563e9ffcc47efbd75e)
+
+DEDUP_TOKEN: operator new(unsigned long)--LLVMFuzzerTestOneInput--fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long)
+[1m[34mIndirect leak of 1092992 byte(s) in 17078 object(s) allocated from:
+[1m[0m    #0 0x564f342a792d in operator new(unsigned long) /src/llvm-project/compiler-rt/lib/asan/asan_new_delete.cpp:95:3
+    #1 0x564f342a9d17 in LLVMFuzzerTestOneInput /src/xpdf-4.05/build/fuzz_JBIG2.cc:15:28
+    #2 0x564f3415c600 in fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:614:13
+    #3 0x564f3415be25 in fuzzer::Fuzzer::RunOne(unsigned char const*, unsigned long, bool, fuzzer::InputInfo*, bool, bool*) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:516:7
+    #4 0x564f3415d5f5 in fuzzer::Fuzzer::MutateAndTestOne() /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:760:19
+    #5 0x564f3415e3e5 in fuzzer::Fuzzer::Loop(std::__Fuzzer::vector&lt;fuzzer::SizedFile, std::__Fuzzer::allocator&lt;fuzzer::SizedFile&gt;&gt;&amp;) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:905:5
+    #6 0x564f3414c6f6 in fuzzer::FuzzerDriver(int*, char***, int (*)(unsigned char const*, unsigned long)) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:914:6
+    #7 0x564f34178c22 in main /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMain.cpp:20:10
+    #8 0x7f1e3c0d5082 in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x24082) (BuildId: 0702430aef5fa3dda43986563e9ffcc47efbd75e)
+
+DEDUP_TOKEN: operator new(unsigned long)--LLVMFuzzerTestOneInput--fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long)
+SUMMARY: AddressSanitizer: 29566464 byte(s) leaked in 461976 allocation(s).
+MS: 5 InsertRepeatedBytes-InsertRepeatedBytes-ChangeBinInt-EraseBytes-ChangeBinInt-; base unit: adc83b19e793491b1c6ea0fd8b46cd9f32e592fc
+
+
+artifact_prefix=&#39;./&#39;; Test unit written to ./crash-da39a3ee5e6b4b0d3255bfef95601890afd80709
+Base64: 
+stat::number_of_executed_units: 461977
+stat::average_exec_per_sec:     14902
+stat::new_units_added:          0
+stat::slowest_unit_time_sec:    0
+stat::peak_rss_mb:              116
+
+</pre>
+
+
+</body>
