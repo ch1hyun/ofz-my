@@ -1,0 +1,244 @@
+<!doctype html>
+
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Experiment results</title>
+<style>
+* {
+    box-sizing: border-box;
+}
+
+html {
+    line-height: 1.15;
+}
+
+body {
+    font-family: sans-serif;
+    font-size: 16px;
+}
+
+table {
+    border-collapse: collapse;
+    border-spacing: 0;
+}
+
+td, th {
+    border-right: 1px #dedede solid;
+    border-bottom: 1px #dedede solid;
+    padding: 5px;
+    text-align: left;
+}
+td:first-child, th:first-child {
+    border-left: 1px #dedede solid;
+}
+th {
+    border-top: 1px #dedede solid;
+}
+
+tbody tr:nth-child(odd) {
+    background-color: #f4f5ff;
+}
+</style>
+<body>
+    LLM: 
+    
+<h1>output-http-parser-http_parser_pause / 02</h1>
+Bug: True
+<br>
+Crash reason: NO_SEMANTIC_ERR
+<br>
+<br>
+
+<h2>Triage</h2>
+<pre>
+The crash is caused by a bug in the fuzz driver.
+
+The crash occurs at the line where the fuzz driver calls the `http_parser_execute` function. The second parameter of this function is expected to be a `http_parser_settings` object, but `NULL` is passed instead, causing a null pointer dereference when the function tries to access this object. To fix this issue, a valid `http_parser_settings` object should be passed as the second argument to the `http_parser_execute` function.
+</pre>
+<br>
+
+
+
+
+
+<h3>Final code</h3>
+
+<pre>
+#include &#34;http_parser.h&#34;
+#include &lt;stdint.h&gt;
+#include &lt;stdlib.h&gt;
+
+int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  if (size &lt; 1)
+    return 0;
+
+  http_parser parser;
+  http_parser_init(&amp;parser, HTTP_BOTH);
+
+  int pause = data[0] % 2;
+  http_parser_pause(&amp;parser, pause);
+
+  // Add the following lines to feed the parser with the input data
+  size_t parsed = http_parser_execute(&amp;parser, NULL, (const char*)data + 1, size - 1);
+
+  return 0;
+}
+</pre>
+
+
+<h3>Fixer prompt #1</h3>
+<pre>
+
+Given the following C fuzz harness and its build error message, fix the code to make it build for fuzzing.
+
+If there is undeclared identifier or unknown type name error, fix it by finding and including the related libraries.
+
+MUST RETURN THE FULL CODE, INCLUDING UNCHANGED PARTS.
+
+Below is the code needs to be built:
+&lt;code&gt;
+#include &#34;http_parser.h&#34;
+#include &lt;stdint.h&gt;
+#include &lt;stdlib.h&gt;
+
+int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  if (size &lt; 1)
+    return 0;
+
+  http_parser parser;
+  http_parser_init(&amp;parser, HTTP_BOTH);
+
+  int pause = data[0] % 2;
+  http_parser_pause(&amp;parser, pause);
+
+  return 0;
+}
+&lt;/code&gt;
+
+Below is the error to fix:
+The code can build successfully but has a runtime issue: No code coverage increasement, indicating the fuzz target ineffectively invokes the function under test.
+
+
+
+
+Fix code:
+1. Consider possible solutions for the issues listed above.
+2. Choose a solution that can maximize fuzzing result, which is utilizing the function under test and feeding it not null input.
+3. Apply the solutions to the original code.
+It&#39;s important to show the complete code, not only the fixed line.
+&lt;solution&gt;
+</pre>
+
+
+
+<h3>Code #1</h3>
+
+<pre>
+#include &#34;http_parser.h&#34;
+#include &lt;stdint.h&gt;
+#include &lt;stdlib.h&gt;
+
+int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  if (size &lt; 1)
+    return 0;
+
+  http_parser parser;
+  http_parser_init(&amp;parser, HTTP_BOTH);
+
+  int pause = data[0] % 2;
+  http_parser_pause(&amp;parser, pause);
+
+  // Add the following lines to feed the parser with the input data
+  size_t parsed = http_parser_execute(&amp;parser, NULL, (const char*)data + 1, size - 1);
+
+  return 0;
+}
+</pre>
+
+
+<h2>Logs</h2>
+<pre>
+Fixing /home/chyun/oss-fuzz-gen/results5/output-http-parser-http_parser_pause/fixed_targets/02.c with gpt-4, attempt 1.
+Successfully built /home/chyun/oss-fuzz-gen/results5/output-http-parser-http_parser_pause/fixed_targets/02.c with gpt-4 in 1 iterations of fixing.
+Triaging the crash related to /home/chyun/oss-fuzz-gen/results5/output-http-parser-http_parser_pause/fixed_targets/02.c with gpt-4.
+Result for http-parser-http_parser_pause-02: crashes=True, coverage=0.02541436464088398 (23/905), coverage diff=0.005031446540880503 (8/1590)
+
+</pre>
+
+<h2>Run logs</h2>
+<pre>
+INFO:__main__:Running: docker run --privileged --shm-size=2g --platform linux/amd64 --rm -e FUZZING_ENGINE=libfuzzer -e SANITIZER=address -e RUN_FUZZER_MODE=interactive -e HELPER=True -v /home/chyun/oss-fuzz-gen/results5/output-http-parser-http_parser_pause/corpora/02.c:/tmp/fuzz_url_corpus -v /tmp/tmpsnq1hadf/build/out/http-parser-http_parser_pause-02:/out -t gcr.io/oss-fuzz-base/base-runner run_fuzzer fuzz_url -print_final_stats=1 -max_total_time=30 -len_control=0 -timeout=30.
+vm.mmap_rnd_bits = 28
+rm: cannot remove &#39;/tmp/fuzz_url_corpus&#39;: Device or resource busy
+/out/fuzz_url -rss_limit_mb=2560 -timeout=25 -print_final_stats=1 -max_total_time=30 -len_control=0 -timeout=30 /tmp/fuzz_url_corpus &lt; /dev/null
+INFO: Running with entropic power schedule (0xFF, 100).
+INFO: Seed: 4018762504
+INFO: Loaded 1 modules   (905 inline 8-bit counters): 905 [0x5628e056fab0, 0x5628e056fe39), 
+INFO: Loaded 1 PC tables (905 PCs): 905 [0x5628e056fe40,0x5628e05736d0), 
+INFO:        0 files found in /tmp/fuzz_url_corpus
+INFO: -max_len is not provided; libFuzzer will not generate inputs larger than 4096 bytes
+INFO: A corpus is not provided, starting from an empty corpus
+#2	INITED cov: 8 ft: 9 corp: 1/1b exec/s: 0 rss: 29Mb
+#5	NEW    cov: 13 ft: 14 corp: 2/84b lim: 4096 exec/s: 0 rss: 30Mb L: 83/83 MS: 3 CrossOver-CrossOver-InsertRepeatedBytes-
+#7	NEW    cov: 14 ft: 15 corp: 3/86b lim: 4096 exec/s: 0 rss: 30Mb L: 2/83 MS: 2 InsertByte-ChangeBit-
+#8	NEW    cov: 15 ft: 16 corp: 4/88b lim: 4096 exec/s: 0 rss: 30Mb L: 2/83 MS: 1 ChangeByte-
+#9	NEW    cov: 17 ft: 19 corp: 5/92b lim: 4096 exec/s: 0 rss: 30Mb L: 4/83 MS: 1 CrossOver-
+#14	NEW    cov: 18 ft: 20 corp: 6/98b lim: 4096 exec/s: 0 rss: 30Mb L: 6/83 MS: 5 CrossOver-CopyPart-EraseBytes-InsertByte-InsertByte-
+#86	NEW    cov: 18 ft: 23 corp: 7/103b lim: 4096 exec/s: 0 rss: 30Mb L: 5/83 MS: 2 ChangeBinInt-CrossOver-
+#119	REDUCE cov: 18 ft: 23 corp: 7/100b lim: 4096 exec/s: 0 rss: 30Mb L: 80/80 MS: 3 CopyPart-InsertRepeatedBytes-EraseBytes-
+#148	NEW    cov: 18 ft: 26 corp: 8/213b lim: 4096 exec/s: 0 rss: 30Mb L: 113/113 MS: 4 ChangeBit-ChangeBit-InsertRepeatedBytes-CrossOver-
+#175	REDUCE cov: 18 ft: 26 corp: 8/193b lim: 4096 exec/s: 0 rss: 30Mb L: 60/113 MS: 2 ChangeByte-EraseBytes-
+#201	NEW    cov: 23 ft: 31 corp: 9/197b lim: 4096 exec/s: 0 rss: 30Mb L: 4/113 MS: 1 CrossOver-
+#243	REDUCE cov: 23 ft: 31 corp: 9/193b lim: 4096 exec/s: 0 rss: 30Mb L: 56/113 MS: 2 ChangeByte-EraseBytes-
+#294	REDUCE cov: 23 ft: 31 corp: 9/191b lim: 4096 exec/s: 0 rss: 31Mb L: 4/113 MS: 1 EraseBytes-
+#332	REDUCE cov: 23 ft: 31 corp: 9/138b lim: 4096 exec/s: 0 rss: 31Mb L: 60/60 MS: 3 ChangeBit-ChangeByte-EraseBytes-
+#344	REDUCE cov: 23 ft: 31 corp: 9/136b lim: 4096 exec/s: 0 rss: 31Mb L: 2/60 MS: 2 ChangeByte-EraseBytes-
+#347	REDUCE cov: 23 ft: 31 corp: 9/133b lim: 4096 exec/s: 0 rss: 31Mb L: 53/60 MS: 3 ChangeBinInt-ShuffleBytes-EraseBytes-
+#353	REDUCE cov: 23 ft: 31 corp: 9/112b lim: 4096 exec/s: 0 rss: 31Mb L: 39/53 MS: 1 EraseBytes-
+#394	REDUCE cov: 23 ft: 31 corp: 9/103b lim: 4096 exec/s: 0 rss: 31Mb L: 44/44 MS: 1 EraseBytes-
+#420	REDUCE cov: 23 ft: 31 corp: 9/88b lim: 4096 exec/s: 0 rss: 31Mb L: 29/39 MS: 1 EraseBytes-
+#521	REDUCE cov: 23 ft: 31 corp: 9/79b lim: 4096 exec/s: 0 rss: 31Mb L: 20/39 MS: 1 EraseBytes-
+#572	REDUCE cov: 23 ft: 31 corp: 9/62b lim: 4096 exec/s: 0 rss: 31Mb L: 22/22 MS: 1 EraseBytes-
+#585	REDUCE cov: 23 ft: 31 corp: 9/61b lim: 4096 exec/s: 0 rss: 31Mb L: 3/22 MS: 3 InsertByte-InsertByte-EraseBytes-
+#587	NEW    cov: 23 ft: 33 corp: 10/71b lim: 4096 exec/s: 0 rss: 31Mb L: 10/22 MS: 2 ShuffleBytes-CopyPart-
+#620	REDUCE cov: 23 ft: 33 corp: 10/70b lim: 4096 exec/s: 0 rss: 31Mb L: 2/22 MS: 3 ShuffleBytes-ChangeBit-EraseBytes-
+#648	REDUCE cov: 23 ft: 33 corp: 10/61b lim: 4096 exec/s: 0 rss: 31Mb L: 13/20 MS: 3 ChangeBit-CrossOver-EraseBytes-
+#826	NEW    cov: 23 ft: 34 corp: 11/77b lim: 4096 exec/s: 0 rss: 31Mb L: 16/20 MS: 3 CrossOver-EraseBytes-CrossOver-
+#862	REDUCE cov: 23 ft: 34 corp: 11/76b lim: 4096 exec/s: 0 rss: 31Mb L: 3/20 MS: 1 EraseBytes-
+#873	REDUCE cov: 23 ft: 34 corp: 11/75b lim: 4096 exec/s: 0 rss: 31Mb L: 9/20 MS: 1 EraseBytes-
+AddressSanitizer:DEADLYSIGNAL
+=================================================================
+[1m[31m==12==ERROR: AddressSanitizer: SEGV on unknown address 0x000000000000 (pc 0x5628e04f9868 bp 0x7ffe8c3ee370 sp 0x7ffe8c3ee240 T0)
+[1m[0m==12==The signal is caused by a READ memory access.
+==12==Hint: address points to the zero page.
+SCARINESS: 10 (null-deref)
+    #0 0x5628e04f9868 in http_parser_execute /src/http-parser/http_parser.c:966:9
+    #1 0x5628e0501c25 in LLVMFuzzerTestOneInput /src/http-parser/fuzzers/fuzz_url.c:16:19
+    #2 0x5628e03a6470 in fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:614:13
+    #3 0x5628e03a5c95 in fuzzer::Fuzzer::RunOne(unsigned char const*, unsigned long, bool, fuzzer::InputInfo*, bool, bool*) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:516:7
+    #4 0x5628e03a7465 in fuzzer::Fuzzer::MutateAndTestOne() /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:760:19
+    #5 0x5628e03a8255 in fuzzer::Fuzzer::Loop(std::__Fuzzer::vector&lt;fuzzer::SizedFile, std::__Fuzzer::allocator&lt;fuzzer::SizedFile&gt;&gt;&amp;) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:905:5
+    #6 0x5628e0396566 in fuzzer::FuzzerDriver(int*, char***, int (*)(unsigned char const*, unsigned long)) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:914:6
+    #7 0x5628e03c2a92 in main /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMain.cpp:20:10
+    #8 0x7f7caecfc082 in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x24082) (BuildId: 0702430aef5fa3dda43986563e9ffcc47efbd75e)
+    #9 0x5628e03876dd in _start (/out/fuzz_url+0x466dd)
+
+DEDUP_TOKEN: http_parser_execute--LLVMFuzzerTestOneInput--fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long)
+AddressSanitizer can not provide additional info.
+SUMMARY: AddressSanitizer: SEGV /src/http-parser/http_parser.c:966:9 in http_parser_execute
+==12==ABORTING
+MS: 3 InsertByte-InsertByte-ShuffleBytes-; base unit: adc83b19e793491b1c6ea0fd8b46cd9f32e592fc
+0xa,0x4f,0x41,
+\012OA
+artifact_prefix=&#39;./&#39;; Test unit written to ./crash-b65c47010d599f242cbad27c7b85ceda3906c35a
+Base64: Ck9B
+stat::number_of_executed_units: 906
+stat::average_exec_per_sec:     0
+stat::new_units_added:          27
+stat::slowest_unit_time_sec:    0
+stat::peak_rss_mb:              31
+
+</pre>
+
+
+</body>

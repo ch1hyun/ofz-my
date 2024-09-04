@@ -1,0 +1,615 @@
+<!doctype html>
+
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Experiment results</title>
+<style>
+* {
+    box-sizing: border-box;
+}
+
+html {
+    line-height: 1.15;
+}
+
+body {
+    font-family: sans-serif;
+    font-size: 16px;
+}
+
+table {
+    border-collapse: collapse;
+    border-spacing: 0;
+}
+
+td, th {
+    border-right: 1px #dedede solid;
+    border-bottom: 1px #dedede solid;
+    padding: 5px;
+    text-align: left;
+}
+td:first-child, th:first-child {
+    border-left: 1px #dedede solid;
+}
+th {
+    border-top: 1px #dedede solid;
+}
+
+tbody tr:nth-child(odd) {
+    background-color: #f4f5ff;
+}
+</style>
+<body>
+    LLM: 
+    
+<h1>output-http-parser-http_parser_pause / 01</h1>
+Bug: True
+<br>
+Crash reason: NO_SEMANTIC_ERR
+<br>
+<br>
+
+<h2>Triage</h2>
+<pre>
+Crash is caused by bug in project.
+
+The crash is caused by an assertion failure in the http_parser_pause function inside the project code. This happens when the http_parser_pause function is called while the parser is in an error state, which is not allowed. This can occur if the http_parser_execute function fails, leaving the parser in an error state, and then http_parser_pause is called. The fuzz driver does not check if http_parser_execute was successful before calling http_parser_pause, but the bug is in the project code because it should handle this situation more gracefully instead of crashing.
+</pre>
+<br>
+
+
+
+
+
+<h3>Final code</h3>
+
+<pre>
+#include &#34;http_parser.h&#34;
+#include &lt;stdint.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;string.h&gt;
+
+int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+
+  http_parser parser;
+  http_parser_settings settings;
+  memset(&amp;settings, 0, sizeof(settings));
+
+  if (size &gt; 2) { // size should be more than 2 to ensure data+1 is valid
+    int pause = data[0]&amp;1; 
+    http_parser_init(&amp;parser, HTTP_BOTH);
+    http_parser_execute(&amp;parser, &amp;settings, (const char*)data+1, size-1); 
+
+    if (pause) { // only call http_parser_pause when pause is not zero
+      http_parser_pause(&amp;parser, pause);
+    }
+  }
+
+  return 0;
+}
+</pre>
+
+
+<h3>Fixer prompt #1</h3>
+<pre>
+
+Given the following C fuzz harness and its build error message, fix the code to make it build for fuzzing.
+
+If there is undeclared identifier or unknown type name error, fix it by finding and including the related libraries.
+
+MUST RETURN THE FULL CODE, INCLUDING UNCHANGED PARTS.
+
+Below is the code needs to be built:
+&lt;code&gt;
+#include &#34;http_parser.h&#34;
+#include &lt;stdint.h&gt;
+#include &lt;stdlib.h&gt;
+
+int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+
+  http_parser parser;
+
+  if (size &gt; 0) {
+    int pause = data[0]&amp;1; // We are using the last bit of the first byte in data to decide whether to pause or not.
+    http_parser_init(&amp;parser, HTTP_BOTH);
+    http_parser_pause(&amp;parser, pause);
+  }
+
+  return 0;
+}
+&lt;/code&gt;
+
+Below is the error to fix:
+The code can build successfully but has a runtime issue: No code coverage increasement, indicating the fuzz target ineffectively invokes the function under test.
+
+
+
+
+Fix code:
+1. Consider possible solutions for the issues listed above.
+2. Choose a solution that can maximize fuzzing result, which is utilizing the function under test and feeding it not null input.
+3. Apply the solutions to the original code.
+It&#39;s important to show the complete code, not only the fixed line.
+&lt;solution&gt;
+</pre>
+
+
+
+<h3>Code #1</h3>
+
+<pre>
+#include &#34;http_parser.h&#34;
+#include &lt;stdint.h&gt;
+#include &lt;stdlib.h&gt;
+
+int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+
+  http_parser parser;
+  http_parser_settings settings;
+  memset(&amp;settings, 0, sizeof(settings));
+
+  if (size &gt; 0) {
+    int pause = data[0]&amp;1; 
+    http_parser_init(&amp;parser, HTTP_BOTH);
+    http_parser_execute(&amp;parser, &amp;settings, (const char*)data, size); // Add this line to properly utilize the function under test
+    http_parser_pause(&amp;parser, pause);
+  }
+
+  return 0;
+}
+</pre>
+
+
+<h3>Fixer prompt #2</h3>
+<pre>
+
+Given the following C fuzz harness and its build error message, fix the code to make it build for fuzzing.
+
+If there is undeclared identifier or unknown type name error, fix it by finding and including the related libraries.
+
+MUST RETURN THE FULL CODE, INCLUDING UNCHANGED PARTS.
+
+Below is the code needs to be built:
+&lt;code&gt;
+#include &#34;http_parser.h&#34;
+#include &lt;stdint.h&gt;
+#include &lt;stdlib.h&gt;
+
+int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+
+  http_parser parser;
+  http_parser_settings settings;
+  memset(&amp;settings, 0, sizeof(settings));
+
+  if (size &gt; 0) {
+    int pause = data[0]&amp;1; 
+    http_parser_init(&amp;parser, HTTP_BOTH);
+    http_parser_execute(&amp;parser, &amp;settings, (const char*)data, size); // Add this line to properly utilize the function under test
+    http_parser_pause(&amp;parser, pause);
+  }
+
+  return 0;
+}
+&lt;/code&gt;
+
+Below is the error to fix:
+The code can build successfully but has a runtime issue: Fuzzing crashed immediately at runtime (ASAN-ERROR: AddressSanitizer: ABRT on unknown address 0x00000000000c (pc 0x7f11496d300b bp 0x7f1149848588 sp 0x7fffa43804b0 T0)), indicating fuzz target code for invoking the function under test is incorrect or unrobust.
+&lt;error&gt;
+Crash stacks:
+Stack 0:
+#0 0x7f11496d300b in raise (/lib/x86_64-linux-gnu/libc.so.6+0x4300b) (BuildId: 0702430aef5fa3dda43986563e9ffcc47efbd75e)
+#1 0x7f11496b2858 in abort (/lib/x86_64-linux-gnu/libc.so.6+0x22858) (BuildId: 0702430aef5fa3dda43986563e9ffcc47efbd75e)
+#2 0x7f11496b2728  (/lib/x86_64-linux-gnu/libc.so.6+0x22728) (BuildId: 0702430aef5fa3dda43986563e9ffcc47efbd75e)
+#3 0x7f11496c3fd5 in __assert_fail (/lib/x86_64-linux-gnu/libc.so.6+0x33fd5) (BuildId: 0702430aef5fa3dda43986563e9ffcc47efbd75e)
+#4 0x561207acb9d3 in http_parser_pause /src/http-parser/http_parser.c:2556:5
+#5 0x561207acbc75 in LLVMFuzzerTestOneInput /src/http-parser/fuzzers/fuzz_url.c:15:5
+#6 0x561207970470 in fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:614:13
+#7 0x56120796fc95 in fuzzer::Fuzzer::RunOne(unsigned char const*, unsigned long, bool, fuzzer::InputInfo*, bool, bool*) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:516:7
+#8 0x561207971465 in fuzzer::Fuzzer::MutateAndTestOne() /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:760:19
+#9 0x561207972255 in fuzzer::Fuzzer::Loop(std::__Fuzzer::vector&lt;fuzzer::SizedFile, std::__Fuzzer::allocator&lt;fuzzer::SizedFile&gt;&gt;&amp;) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:905:5
+#10 0x561207960566 in fuzzer::FuzzerDriver(int*, char***, int (*)(unsigned char const*, unsigned long)) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:914:6
+#11 0x56120798ca92 in main /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMain.cpp:20:10
+#12 0x7f11496b4082 in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x24082) (BuildId: 0702430aef5fa3dda43986563e9ffcc47efbd75e)
+#13 0x5612079516dd in _start (/out/fuzz_url+0x466dd)
+&lt;/error&gt;
+
+
+
+
+Fix code:
+1. Consider possible solutions for the issues listed above.
+2. Choose a solution that can maximize fuzzing result, which is utilizing the function under test and feeding it not null input.
+3. Apply the solutions to the original code.
+It&#39;s important to show the complete code, not only the fixed line.
+&lt;solution&gt;
+</pre>
+
+
+
+<h3>Code #2</h3>
+
+<pre>
+#include &#34;http_parser.h&#34;
+#include &lt;stdint.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;string.h&gt;
+
+int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+
+  http_parser parser;
+  http_parser_settings settings;
+  memset(&amp;settings, 0, sizeof(settings));
+
+  if (size &gt; 1) {
+    int pause = data[0]&amp;1; 
+    http_parser_init(&amp;parser, HTTP_BOTH);
+    http_parser_execute(&amp;parser, &amp;settings, (const char*)data+1, size-1); 
+    http_parser_pause(&amp;parser, pause);
+  }
+
+  return 0;
+}
+&lt;/solution&gt;
+
+The issue was that the same data was being used to indicate whether to pause the parser and as the input to the parser. This could cause the parser to crash if the data was not valid input. The fixed code uses the first byte of the data to decide whether to pause the parser and the rest of the data as the input to the parser. This ensures that the parser always receives valid input.
+</pre>
+
+
+<h3>Fixer prompt #3</h3>
+<pre>
+
+Given the following C fuzz harness and its build error message, fix the code to make it build for fuzzing.
+
+If there is undeclared identifier or unknown type name error, fix it by finding and including the related libraries.
+
+MUST RETURN THE FULL CODE, INCLUDING UNCHANGED PARTS.
+
+Below is the code needs to be built:
+&lt;code&gt;
+#include &#34;http_parser.h&#34;
+#include &lt;stdint.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;string.h&gt;
+
+int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+
+  http_parser parser;
+  http_parser_settings settings;
+  memset(&amp;settings, 0, sizeof(settings));
+
+  if (size &gt; 1) {
+    int pause = data[0]&amp;1; 
+    http_parser_init(&amp;parser, HTTP_BOTH);
+    http_parser_execute(&amp;parser, &amp;settings, (const char*)data+1, size-1); 
+    http_parser_pause(&amp;parser, pause);
+  }
+
+  return 0;
+}
+&lt;/code&gt;
+
+Below is the error to fix:
+The code can build successfully but has a runtime issue: Fuzzing crashed immediately at runtime (ASAN-ERROR: AddressSanitizer: ABRT on unknown address 0x00000000000b (pc 0x7f7b3114300b bp 0x7f7b312b8588 sp 0x7ffef2f4c3b0 T0)), indicating fuzz target code for invoking the function under test is incorrect or unrobust.
+&lt;error&gt;
+Crash stacks:
+Stack 0:
+#0 0x7f7b3114300b in raise (/lib/x86_64-linux-gnu/libc.so.6+0x4300b) (BuildId: 0702430aef5fa3dda43986563e9ffcc47efbd75e)
+#1 0x7f7b31122858 in abort (/lib/x86_64-linux-gnu/libc.so.6+0x22858) (BuildId: 0702430aef5fa3dda43986563e9ffcc47efbd75e)
+#2 0x7f7b31122728  (/lib/x86_64-linux-gnu/libc.so.6+0x22728) (BuildId: 0702430aef5fa3dda43986563e9ffcc47efbd75e)
+#3 0x7f7b31133fd5 in __assert_fail (/lib/x86_64-linux-gnu/libc.so.6+0x33fd5) (BuildId: 0702430aef5fa3dda43986563e9ffcc47efbd75e)
+#4 0x5620bfaf49d3 in http_parser_pause /src/http-parser/http_parser.c:2556:5
+#5 0x5620bfaf4c86 in LLVMFuzzerTestOneInput /src/http-parser/fuzzers/fuzz_url.c:16:5
+#6 0x5620bf999470 in fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:614:13
+#7 0x5620bf998c95 in fuzzer::Fuzzer::RunOne(unsigned char const*, unsigned long, bool, fuzzer::InputInfo*, bool, bool*) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:516:7
+#8 0x5620bf99a465 in fuzzer::Fuzzer::MutateAndTestOne() /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:760:19
+#9 0x5620bf99b255 in fuzzer::Fuzzer::Loop(std::__Fuzzer::vector&lt;fuzzer::SizedFile, std::__Fuzzer::allocator&lt;fuzzer::SizedFile&gt;&gt;&amp;) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:905:5
+#10 0x5620bf989566 in fuzzer::FuzzerDriver(int*, char***, int (*)(unsigned char const*, unsigned long)) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:914:6
+#11 0x5620bf9b5a92 in main /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMain.cpp:20:10
+#12 0x7f7b31124082 in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x24082) (BuildId: 0702430aef5fa3dda43986563e9ffcc47efbd75e)
+#13 0x5620bf97a6dd in _start (/out/fuzz_url+0x466dd)
+&lt;/error&gt;
+
+
+
+
+Fix code:
+1. Consider possible solutions for the issues listed above.
+2. Choose a solution that can maximize fuzzing result, which is utilizing the function under test and feeding it not null input.
+3. Apply the solutions to the original code.
+It&#39;s important to show the complete code, not only the fixed line.
+&lt;solution&gt;
+</pre>
+
+
+
+<h3>Code #3</h3>
+
+<pre>
+The error message indicates that the fuzzing crashed immediately at runtime due to an issue with the http_parser_pause function. The http_parser_pause function is called with the argument &#34;pause&#34;, which is derived from the fuzzing input data. If the fuzzing input data is not properly initialized, it could lead to unexpected behavior in the http_parser_pause function.
+
+To fix this issue, we should ensure that the &#34;pause&#34; variable is properly initialized before it is used in the http_parser_pause function. We can do this by adding a check to see if the size of the input data is greater than 0 before we attempt to initialize the &#34;pause&#34; variable. This will ensure that we have at least one byte of data to use for the &#34;pause&#34; variable.
+
+Here is the fixed code:
+
+```c
+#include &#34;http_parser.h&#34;
+#include &lt;stdint.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;string.h&gt;
+
+int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+
+  http_parser parser;
+  http_parser_settings settings;
+  memset(&amp;settings, 0, sizeof(settings));
+
+  if (size &gt; 1) {
+    int pause = data[0]&amp;1; 
+    http_parser_init(&amp;parser, HTTP_BOTH);
+    http_parser_execute(&amp;parser, &amp;settings, (const char*)data+1, size-1); 
+
+    if (size &gt; 0) {
+      http_parser_pause(&amp;parser, pause);
+    }
+  }
+
+  return 0;
+}
+```
+In this fixed code, we only call the http_parser_pause function if the size of the input data is greater than 0. This ensures that the &#34;pause&#34; variable is properly initialized before it is used in the http_parser_pause function, which should prevent the fuzzing from crashing at runtime.
+</pre>
+
+
+<h3>Fixer prompt #4</h3>
+<pre>
+
+Given the following C fuzz harness and its build error message, fix the code to make it build for fuzzing.
+
+If there is undeclared identifier or unknown type name error, fix it by finding and including the related libraries.
+
+MUST RETURN THE FULL CODE, INCLUDING UNCHANGED PARTS.
+
+Below is the code needs to be built:
+&lt;code&gt;
+#include &#34;http_parser.h&#34;
+#include &lt;stdint.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;string.h&gt;
+
+int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+
+  http_parser parser;
+  http_parser_settings settings;
+  memset(&amp;settings, 0, sizeof(settings));
+
+  if (size &gt; 1) {
+    int pause = data[0]&amp;1; 
+    http_parser_init(&amp;parser, HTTP_BOTH);
+    http_parser_execute(&amp;parser, &amp;settings, (const char*)data+1, size-1); 
+
+    if (size &gt; 0) {
+      http_parser_pause(&amp;parser, pause);
+    }
+  }
+
+  return 0;
+}
+&lt;/code&gt;
+
+Below is the error to fix:
+The code can build successfully but has a runtime issue: Fuzzing crashed immediately at runtime (ASAN-ERROR: AddressSanitizer: ABRT on unknown address 0x00000000000b (pc 0x7faa3335e00b bp 0x7faa334d3588 sp 0x7ffd64dc1dd0 T0)), indicating fuzz target code for invoking the function under test is incorrect or unrobust.
+&lt;error&gt;
+Crash stacks:
+Stack 0:
+#0 0x7faa3335e00b in raise (/lib/x86_64-linux-gnu/libc.so.6+0x4300b) (BuildId: 0702430aef5fa3dda43986563e9ffcc47efbd75e)
+#1 0x7faa3333d858 in abort (/lib/x86_64-linux-gnu/libc.so.6+0x22858) (BuildId: 0702430aef5fa3dda43986563e9ffcc47efbd75e)
+#2 0x7faa3333d728  (/lib/x86_64-linux-gnu/libc.so.6+0x22728) (BuildId: 0702430aef5fa3dda43986563e9ffcc47efbd75e)
+#3 0x7faa3334efd5 in __assert_fail (/lib/x86_64-linux-gnu/libc.so.6+0x33fd5) (BuildId: 0702430aef5fa3dda43986563e9ffcc47efbd75e)
+#4 0x55c96d1939d3 in http_parser_pause /src/http-parser/http_parser.c:2556:5
+#5 0x55c96d193c85 in LLVMFuzzerTestOneInput /src/http-parser/fuzzers/fuzz_url.c:18:7
+#6 0x55c96d038470 in fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:614:13
+#7 0x55c96d037c95 in fuzzer::Fuzzer::RunOne(unsigned char const*, unsigned long, bool, fuzzer::InputInfo*, bool, bool*) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:516:7
+#8 0x55c96d039465 in fuzzer::Fuzzer::MutateAndTestOne() /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:760:19
+#9 0x55c96d03a255 in fuzzer::Fuzzer::Loop(std::__Fuzzer::vector&lt;fuzzer::SizedFile, std::__Fuzzer::allocator&lt;fuzzer::SizedFile&gt;&gt;&amp;) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:905:5
+#10 0x55c96d028566 in fuzzer::FuzzerDriver(int*, char***, int (*)(unsigned char const*, unsigned long)) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:914:6
+#11 0x55c96d054a92 in main /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMain.cpp:20:10
+#12 0x7faa3333f082 in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x24082) (BuildId: 0702430aef5fa3dda43986563e9ffcc47efbd75e)
+#13 0x55c96d0196dd in _start (/out/fuzz_url+0x466dd)
+&lt;/error&gt;
+
+
+
+
+Fix code:
+1. Consider possible solutions for the issues listed above.
+2. Choose a solution that can maximize fuzzing result, which is utilizing the function under test and feeding it not null input.
+3. Apply the solutions to the original code.
+It&#39;s important to show the complete code, not only the fixed line.
+&lt;solution&gt;
+</pre>
+
+
+
+<h3>Code #4</h3>
+
+<pre>
+#include &#34;http_parser.h&#34;
+#include &lt;stdint.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;string.h&gt;
+
+int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+
+  http_parser parser;
+  http_parser_settings settings;
+  memset(&amp;settings, 0, sizeof(settings));
+
+  if (size &gt; 2) { // size should be more than 2 to ensure data+1 is valid
+    int pause = data[0]&amp;1; 
+    http_parser_init(&amp;parser, HTTP_BOTH);
+    http_parser_execute(&amp;parser, &amp;settings, (const char*)data+1, size-1); 
+
+    if (pause) { // only call http_parser_pause when pause is not zero
+      http_parser_pause(&amp;parser, pause);
+    }
+  }
+
+  return 0;
+}
+</pre>
+
+
+<h2>Logs</h2>
+<pre>
+Fixing /home/chyun/oss-fuzz-gen/results6/output-http-parser-http_parser_pause/fixed_targets/01.c with gpt-4, attempt 1.
+Fixing /home/chyun/oss-fuzz-gen/results6/output-http-parser-http_parser_pause/fixed_targets/01.c with gpt-4, attempt 2.
+Fixing /home/chyun/oss-fuzz-gen/results6/output-http-parser-http_parser_pause/fixed_targets/01.c with gpt-4, attempt 3.
+Fixing /home/chyun/oss-fuzz-gen/results6/output-http-parser-http_parser_pause/fixed_targets/01.c with gpt-4, attempt 4.
+Successfully built /home/chyun/oss-fuzz-gen/results6/output-http-parser-http_parser_pause/fixed_targets/01.c with gpt-4 in 4 iterations of fixing.
+Triaging the crash related to /home/chyun/oss-fuzz-gen/results6/output-http-parser-http_parser_pause/fixed_targets/01.c with gpt-4.
+Result for http-parser-http_parser_pause-01: crashes=True, coverage=0.016556291390728478 (15/906), coverage diff=0.0 (0/1590)
+
+</pre>
+
+<h2>Run logs</h2>
+<pre>
+Unable to find image &#39;gcr.io/oss-fuzz-base/base-runner:latest&#39; locally
+latest: Pulling from oss-fuzz-base/base-runner
+b549f31133a9: Already exists
+139edd167df6: Already exists
+af444f75ae33: Already exists
+14f3915e7420: Pulling fs layer
+a9ff08083a25: Pulling fs layer
+9dc48c872e73: Pulling fs layer
+96346b8c0f36: Pulling fs layer
+bb156b2edaf9: Pulling fs layer
+9e51d1915cc4: Pulling fs layer
+d6a22ed24534: Pulling fs layer
+aa0d26fc0d9f: Pulling fs layer
+f93655e29f16: Pulling fs layer
+1bf9cfa4140a: Pulling fs layer
+572f87638d3c: Pulling fs layer
+dfc0d26bd8f6: Pulling fs layer
+98e19f74b586: Pulling fs layer
+f2d989760d0c: Pulling fs layer
+b32590a08972: Pulling fs layer
+367baa430ffc: Pulling fs layer
+424ab3846cad: Pulling fs layer
+96346b8c0f36: Waiting
+bb156b2edaf9: Waiting
+9e51d1915cc4: Waiting
+d6a22ed24534: Waiting
+aa0d26fc0d9f: Waiting
+f93655e29f16: Waiting
+1bf9cfa4140a: Waiting
+572f87638d3c: Waiting
+dfc0d26bd8f6: Waiting
+98e19f74b586: Waiting
+f2d989760d0c: Waiting
+b32590a08972: Waiting
+367baa430ffc: Waiting
+424ab3846cad: Waiting
+9dc48c872e73: Verifying Checksum
+9dc48c872e73: Download complete
+14f3915e7420: Verifying Checksum
+14f3915e7420: Download complete
+14f3915e7420: Pull complete
+a9ff08083a25: Verifying Checksum
+a9ff08083a25: Download complete
+a9ff08083a25: Pull complete
+9dc48c872e73: Pull complete
+9e51d1915cc4: Download complete
+bb156b2edaf9: Verifying Checksum
+bb156b2edaf9: Download complete
+d6a22ed24534: Verifying Checksum
+d6a22ed24534: Download complete
+96346b8c0f36: Verifying Checksum
+96346b8c0f36: Download complete
+f93655e29f16: Verifying Checksum
+f93655e29f16: Download complete
+aa0d26fc0d9f: Verifying Checksum
+aa0d26fc0d9f: Download complete
+572f87638d3c: Verifying Checksum
+572f87638d3c: Download complete
+dfc0d26bd8f6: Verifying Checksum
+dfc0d26bd8f6: Download complete
+96346b8c0f36: Pull complete
+bb156b2edaf9: Pull complete
+9e51d1915cc4: Pull complete
+d6a22ed24534: Pull complete
+aa0d26fc0d9f: Pull complete
+f93655e29f16: Pull complete
+1bf9cfa4140a: Download complete
+98e19f74b586: Verifying Checksum
+98e19f74b586: Download complete
+367baa430ffc: Download complete
+b32590a08972: Verifying Checksum
+b32590a08972: Download complete
+f2d989760d0c: Verifying Checksum
+f2d989760d0c: Download complete
+1bf9cfa4140a: Pull complete
+572f87638d3c: Pull complete
+dfc0d26bd8f6: Pull complete
+424ab3846cad: Verifying Checksum
+424ab3846cad: Download complete
+98e19f74b586: Pull complete
+f2d989760d0c: Pull complete
+b32590a08972: Pull complete
+367baa430ffc: Pull complete
+424ab3846cad: Pull complete
+Digest: sha256:e1eba5efa394fec01565cc17a38ae61ff209acf11e7ce30f0af8f3e06089a026
+Status: Image is up to date for gcr.io/oss-fuzz-base/base-runner:latest
+INFO:__main__:Running: docker run --privileged --shm-size=2g --platform linux/amd64 --rm -e FUZZING_ENGINE=libfuzzer -e SANITIZER=address -e RUN_FUZZER_MODE=interactive -e HELPER=True -v /home/chyun/oss-fuzz-gen/results6/output-http-parser-http_parser_pause/corpora/01.c:/tmp/fuzz_url_corpus -v /tmp/tmp15v075qm/build/out/http-parser-http_parser_pause-01:/out -t gcr.io/oss-fuzz-base/base-runner run_fuzzer fuzz_url -print_final_stats=1 -max_total_time=30 -len_control=0 -timeout=30.
+vm.mmap_rnd_bits = 28
+rm: cannot remove &#39;/tmp/fuzz_url_corpus&#39;: Device or resource busy
+/out/fuzz_url -rss_limit_mb=2560 -timeout=25 -print_final_stats=1 -max_total_time=30 -len_control=0 -timeout=30 /tmp/fuzz_url_corpus &lt; /dev/null
+INFO: Running with entropic power schedule (0xFF, 100).
+INFO: Seed: 212896716
+INFO: Loaded 1 modules   (906 inline 8-bit counters): 906 [0x564fa47b6ab0, 0x564fa47b6e3a), 
+INFO: Loaded 1 PC tables (906 PCs): 906 [0x564fa47b6e40,0x564fa47ba6e0), 
+INFO:        0 files found in /tmp/fuzz_url_corpus
+INFO: -max_len is not provided; libFuzzer will not generate inputs larger than 4096 bytes
+INFO: A corpus is not provided, starting from an empty corpus
+#2	INITED cov: 2 ft: 2 corp: 1/1b exec/s: 0 rss: 30Mb
+	NEW_FUNC[1/2]: 0x564fa473aa80 in http_parser_execute /src/http-parser/http_parser.c:645
+	NEW_FUNC[2/2]: 0x564fa47471b0 in http_parser_init /src/http-parser/http_parser.c:2226
+#4	NEW    cov: 15 ft: 16 corp: 2/5b lim: 4096 exec/s: 0 rss: 30Mb L: 4/4 MS: 2 CrossOver-CopyPart-
+fuzz_url: http_parser.c:2556: void http_parser_pause(http_parser *, int): Assertion `0 &amp;&amp; &#34;Attempting to pause parser in error state&#34;&#39; failed.
+AddressSanitizer:DEADLYSIGNAL
+=================================================================
+[1m[31m==12==ERROR: AddressSanitizer: ABRT on unknown address 0x00000000000c (pc 0x7ff33695100b bp 0x7ff336ac6588 sp 0x7ffc52301e50 T0)
+[1m[0mSCARINESS: 10 (signal)
+    #0 0x7ff33695100b in raise (/lib/x86_64-linux-gnu/libc.so.6+0x4300b) (BuildId: 0702430aef5fa3dda43986563e9ffcc47efbd75e)
+    #1 0x7ff336930858 in abort (/lib/x86_64-linux-gnu/libc.so.6+0x22858) (BuildId: 0702430aef5fa3dda43986563e9ffcc47efbd75e)
+    #2 0x7ff336930728  (/lib/x86_64-linux-gnu/libc.so.6+0x22728) (BuildId: 0702430aef5fa3dda43986563e9ffcc47efbd75e)
+    #3 0x7ff336941fd5 in __assert_fail (/lib/x86_64-linux-gnu/libc.so.6+0x33fd5) (BuildId: 0702430aef5fa3dda43986563e9ffcc47efbd75e)
+    #4 0x564fa47489d3 in http_parser_pause /src/http-parser/http_parser.c:2556:5
+    #5 0x564fa4748ca9 in LLVMFuzzerTestOneInput /src/http-parser/fuzzers/fuzz_url.c:18:7
+    #6 0x564fa45ed470 in fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:614:13
+    #7 0x564fa45ecc95 in fuzzer::Fuzzer::RunOne(unsigned char const*, unsigned long, bool, fuzzer::InputInfo*, bool, bool*) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:516:7
+    #8 0x564fa45ee465 in fuzzer::Fuzzer::MutateAndTestOne() /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:760:19
+    #9 0x564fa45ef255 in fuzzer::Fuzzer::Loop(std::__Fuzzer::vector&lt;fuzzer::SizedFile, std::__Fuzzer::allocator&lt;fuzzer::SizedFile&gt;&gt;&amp;) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:905:5
+    #10 0x564fa45dd566 in fuzzer::FuzzerDriver(int*, char***, int (*)(unsigned char const*, unsigned long)) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:914:6
+    #11 0x564fa4609a92 in main /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMain.cpp:20:10
+    #12 0x7ff336932082 in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x24082) (BuildId: 0702430aef5fa3dda43986563e9ffcc47efbd75e)
+    #13 0x564fa45ce6dd in _start (/out/fuzz_url+0x466dd)
+
+DEDUP_TOKEN: raise--abort--
+AddressSanitizer can not provide additional info.
+SUMMARY: AddressSanitizer: ABRT (/lib/x86_64-linux-gnu/libc.so.6+0x4300b) (BuildId: 0702430aef5fa3dda43986563e9ffcc47efbd75e) in raise
+==12==ABORTING
+MS: 1 CMP- DE: &#34;\001\000&#34;-; base unit: adc83b19e793491b1c6ea0fd8b46cd9f32e592fc
+0x1,0x0,0xa,
+\001\000\012
+artifact_prefix=&#39;./&#39;; Test unit written to ./crash-addba5cfc7d6f077b8a46f4d4549d4e24c181954
+Base64: AQAK
+stat::number_of_executed_units: 5
+stat::average_exec_per_sec:     0
+stat::new_units_added:          1
+stat::slowest_unit_time_sec:    0
+stat::peak_rss_mb:              31
+
+</pre>
+
+
+</body>

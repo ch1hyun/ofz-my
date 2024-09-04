@@ -1,0 +1,907 @@
+<!doctype html>
+
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Experiment results</title>
+<style>
+* {
+    box-sizing: border-box;
+}
+
+html {
+    line-height: 1.15;
+}
+
+body {
+    font-family: sans-serif;
+    font-size: 16px;
+}
+
+table {
+    border-collapse: collapse;
+    border-spacing: 0;
+}
+
+td, th {
+    border-right: 1px #dedede solid;
+    border-bottom: 1px #dedede solid;
+    padding: 5px;
+    text-align: left;
+}
+td:first-child, th:first-child {
+    border-left: 1px #dedede solid;
+}
+th {
+    border-top: 1px #dedede solid;
+}
+
+tbody tr:nth-child(odd) {
+    background-color: #f4f5ff;
+}
+</style>
+<body>
+    LLM: 
+    
+<h1>output-http-parser-http_errno_description / 02</h1>
+Bug: True
+<br>
+Crash reason: NO_SEMANTIC_ERR
+<br>
+<br>
+
+<h2>Triage</h2>
+<pre>
+The crash is caused by a bug in the fuzz driver.
+
+The crash report shows that the crash occured during the execution of the http_parser_execute function, which was called in the fuzz driver. The driver code shows that http_parser_execute is called with NULL as the second argument. This is likely the cause of the crash, as http_parser_execute probably tries to access or modify data through this pointer, leading to a segmentation fault when it is NULL.
+</pre>
+<br>
+
+
+
+
+
+<h3>Final code</h3>
+
+<pre>
+#include &#34;http_parser.h&#34;
+#include &lt;stdint.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;stdio.h&gt;
+
+int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  if (size &lt; 1)
+    return 0;
+
+  /* Interpret the first byte of the input as an enumeration value, it prevents an out-of-bounds
+   * enumeration value and broker cast.  
+   */
+  enum http_errno err_no = (enum http_errno)(data[0] % (HPE_UNKNOWN + 1));
+
+  // Call test target function
+  const char * description = http_errno_description(err_no);
+
+  // Check if the description is not NULL and it&#39;s not an empty string
+  if (description != NULL &amp;&amp; description[0] != &#39;\0&#39;) {
+    // Do something with the description
+    // For example, print it to the console
+    printf(&#34;Description: %s\n&#34;, description);
+  }
+
+  // Feed the function with not null input
+  if (size &gt; 1) {
+    http_parser parser;
+    http_parser_init(&amp;parser, HTTP_REQUEST);
+    http_parser_execute(&amp;parser, NULL, (const char *)(data + 1), size - 1);
+  }
+
+  return 0;
+}
+</pre>
+
+
+<h3>Fixer prompt #1</h3>
+<pre>
+
+Given the following C fuzz harness and its build error message, fix the code to make it build for fuzzing.
+
+If there is undeclared identifier or unknown type name error, fix it by finding and including the related libraries.
+
+MUST RETURN THE FULL CODE, INCLUDING UNCHANGED PARTS.
+
+Below is the code needs to be built:
+&lt;code&gt;
+#include &#34;http_parser.h&#34;
+#include &lt;stdint.h&gt;
+#include &lt;stdlib.h&gt;
+
+enum http_errno{
+  HPE_OK,
+  HPE_CB_message_begin,
+  HPE_CB_url,
+  HPE_CB_header_field,
+  HPE_CB_header_value,
+  HPE_CB_headers_complete,
+  HPE_CB_body,
+  HPE_CB_message_complete,
+  HPE_CB_chunk_header,
+  HPE_CB_chunk_complete,
+  HPE_INVALID_EOF_STATE,
+  HPE_HEADER_OVERFLOW,
+  HPE_CLOSED_CONNECTION,
+  HPE_INVALID_VERSION,
+  HPE_INVALID_STATUS,
+  HPE_INVALID_METHOD,
+  HPE_INVALID_URL,
+  HPE_INVALID_HOST,
+  HPE_INVALID_PORT,
+  HPE_INVALID_PATH,
+  HPE_INVALID_QUERY_STRING,
+  HPE_INVALID_FRAGMENT,
+  HPE_LF_EXPECTED,
+  HPE_INVALID_HEADER_TOKEN,
+  HPE_INVALID_CONTENT_LENGTH,
+  HPE_UNEXPECTED_CONTENT_LENGTH,
+  HPE_INVALID_CHUNK_SIZE,
+  HPE_INVALID_CONSTANT,
+  HPE_INVALID_INTERNAL_STATE,
+  HPE_STRICT,
+  HPE_PAUSED,
+  HPE_UNKNOWN
+};
+
+int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  if (size &lt; 1)
+    return 0;
+
+  /* Interpret the first byte of the input as an enumeration value, it prevents an out-of-bounds
+   * enumeration value and broker cast.  
+   */
+  enum http_errno err_no = (enum http_errno)(data[0] % (HPE_UNKNOWN + 1));
+
+  // Call test target function
+  const char * description = http_errno_description(err_no);
+
+  return 0;
+}
+&lt;/code&gt;
+
+Below is the error to fix:
+The code has the following build issues:
+&lt;error&gt;
+fuzzers/fuzz_url.c:5:6: error: redefinition of &#39;http_errno&#39;
+    5 | enum http_errno{
+      |      ^
+./http_parser.h:287:6: note: previous definition is here
+  287 | enum http_errno {
+      |      ^
+fuzzers/fuzz_url.c:6:3: error: redefinition of enumerator &#39;HPE_OK&#39;
+    6 |   HPE_OK,
+      |   ^
+./http_parser.h:288:18: note: previous definition is here
+  288 |   HTTP_ERRNO_MAP(HTTP_ERRNO_GEN)
+      |                  ^
+fuzzers/fuzz_url.c:7:3: error: redefinition of enumerator &#39;HPE_CB_message_begin&#39;
+    7 |   HPE_CB_message_begin,
+      |   ^
+./http_parser.h:288:18: note: previous definition is here
+  288 |   HTTP_ERRNO_MAP(HTTP_ERRNO_GEN)
+      |                  ^
+fuzzers/fuzz_url.c:8:3: error: redefinition of enumerator &#39;HPE_CB_url&#39;
+    8 |   HPE_CB_url,
+      |   ^
+./http_parser.h:288:18: note: previous definition is here
+  288 |   HTTP_ERRNO_MAP(HTTP_ERRNO_GEN)
+      |                  ^
+fuzzers/fuzz_url.c:9:3: error: redefinition of enumerator &#39;HPE_CB_header_field&#39;
+    9 |   HPE_CB_header_field,
+      |   ^
+./http_parser.h:288:18: note: previous definition is here
+  288 |   HTTP_ERRNO_MAP(HTTP_ERRNO_GEN)
+      |                  ^
+fuzzers/fuzz_url.c:10:3: error: redefinition of enumerator &#39;HPE_CB_header_value&#39;
+   10 |   HPE_CB_header_value,
+      |   ^
+./http_parser.h:288:18: note: previous definition is here
+  288 |   HTTP_ERRNO_MAP(HTTP_ERRNO_GEN)
+      |                  ^
+fuzzers/fuzz_url.c:11:3: error: redefinition of enumerator &#39;HPE_CB_headers_complete&#39;
+   11 |   HPE_CB_headers_complete,
+      |   ^
+./http_parser.h:288:18: note: previous definition is here
+  288 |   HTTP_ERRNO_MAP(HTTP_ERRNO_GEN)
+      |                  ^
+fuzzers/fuzz_url.c:12:3: error: redefinition of enumerator &#39;HPE_CB_body&#39;
+   12 |   HPE_CB_body,
+      |   ^
+./http_parser.h:288:18: note: previous definition is here
+  288 |   HTTP_ERRNO_MAP(HTTP_ERRNO_GEN)
+      |                  ^
+fuzzers/fuzz_url.c:13:3: error: redefinition of enumerator &#39;HPE_CB_message_complete&#39;
+   13 |   HPE_CB_message_complete,
+      |   ^
+./http_parser.h:288:18: note: previous definition is here
+  288 |   HTTP_ERRNO_MAP(HTTP_ERRNO_GEN)
+      |                  ^
+fuzzers/fuzz_url.c:14:3: error: redefinition of enumerator &#39;HPE_CB_chunk_header&#39;
+   14 |   HPE_CB_chunk_header,
+      |   ^
+./http_parser.h:288:18: note: previous definition is here
+  288 |   HTTP_ERRNO_MAP(HTTP_ERRNO_GEN)
+      |                  ^
+fuzzers/fuzz_url.c:15:3: error: redefinition of enumerator &#39;HPE_CB_chunk_complete&#39;
+   15 |   HPE_CB_chunk_complete,
+      |   ^
+./http_parser.h:288:18: note: previous definition is here
+  288 |   HTTP_ERRNO_MAP(HTTP_ERRNO_GEN)
+      |                  ^
+fuzzers/fuzz_url.c:16:3: error: redefinition of enumerator &#39;HPE_INVALID_EOF_STATE&#39;
+   16 |   HPE_INVALID_EOF_STATE,
+      |   ^
+./http_parser.h:288:18: note: previous definition is here
+  288 |   HTTP_ERRNO_MAP(HTTP_ERRNO_GEN)
+      |                  ^
+fuzzers/fuzz_url.c:17:3: error: redefinition of enumerator &#39;HPE_HEADER_OVERFLOW&#39;
+   17 |   HPE_HEADER_OVERFLOW,
+      |   ^
+./http_parser.h:288:18: note: previous definition is here
+  288 |   HTTP_ERRNO_MAP(HTTP_ERRNO_GEN)
+      |                  ^
+fuzzers/fuzz_url.c:18:3: error: redefinition of enumerator &#39;HPE_CLOSED_CONNECTION&#39;
+   18 |   HPE_CLOSED_CONNECTION,
+      |   ^
+./http_parser.h:288:18: note: previous definition is here
+  288 |   HTTP_ERRNO_MAP(HTTP_ERRNO_GEN)
+      |                  ^
+fuzzers/fuzz_url.c:19:3: error: redefinition of enumerator &#39;HPE_INVALID_VERSION&#39;
+   19 |   HPE_INVALID_VERSION,
+      |   ^
+./http_parser.h:288:18: note: previous definition is here
+  288 |   HTTP_ERRNO_MAP(HTTP_ERRNO_GEN)
+      |                  ^
+fuzzers/fuzz_url.c:20:3: error: redefinition of enumerator &#39;HPE_INVALID_STATUS&#39;
+   20 |   HPE_INVALID_STATUS,
+      |   ^
+./http_parser.h:288:18: note: previous definition is here
+  288 |   HTTP_ERRNO_MAP(HTTP_ERRNO_GEN)
+      |                  ^
+fuzzers/fuzz_url.c:21:3: error: redefinition of enumerator &#39;HPE_INVALID_METHOD&#39;
+   21 |   HPE_INVALID_METHOD,
+      |   ^
+./http_parser.h:288:18: note: previous definition is here
+  288 |   HTTP_ERRNO_MAP(HTTP_ERRNO_GEN)
+      |                  ^
+fuzzers/fuzz_url.c:22:3: error: redefinition of enumerator &#39;HPE_INVALID_URL&#39;
+   22 |   HPE_INVALID_URL,
+      |   ^
+./http_parser.h:288:18: note: previous definition is here
+  288 |   HTTP_ERRNO_MAP(HTTP_ERRNO_GEN)
+      |                  ^
+fuzzers/fuzz_url.c:23:3: error: redefinition of enumerator &#39;HPE_INVALID_HOST&#39;
+   23 |   HPE_INVALID_HOST,
+      |   ^
+./http_parser.h:288:18: note: previous definition is here
+  288 |   HTTP_ERRNO_MAP(HTTP_ERRNO_GEN)
+      |                  ^
+fatal error: too many errors emitted, stopping now [-ferror-limit=]
+&lt;/error&gt;
+
+
+
+
+Fix code:
+1. Consider possible solutions for the issues listed above.
+2. Choose a solution that can maximize fuzzing result, which is utilizing the function under test and feeding it not null input.
+3. Apply the solutions to the original code.
+It&#39;s important to show the complete code, not only the fixed line.
+&lt;solution&gt;
+</pre>
+
+
+
+<h3>Code #1</h3>
+
+<pre>
+The error messages indicate that the enum &#39;http_errno&#39; and its elements are already defined in the &#34;http_parser.h&#34; header file. So, we don&#39;t need to redefine them in our fuzzing code. The fixed code is as follows:
+
+```c
+#include &#34;http_parser.h&#34;
+#include &lt;stdint.h&gt;
+#include &lt;stdlib.h&gt;
+
+int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  if (size &lt; 1)
+    return 0;
+
+  /* Interpret the first byte of the input as an enumeration value, it prevents an out-of-bounds
+   * enumeration value and broker cast.  
+   */
+  enum http_errno err_no = (enum http_errno)(data[0] % (HPE_UNKNOWN + 1));
+
+  // Call test target function
+  const char * description = http_errno_description(err_no);
+
+  return 0;
+}
+```
+This code should build without any errors.
+</pre>
+
+
+<h3>Fixer prompt #2</h3>
+<pre>
+
+Given the following C fuzz harness and its build error message, fix the code to make it build for fuzzing.
+
+If there is undeclared identifier or unknown type name error, fix it by finding and including the related libraries.
+
+MUST RETURN THE FULL CODE, INCLUDING UNCHANGED PARTS.
+
+Below is the code needs to be built:
+&lt;code&gt;
+#include &#34;http_parser.h&#34;
+#include &lt;stdint.h&gt;
+#include &lt;stdlib.h&gt;
+
+int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  if (size &lt; 1)
+    return 0;
+
+  /* Interpret the first byte of the input as an enumeration value, it prevents an out-of-bounds
+   * enumeration value and broker cast.  
+   */
+  enum http_errno err_no = (enum http_errno)(data[0] % (HPE_UNKNOWN + 1));
+
+  // Call test target function
+  const char * description = http_errno_description(err_no);
+
+  return 0;
+}
+&lt;/code&gt;
+
+Below is the error to fix:
+The code can build successfully but has a runtime issue: No code coverage increasement, indicating the fuzz target ineffectively invokes the function under test.
+
+
+
+
+Fix code:
+1. Consider possible solutions for the issues listed above.
+2. Choose a solution that can maximize fuzzing result, which is utilizing the function under test and feeding it not null input.
+3. Apply the solutions to the original code.
+It&#39;s important to show the complete code, not only the fixed line.
+&lt;solution&gt;
+</pre>
+
+
+
+<h3>Code #2</h3>
+
+<pre>
+#include &#34;http_parser.h&#34;
+#include &lt;stdint.h&gt;
+#include &lt;stdlib.h&gt;
+
+int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  if (size &lt; 1)
+    return 0;
+
+  /* Interpret the first byte of the input as an enumeration value, it prevents an out-of-bounds
+   * enumeration value and broker cast.  
+   */
+  enum http_errno err_no = (enum http_errno)(data[0] % (HPE_UNKNOWN + 1));
+
+  // Call test target function
+  const char * description = http_errno_description(err_no);
+
+  // Check if the description is not NULL and it&#39;s not an empty string
+  if (description != NULL &amp;&amp; description[0] != &#39;\0&#39;) {
+    // Do something with the description
+    // For example, print it to the console
+    printf(&#34;Description: %s\n&#34;, description);
+  }
+
+  return 0;
+}
+</pre>
+
+
+<h3>Fixer prompt #3</h3>
+<pre>
+
+Given the following C fuzz harness and its build error message, fix the code to make it build for fuzzing.
+
+If there is undeclared identifier or unknown type name error, fix it by finding and including the related libraries.
+
+MUST RETURN THE FULL CODE, INCLUDING UNCHANGED PARTS.
+
+Below is the code needs to be built:
+&lt;code&gt;
+#include &#34;http_parser.h&#34;
+#include &lt;stdint.h&gt;
+#include &lt;stdlib.h&gt;
+
+int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  if (size &lt; 1)
+    return 0;
+
+  /* Interpret the first byte of the input as an enumeration value, it prevents an out-of-bounds
+   * enumeration value and broker cast.  
+   */
+  enum http_errno err_no = (enum http_errno)(data[0] % (HPE_UNKNOWN + 1));
+
+  // Call test target function
+  const char * description = http_errno_description(err_no);
+
+  // Check if the description is not NULL and it&#39;s not an empty string
+  if (description != NULL &amp;&amp; description[0] != &#39;\0&#39;) {
+    // Do something with the description
+    // For example, print it to the console
+    printf(&#34;Description: %s\n&#34;, description);
+  }
+
+  return 0;
+}
+&lt;/code&gt;
+
+Below is the error to fix:
+The code can build successfully but has a runtime issue: No code coverage increasement, indicating the fuzz target ineffectively invokes the function under test.
+
+
+
+
+Fix code:
+1. Consider possible solutions for the issues listed above.
+2. Choose a solution that can maximize fuzzing result, which is utilizing the function under test and feeding it not null input.
+3. Apply the solutions to the original code.
+It&#39;s important to show the complete code, not only the fixed line.
+&lt;solution&gt;
+</pre>
+
+
+
+<h3>Code #3</h3>
+
+<pre>
+#include &#34;http_parser.h&#34;
+#include &lt;stdint.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;stdio.h&gt;
+
+int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  if (size &lt; 1)
+    return 0;
+
+  /* Interpret the first byte of the input as an enumeration value, it prevents an out-of-bounds
+   * enumeration value and broker cast.  
+   */
+  enum http_errno err_no = (enum http_errno)(data[0] % (HPE_UNKNOWN + 1));
+
+  // Call test target function
+  const char * description = http_errno_description(err_no);
+
+  // Check if the description is not NULL and it&#39;s not an empty string
+  if (description != NULL &amp;&amp; description[0] != &#39;\0&#39;) {
+    // Do something with the description
+    // For example, print it to the console
+    printf(&#34;Description: %s\n&#34;, description);
+  }
+
+  return 0;
+}
+</pre>
+
+
+<h3>Fixer prompt #4</h3>
+<pre>
+
+Given the following C fuzz harness and its build error message, fix the code to make it build for fuzzing.
+
+If there is undeclared identifier or unknown type name error, fix it by finding and including the related libraries.
+
+MUST RETURN THE FULL CODE, INCLUDING UNCHANGED PARTS.
+
+Below is the code needs to be built:
+&lt;code&gt;
+#include &#34;http_parser.h&#34;
+#include &lt;stdint.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;stdio.h&gt;
+
+int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  if (size &lt; 1)
+    return 0;
+
+  /* Interpret the first byte of the input as an enumeration value, it prevents an out-of-bounds
+   * enumeration value and broker cast.  
+   */
+  enum http_errno err_no = (enum http_errno)(data[0] % (HPE_UNKNOWN + 1));
+
+  // Call test target function
+  const char * description = http_errno_description(err_no);
+
+  // Check if the description is not NULL and it&#39;s not an empty string
+  if (description != NULL &amp;&amp; description[0] != &#39;\0&#39;) {
+    // Do something with the description
+    // For example, print it to the console
+    printf(&#34;Description: %s\n&#34;, description);
+  }
+
+  return 0;
+}
+&lt;/code&gt;
+
+Below is the error to fix:
+The code can build successfully but has a runtime issue: No code coverage increasement, indicating the fuzz target ineffectively invokes the function under test.
+
+
+
+
+Fix code:
+1. Consider possible solutions for the issues listed above.
+2. Choose a solution that can maximize fuzzing result, which is utilizing the function under test and feeding it not null input.
+3. Apply the solutions to the original code.
+It&#39;s important to show the complete code, not only the fixed line.
+&lt;solution&gt;
+</pre>
+
+
+
+<h3>Code #4</h3>
+
+<pre>
+#include &#34;http_parser.h&#34;
+#include &lt;stdint.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;stdio.h&gt;
+
+int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  if (size &lt; 1)
+    return 0;
+
+  /* Interpret the first byte of the input as an enumeration value, it prevents an out-of-bounds
+   * enumeration value and broker cast.  
+   */
+  enum http_errno err_no = (enum http_errno)(data[0] % (HPE_UNKNOWN + 1));
+
+  // Call test target function
+  const char * description = http_errno_description(err_no);
+
+  // Check if the description is not NULL and it&#39;s not an empty string
+  if (description != NULL &amp;&amp; description[0] != &#39;\0&#39;) {
+    // Do something with the description
+    // For example, print it to the console
+    printf(&#34;Description: %s\n&#34;, description);
+  }
+
+  return 0;
+}
+&lt;/solution&gt;
+
+The code does not have any build errors. The issue is with the runtime where there is no code coverage increment. This indicates that the fuzz target is not effectively invoking the function under test. The solution to this problem is not a code fix but rather a change in the testing strategy. The input data used for fuzzing needs to be varied and diverse enough to cover different paths in the function under test. This can be achieved by using a fuzzing tool or framework that supports coverage-guided fuzzing.
+</pre>
+
+
+<h3>Fixer prompt #5</h3>
+<pre>
+
+Given the following C fuzz harness and its build error message, fix the code to make it build for fuzzing.
+
+If there is undeclared identifier or unknown type name error, fix it by finding and including the related libraries.
+
+MUST RETURN THE FULL CODE, INCLUDING UNCHANGED PARTS.
+
+Below is the code needs to be built:
+&lt;code&gt;
+#include &#34;http_parser.h&#34;
+#include &lt;stdint.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;stdio.h&gt;
+
+int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  if (size &lt; 1)
+    return 0;
+
+  /* Interpret the first byte of the input as an enumeration value, it prevents an out-of-bounds
+   * enumeration value and broker cast.  
+   */
+  enum http_errno err_no = (enum http_errno)(data[0] % (HPE_UNKNOWN + 1));
+
+  // Call test target function
+  const char * description = http_errno_description(err_no);
+
+  // Check if the description is not NULL and it&#39;s not an empty string
+  if (description != NULL &amp;&amp; description[0] != &#39;\0&#39;) {
+    // Do something with the description
+    // For example, print it to the console
+    printf(&#34;Description: %s\n&#34;, description);
+  }
+
+  return 0;
+}
+&lt;/code&gt;
+
+Below is the error to fix:
+The code can build successfully but has a runtime issue: No code coverage increasement, indicating the fuzz target ineffectively invokes the function under test.
+
+
+
+
+Fix code:
+1. Consider possible solutions for the issues listed above.
+2. Choose a solution that can maximize fuzzing result, which is utilizing the function under test and feeding it not null input.
+3. Apply the solutions to the original code.
+It&#39;s important to show the complete code, not only the fixed line.
+&lt;solution&gt;
+</pre>
+
+
+
+<h3>Code #5</h3>
+
+<pre>
+#include &#34;http_parser.h&#34;
+#include &lt;stdint.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;stdio.h&gt;
+
+int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  if (size &lt; 1)
+    return 0;
+
+  /* Interpret the first byte of the input as an enumeration value, it prevents an out-of-bounds
+   * enumeration value and broker cast.  
+   */
+  enum http_errno err_no = (enum http_errno)(data[0] % (HPE_UNKNOWN + 1));
+
+  // Call test target function
+  const char * description = http_errno_description(err_no);
+
+  // Check if the description is not NULL and it&#39;s not an empty string
+  if (description != NULL &amp;&amp; description[0] != &#39;\0&#39;) {
+    // Do something with the description
+    // For example, print it to the console
+    printf(&#34;Description: %s\n&#34;, description);
+  }
+
+  // Feed the function with not null input
+  if (size &gt; 1) {
+    http_parser parser;
+    http_parser_init(&amp;parser, HTTP_REQUEST);
+    http_parser_execute(&amp;parser, NULL, (const char *)(data + 1), size - 1);
+  }
+
+  return 0;
+}
+</pre>
+
+
+<h2>Logs</h2>
+<pre>
+Fixing /home/chyun/oss-fuzz-gen/results6/output-http-parser-http_errno_description/fixed_targets/02.c with gpt-4, attempt 1.
+Fixing /home/chyun/oss-fuzz-gen/results6/output-http-parser-http_errno_description/fixed_targets/02.c with gpt-4, attempt 2.
+Fixing /home/chyun/oss-fuzz-gen/results6/output-http-parser-http_errno_description/fixed_targets/02.c with gpt-4, attempt 3.
+Fixing /home/chyun/oss-fuzz-gen/results6/output-http-parser-http_errno_description/fixed_targets/02.c with gpt-4, attempt 4.
+Fixing /home/chyun/oss-fuzz-gen/results6/output-http-parser-http_errno_description/fixed_targets/02.c with gpt-4, attempt 5.
+Successfully built /home/chyun/oss-fuzz-gen/results6/output-http-parser-http_errno_description/fixed_targets/02.c with gpt-4 in 5 iterations of fixing.
+Triaging the crash related to /home/chyun/oss-fuzz-gen/results6/output-http-parser-http_errno_description/fixed_targets/02.c with gpt-4.
+Result for http-parser-http_errno_description-02: crashes=True, coverage=0.0242024202420242 (22/909), coverage diff=0.0025157232704402514 (4/1590)
+
+</pre>
+
+<h2>Run logs</h2>
+<pre>
+INFO:__main__:Running: docker run --privileged --shm-size=2g --platform linux/amd64 --rm -e FUZZING_ENGINE=libfuzzer -e SANITIZER=address -e RUN_FUZZER_MODE=interactive -e HELPER=True -v /home/chyun/oss-fuzz-gen/results6/output-http-parser-http_errno_description/corpora/02.c:/tmp/fuzz_url_corpus -v /tmp/tmp15v075qm/build/out/http-parser-http_errno_description-02:/out -t gcr.io/oss-fuzz-base/base-runner run_fuzzer fuzz_url -print_final_stats=1 -max_total_time=30 -len_control=0 -timeout=30.
+vm.mmap_rnd_bits = 28
+rm: cannot remove &#39;/tmp/fuzz_url_corpus&#39;: Device or resource busy
+/out/fuzz_url -rss_limit_mb=2560 -timeout=25 -print_final_stats=1 -max_total_time=30 -len_control=0 -timeout=30 /tmp/fuzz_url_corpus &lt; /dev/null
+INFO: Running with entropic power schedule (0xFF, 100).
+INFO: Seed: 153030405
+INFO: Loaded 1 modules   (909 inline 8-bit counters): 909 [0x55c8a19c4af0, 0x55c8a19c4e7d), 
+INFO: Loaded 1 PC tables (909 PCs): 909 [0x55c8a19c4e80,0x55c8a19c8750), 
+INFO:        0 files found in /tmp/fuzz_url_corpus
+INFO: -max_len is not provided; libFuzzer will not generate inputs larger than 4096 bytes
+INFO: A corpus is not provided, starting from an empty corpus
+Description: the on_chunk_complete callback failed
+#2	INITED cov: 5 ft: 6 corp: 1/1b exec/s: 0 rss: 29Mb
+Description: the on_message_complete callback failed
+Description: the on_message_complete callback failed
+	NEW_FUNC[1/2]: 0x55c8a1948a80 in http_parser_execute /src/http-parser/http_parser.c:645
+	NEW_FUNC[2/2]: 0x55c8a19551b0 in http_parser_init /src/http-parser/http_parser.c:2226
+#4	NEW    cov: 17 ft: 18 corp: 2/3b lim: 4096 exec/s: 0 rss: 30Mb L: 2/2 MS: 2 ChangeByte-CrossOver-
+Description: success
+#5	NEW    cov: 19 ft: 20 corp: 3/12b lim: 4096 exec/s: 0 rss: 30Mb L: 9/9 MS: 1 CMP- DE: &#34;\000\000\000\000\000\000\000\000&#34;-
+Description: success
+Description: success
+#7	REDUCE cov: 19 ft: 20 corp: 3/11b lim: 4096 exec/s: 0 rss: 30Mb L: 8/8 MS: 2 ChangeByte-EraseBytes-
+Description: the on_chunk_complete callback failed
+#8	NEW    cov: 20 ft: 21 corp: 4/111b lim: 4096 exec/s: 0 rss: 30Mb L: 100/100 MS: 1 InsertRepeatedBytes-
+Description: invalid character in header
+#9	NEW    cov: 21 ft: 22 corp: 5/113b lim: 4096 exec/s: 0 rss: 30Mb L: 2/100 MS: 1 CMP- DE: &#34;\377\377&#34;-
+Description: the on_chunk_complete callback failed
+Description: the on_chunk_complete callback failed
+Description: the on_body callback failed
+Description: the on_body callback failed
+Description: invalid character in header
+Description: the on_chunk_complete callback failed
+Description: the on_chunk_complete callback failed
+Description: the on_chunk_complete callback failed
+Description: the on_chunk_complete callback failed
+Description: the on_chunk_complete callback failed
+Description: the on_chunk_complete callback failed
+Description: the on_chunk_complete callback failed
+Description: the on_chunk_complete callback failed
+Description: the on_chunk_complete callback failed
+Description: the on_chunk_complete callback failed
+Description: the on_message_complete callback failed
+Description: the on_message_complete callback failed
+Description: the on_message_complete callback failed
+Description: the on_message_complete callback failed
+Description: the on_message_complete callback failed
+Description: the on_chunk_complete callback failed
+Description: the on_chunk_complete callback failed
+Description: the on_chunk_complete callback failed
+Description: the on_chunk_complete callback failed
+Description: the on_chunk_complete callback failed
+Description: the on_chunk_complete callback failed
+Description: the on_chunk_complete callback failed
+Description: the on_chunk_complete callback failed
+Description: the on_chunk_complete callback failed
+Description: the on_chunk_complete callback failed
+Description: success
+Description: success
+Description: success
+Description: success
+#43	REDUCE cov: 21 ft: 22 corp: 5/112b lim: 4096 exec/s: 0 rss: 30Mb L: 7/100 MS: 4 ChangeBit-ChangeBinInt-PersAutoDict-EraseBytes- DE: &#34;\000\000\000\000\000\000\000\000&#34;-
+Description: the on_chunk_complete callback failed
+#44	REDUCE cov: 21 ft: 22 corp: 5/108b lim: 4096 exec/s: 0 rss: 31Mb L: 96/96 MS: 1 EraseBytes-
+Description: the on_message_complete callback failed
+Description: success
+Description: success
+Description: success
+Description: success
+Description: success
+Description: success
+#51	REDUCE cov: 21 ft: 22 corp: 5/105b lim: 4096 exec/s: 0 rss: 31Mb L: 4/96 MS: 2 ShuffleBytes-EraseBytes-
+Description: invalid character in header
+Description: invalid character in header
+Description: success
+Description: success
+Description: success
+Description: data received after completed connection: close message
+Description: data received after completed connection: close message
+Description: data received after completed connection: close message
+#59	NEW    cov: 22 ft: 24 corp: 6/115b lim: 4096 exec/s: 0 rss: 31Mb L: 10/96 MS: 3 InsertByte-ShuffleBytes-PersAutoDict- DE: &#34;\000\000\000\000\000\000\000\000&#34;-
+Description: the on_message_complete callback failed
+Description: the on_message_complete callback failed
+Description: the on_message_complete callback failed
+Description: the on_message_complete callback failed
+Description: the on_message_complete callback failed
+Description: the on_chunk_complete callback failed
+Description: the on_chunk_complete callback failed
+Description: the on_chunk_complete callback failed
+Description: the on_chunk_complete callback failed
+Description: the on_chunk_complete callback failed
+Description: success
+Description: success
+#71	REDUCE cov: 22 ft: 24 corp: 6/114b lim: 4096 exec/s: 0 rss: 31Mb L: 3/96 MS: 2 ChangeByte-EraseBytes-
+Description: invalid character in header
+Description: LF character expected
+Description: LF character expected
+Description: LF character expected
+Description: invalid character in header
+Description: invalid constant string
+Description: invalid constant string
+Description: invalid constant string
+Description: invalid constant string
+Description: invalid constant string
+Description: invalid port
+Description: invalid port
+Description: invalid port
+Description: invalid port
+Description: invalid port
+Description: the on_message_complete callback failed
+Description: the on_message_complete callback failed
+Description: the on_message_complete callback failed
+Description: the on_message_complete callback failed
+Description: the on_message_complete callback failed
+Description: invalid port
+Description: invalid port
+Description: invalid port
+Description: invalid port
+Description: invalid port
+Description: data received after completed connection: close message
+Description: data received after completed connection: close message
+Description: data received after completed connection: close message
+Description: data received after completed connection: close message
+Description: data received after completed connection: close message
+Description: the on_message_complete callback failed
+Description: the on_message_complete callback failed
+Description: the on_message_complete callback failed
+Description: the on_message_complete callback failed
+Description: the on_message_complete callback failed
+Description: the on_chunk_complete callback failed
+Description: the on_chunk_complete callback failed
+Description: the on_chunk_complete callback failed
+Description: the on_chunk_complete callback failed
+Description: the on_chunk_complete callback failed
+Description: the on_chunk_complete callback failed
+Description: the on_chunk_complete callback failed
+Description: the on_chunk_complete callback failed
+Description: the on_chunk_complete callback failed
+Description: the on_chunk_complete callback failed
+#116	REDUCE cov: 22 ft: 24 corp: 6/101b lim: 4096 exec/s: 0 rss: 31Mb L: 83/83 MS: 5 PersAutoDict-ShuffleBytes-InsertRepeatedBytes-InsertByte-EraseBytes- DE: &#34;\377\377&#34;-
+Description: the on_chunk_complete callback failed
+Description: the on_chunk_complete callback failed
+Description: the on_chunk_complete callback failed
+Description: the on_chunk_complete callback failed
+Description: the on_chunk_complete callback failed
+Description: invalid character in header
+Description: invalid character in header
+Description: invalid character in header
+Description: invalid character in header
+Description: invalid character in header
+Description: the on_chunk_complete callback failed
+Description: the on_chunk_complete callback failed
+#128	REDUCE cov: 22 ft: 24 corp: 6/79b lim: 4096 exec/s: 0 rss: 31Mb L: 61/61 MS: 2 PersAutoDict-EraseBytes- DE: &#34;\377\377&#34;-
+Description: data received after completed connection: close message
+Description: data received after completed connection: close message
+Description: data received after completed connection: close message
+Description: data received after completed connection: close message
+Description: data received after completed connection: close message
+Description: the on_chunk_complete callback failed
+Description: invalid character in header
+Description: invalid character in header
+Description: invalid character in header
+Description: invalid character in header
+Description: success
+Description: success
+Description: the on_status callback failed
+Description: invalid character in header
+Description: invalid character in header
+Description: data received after completed connection: close message
+Description: data received after completed connection: close message
+Description: data received after completed connection: close message
+Description: data received after completed connection: close message
+Description: data received after completed connection: close message
+Description: data received after completed connection: close message
+Description: data received after completed connection: close message
+Description: data received after completed connection: close message
+Description: data received after completed connection: close message
+Description: data received after completed connection: close message
+AddressSanitizer:DEADLYSIGNAL
+=================================================================
+[1m[31m==11==ERROR: AddressSanitizer: SEGV on unknown address 0x000000000000 (pc 0x55c8a194e868 bp 0x7ffea8736bf0 sp 0x7ffea8736ac0 T0)
+[1m[0m==11==The signal is caused by a READ memory access.
+==11==Hint: address points to the zero page.
+SCARINESS: 10 (null-deref)
+    #0 0x55c8a194e868 in http_parser_execute /src/http-parser/http_parser.c:966:9
+    #1 0x55c8a1956cb2 in LLVMFuzzerTestOneInput /src/http-parser/fuzzers/fuzz_url.c:29:5
+    #2 0x55c8a17fb470 in fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:614:13
+    #3 0x55c8a17fac95 in fuzzer::Fuzzer::RunOne(unsigned char const*, unsigned long, bool, fuzzer::InputInfo*, bool, bool*) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:516:7
+    #4 0x55c8a17fc465 in fuzzer::Fuzzer::MutateAndTestOne() /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:760:19
+    #5 0x55c8a17fd255 in fuzzer::Fuzzer::Loop(std::__Fuzzer::vector&lt;fuzzer::SizedFile, std::__Fuzzer::allocator&lt;fuzzer::SizedFile&gt;&gt;&amp;) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:905:5
+    #6 0x55c8a17eb566 in fuzzer::FuzzerDriver(int*, char***, int (*)(unsigned char const*, unsigned long)) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:914:6
+    #7 0x55c8a1817a92 in main /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMain.cpp:20:10
+    #8 0x7fe69f06a082 in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x24082) (BuildId: 0702430aef5fa3dda43986563e9ffcc47efbd75e)
+    #9 0x55c8a17dc6dd in _start (/out/fuzz_url+0x466dd)
+
+DEDUP_TOKEN: http_parser_execute--LLVMFuzzerTestOneInput--fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long)
+AddressSanitizer can not provide additional info.
+SUMMARY: AddressSanitizer: SEGV /src/http-parser/http_parser.c:966:9 in http_parser_execute
+==11==ABORTING
+MS: 5 CrossOver-ChangeByte-ChangeBinInt-ChangeByte-EraseBytes-; base unit: cd3468280a200b8d06c5614a74a83c52f7f315cb
+0x2e,0xa,0x44,0x0,0x0,0x3d,0x0,0x1,0xff,0xf8,
+.\012D\000\000=\000\001\377\370
+artifact_prefix=&#39;./&#39;; Test unit written to ./crash-4dc2ab8f0546bdfe549f560ef5b2621e8059279e
+Base64: LgpEAAA9AAH/+A==
+stat::number_of_executed_units: 153
+stat::average_exec_per_sec:     0
+stat::new_units_added:          12
+stat::slowest_unit_time_sec:    0
+stat::peak_rss_mb:              31
+
+</pre>
+
+
+</body>

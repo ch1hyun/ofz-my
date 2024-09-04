@@ -1,0 +1,466 @@
+<!doctype html>
+
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Experiment results</title>
+<style>
+* {
+    box-sizing: border-box;
+}
+
+html {
+    line-height: 1.15;
+}
+
+body {
+    font-family: sans-serif;
+    font-size: 16px;
+}
+
+table {
+    border-collapse: collapse;
+    border-spacing: 0;
+}
+
+td, th {
+    border-right: 1px #dedede solid;
+    border-bottom: 1px #dedede solid;
+    padding: 5px;
+    text-align: left;
+}
+td:first-child, th:first-child {
+    border-left: 1px #dedede solid;
+}
+th {
+    border-top: 1px #dedede solid;
+}
+
+tbody tr:nth-child(odd) {
+    background-color: #f4f5ff;
+}
+</style>
+<body>
+    LLM: 
+    
+<h1>output-xpdf-_zn3gfx14opsetextgstateep6objecti / 02</h1>
+Bug: True
+<br>
+Crash reason: NO_SEMANTIC_ERR
+<br>
+<br>
+
+<h2>Triage</h2>
+<pre>
+Crash is caused by bug in project.
+
+The crash report indicates a direct memory leak. The memory allocated for a string copy in &#39;copyString&#39; function (called from &#39;initName&#39; function in the fuzz driver) is not freed, resulting in a memory leak. Since the &#39;copyString&#39; function is part of the project and not the fuzz driver, the bug causing the crash is in the project.
+</pre>
+<br>
+
+
+
+
+
+<h3>Final code</h3>
+
+<pre>
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+#include &lt;aconf.h&gt;
+#include &lt;png.h&gt;
+#include &lt;stddef.h&gt;
+#include &lt;stdint.h&gt;
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;vector&gt;
+
+#include &#34;GString.h&#34;
+#include &#34;GlobalParams.h&#34;
+#include &#34;JBIG2Stream.h&#34;
+#include &#34;Object.h&#34;
+#include &#34;PDFDoc.h&#34;
+#include &#34;Splash.h&#34;
+#include &#34;SplashBitmap.h&#34;
+#include &#34;SplashOutputDev.h&#34;
+#include &#34;Stream.h&#34;
+#include &#34;config.h&#34;
+#include &#34;gfile.h&#34;
+#include &#34;gmem.h&#34;
+#include &#34;gmempp.h&#34;
+#include &#34;parseargs.h&#34;
+#include &#34;/src/xpdf-4.05/xpdf/GfxState.h&#34;
+#include &#34;/src/xpdf-4.05/xpdf/Gfx.h&#34;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  FuzzedDataProvider fdp(data, size);
+  
+  if (size &lt; 3) {
+    return 0;
+  }
+
+  int numArgs = fdp.ConsumeIntegralInRange&lt;int&gt;(1, 3);
+
+  Object dict;
+  dict.initNull();
+
+  std::string name = fdp.ConsumeRandomLengthString();
+  int64_t refNum = fdp.ConsumeIntegral&lt;int64_t&gt;();
+  int64_t refGen = fdp.ConsumeIntegral&lt;int64_t&gt;();
+  
+  std::vector&lt;Object&gt; args(numArgs);
+  args[0].initNull();
+  if(numArgs &gt; 1) {
+    args[1].initName(name.c_str());
+  }
+  if(numArgs &gt; 2) {
+    args[2].initRef(refNum, refGen);
+  }
+
+  // In order for opSetExtGState to work, the args array should contain Ref type objects that can be found in the PDFDoc catalog.
+  // In this context it&#39;s not possible because the PDFDoc instance cannot be controlled and hence we can&#39;t add objects in it&#39;s `xref` atrribute.
+  // Also it&#39;s not possible to create a dummy `PDFDoc` because it&#39;s constructor is private.
+
+  //  Gfx gfx(doc.getCatalog(), pdf_out,
+  //          
+  return 0;
+}
+</pre>
+
+
+<h3>Fixer prompt #1</h3>
+<pre>
+
+Given the following C++ fuzz harness and its build error message, fix the code to make it build for fuzzing.
+
+If there is undeclared identifier or unknown type name error, fix it by finding and including the related libraries.
+
+MUST RETURN THE FULL CODE, INCLUDING UNCHANGED PARTS.
+
+Below is the code needs to be built:
+&lt;code&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+#include &lt;aconf.h&gt;
+#include &lt;png.h&gt;
+#include &lt;stddef.h&gt;
+#include &lt;stdint.h&gt;
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;vector&gt;
+
+#include &#34;GString.h&#34;
+#include &#34;GlobalParams.h&#34;
+#include &#34;JBIG2Stream.h&#34;
+#include &#34;Object.h&#34;
+#include &#34;PDFDoc.h&#34;
+#include &#34;Splash.h&#34;
+#include &#34;SplashBitmap.h&#34;
+#include &#34;SplashOutputDev.h&#34;
+#include &#34;Stream.h&#34;
+#include &#34;config.h&#34;
+#include &#34;gfile.h&#34;
+#include &#34;gmem.h&#34;
+#include &#34;gmempp.h&#34;
+#include &#34;parseargs.h&#34;
+#include &#34;/src/xpdf-4.05/xpdf/GfxState.h&#34;
+#include &#34;/src/xpdf-4.05/xpdf/Gfx.h&#34;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  FuzzedDataProvider fdp(data, size);
+  
+  if (size &lt; 3) {
+    return 0;
+  }
+
+  int numArgs = fdp.ConsumeIntegralInRange&lt;int&gt;(1, 3);
+
+  Object dict;
+  dict.initNull();
+
+  std::string name = fdp.ConsumeRandomLengthString();
+  int64_t refNum = fdp.ConsumeIntegral&lt;int64_t&gt;();
+  int64_t refGen = fdp.ConsumeIntegral&lt;int64_t&gt;();
+  
+  std::vector&lt;Object&gt; args(numArgs);
+  args[0].initNull();
+  if(numArgs &gt; 1) {
+    args[1].initName(name.c_str());
+  }
+  if(numArgs &gt; 2) {
+    args[2].initRef(refNum, refGen);
+  }
+
+  // In order for opSetExtGState to work, the args array should contain Ref type objects that can be found in the PDFDoc catalog.
+  // In this context it&#39;s not possible because the PDFDoc instance cannot be controlled and hence we can&#39;t add objects in it&#39;s `xref` atrribute.
+  // Also it&#39;s not possible to create a dummy `PDFDoc` because it&#39;s constructor is private.
+
+  //  Gfx gfx(doc.getCatalog(), pdf_out,
+  //          
+&lt;/code&gt;
+
+Below is the error to fix:
+The code has the following build issues:
+&lt;error&gt;
+fuzz_JBIG2.cc:58:15: error: expected &#39;}&#39;
+   58 |   //
+      |               ^
+fuzz_JBIG2.cc:28:73: note: to match this &#39;{&#39;
+   28 | extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+      |                                                                         ^
+&lt;/error&gt;
+
+
+
+
+Fix code:
+1. Consider possible solutions for the issues listed above.
+2. Choose a solution that can maximize fuzzing result, which is utilizing the function under test and feeding it not null input.
+3. Apply the solutions to the original code.
+It&#39;s important to show the complete code, not only the fixed line.
+&lt;solution&gt;
+</pre>
+
+
+
+<h3>Code #1</h3>
+
+<pre>
+&lt;code&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+#include &lt;aconf.h&gt;
+#include &lt;png.h&gt;
+#include &lt;stddef.h&gt;
+#include &lt;stdint.h&gt;
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;vector&gt;
+
+#include &#34;GString.h&#34;
+#include &#34;GlobalParams.h&#34;
+#include &#34;JBIG2Stream.h&#34;
+#include &#34;Object.h&#34;
+#include &#34;PDFDoc.h&#34;
+#include &#34;Splash.h&#34;
+#include &#34;SplashBitmap.h&#34;
+#include &#34;SplashOutputDev.h&#34;
+#include &#34;Stream.h&#34;
+#include &#34;config.h&#34;
+#include &#34;gfile.h&#34;
+#include &#34;gmem.h&#34;
+#include &#34;gmempp.h&#34;
+#include &#34;parseargs.h&#34;
+#include &#34;/src/xpdf-4.05/xpdf/GfxState.h&#34;
+#include &#34;/src/xpdf-4.05/xpdf/Gfx.h&#34;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  FuzzedDataProvider fdp(data, size);
+  
+  if (size &lt; 3) {
+    return 0;
+  }
+
+  int numArgs = fdp.ConsumeIntegralInRange&lt;int&gt;(1, 3);
+
+  Object dict;
+  dict.initNull();
+
+  std::string name = fdp.ConsumeRandomLengthString();
+  int64_t refNum = fdp.ConsumeIntegral&lt;int64_t&gt;();
+  int64_t refGen = fdp.ConsumeIntegral&lt;int64_t&gt;();
+  
+  std::vector&lt;Object&gt; args(numArgs);
+  args[0].initNull();
+  if(numArgs &gt; 1) {
+    args[1].initName(name.c_str());
+  }
+  if(numArgs &gt; 2) {
+    args[2].initRef(refNum, refGen);
+  }
+
+  // In order for opSetExtGState to work, the args array should contain Ref type objects that can be found in the PDFDoc catalog.
+  // In this context it&#39;s not possible because the PDFDoc instance cannot be controlled and hence we can&#39;t add objects in it&#39;s `xref` atrribute.
+  // Also it&#39;s not possible to create a dummy `PDFDoc` because it&#39;s constructor is private.
+
+  //  Gfx gfx(doc.getCatalog(), pdf_out,
+  //          
+  return 0;
+}
+&lt;/code&gt;
+</pre>
+
+
+<h2>Logs</h2>
+<pre>
+Fixing /home/chyun/oss-fuzz-gen/results10/output-xpdf-_zn3gfx14opsetextgstateep6objecti/fixed_targets/02.cc with gpt-4, attempt 1.
+Successfully built /home/chyun/oss-fuzz-gen/results10/output-xpdf-_zn3gfx14opsetextgstateep6objecti/fixed_targets/02.cc with gpt-4 in 1 iterations of fixing.
+Triaging the crash related to /home/chyun/oss-fuzz-gen/results10/output-xpdf-_zn3gfx14opsetextgstateep6objecti/fixed_targets/02.cc with gpt-4.
+Result for xpdf-zn3gfx14opsetextgstateep6objecti-02: crashes=True, coverage=0.40522875816993464 (62/153), coverage diff=0.0 (0/124731)
+
+</pre>
+
+<h2>Run logs</h2>
+<pre>
+INFO:__main__:Running: docker run --privileged --shm-size=2g --platform linux/amd64 --rm -e FUZZING_ENGINE=libfuzzer -e SANITIZER=address -e RUN_FUZZER_MODE=interactive -e HELPER=True -v /home/chyun/oss-fuzz-gen/results10/output-xpdf-_zn3gfx14opsetextgstateep6objecti/corpora/02.cc:/tmp/fuzz_JBIG2_corpus -v /tmp/tmp3dj7t1cn/build/out/xpdf-zn3gfx14opsetextgstateep6objecti-02:/out -t gcr.io/oss-fuzz-base/base-runner run_fuzzer fuzz_JBIG2 -print_final_stats=1 -max_total_time=30 -len_control=0 -timeout=30.
+vm.mmap_rnd_bits = 28
+rm: cannot remove &#39;/tmp/fuzz_JBIG2_corpus&#39;: Device or resource busy
+/out/fuzz_JBIG2 -rss_limit_mb=2560 -timeout=25 -print_final_stats=1 -max_total_time=30 -len_control=0 -timeout=30 /tmp/fuzz_JBIG2_corpus -detect_leaks=0 &lt; /dev/null
+INFO: Running with entropic power schedule (0xFF, 100).
+INFO: Seed: 3958696771
+INFO: Loaded 1 modules   (153 inline 8-bit counters): 153 [0x56126e6ccfe0, 0x56126e6cd079), 
+INFO: Loaded 1 PC tables (153 PCs): 153 [0x56126e6cd080,0x56126e6cda10), 
+INFO:        0 files found in /tmp/fuzz_JBIG2_corpus
+INFO: -max_len is not provided; libFuzzer will not generate inputs larger than 4096 bytes
+INFO: A corpus is not provided, starting from an empty corpus
+#2	INITED cov: 2 ft: 2 corp: 1/1b exec/s: 0 rss: 30Mb
+	NEW_FUNC[1/4]: 0x56126e62f520 in std::__1::vector&lt;Object, std::__1::allocator&lt;Object&gt;&gt;::vector(unsigned long) /usr/local/bin/../include/c++/v1/vector:1191
+	NEW_FUNC[2/4]: 0x56126e62f920 in FuzzedDataProvider::ConsumeRandomLengthString(unsigned long) /usr/local/lib/clang/18/include/fuzzer/FuzzedDataProvider.h:152
+#4	NEW    cov: 35 ft: 36 corp: 2/11b lim: 4096 exec/s: 0 rss: 30Mb L: 10/10 MS: 2 CrossOver-CMP- DE: &#34;\000\000\000\000\000\000\000\000&#34;-
+#5	NEW    cov: 40 ft: 45 corp: 3/116b lim: 4096 exec/s: 0 rss: 30Mb L: 105/105 MS: 1 InsertRepeatedBytes-
+#8	NEW    cov: 40 ft: 49 corp: 4/262b lim: 4096 exec/s: 0 rss: 30Mb L: 146/146 MS: 3 CrossOver-ShuffleBytes-InsertRepeatedBytes-
+#19	NEW    cov: 41 ft: 50 corp: 5/272b lim: 4096 exec/s: 0 rss: 30Mb L: 10/146 MS: 1 PersAutoDict- DE: &#34;\000\000\000\000\000\000\000\000&#34;-
+#40	REDUCE cov: 41 ft: 50 corp: 5/259b lim: 4096 exec/s: 0 rss: 31Mb L: 92/146 MS: 1 EraseBytes-
+#54	NEW    cov: 41 ft: 54 corp: 6/265b lim: 4096 exec/s: 0 rss: 31Mb L: 6/146 MS: 4 PersAutoDict-InsertByte-ChangeBinInt-EraseBytes- DE: &#34;\000\000\000\000\000\000\000\000&#34;-
+#57	NEW    cov: 41 ft: 58 corp: 7/285b lim: 4096 exec/s: 0 rss: 31Mb L: 20/146 MS: 3 ShuffleBytes-ChangeBit-CrossOver-
+#68	NEW    cov: 42 ft: 60 corp: 8/296b lim: 4096 exec/s: 0 rss: 31Mb L: 11/146 MS: 1 InsertByte-
+#116	NEW    cov: 42 ft: 64 corp: 9/300b lim: 4096 exec/s: 0 rss: 31Mb L: 4/146 MS: 3 CrossOver-ChangeBit-EraseBytes-
+#158	REDUCE cov: 42 ft: 64 corp: 9/299b lim: 4096 exec/s: 0 rss: 31Mb L: 9/146 MS: 2 ChangeBit-EraseBytes-
+#169	REDUCE cov: 42 ft: 64 corp: 9/298b lim: 4096 exec/s: 0 rss: 31Mb L: 9/146 MS: 1 EraseBytes-
+#235	NEW    cov: 42 ft: 68 corp: 10/301b lim: 4096 exec/s: 0 rss: 31Mb L: 3/146 MS: 1 EraseBytes-
+#365	REDUCE cov: 42 ft: 68 corp: 10/299b lim: 4096 exec/s: 0 rss: 31Mb L: 9/146 MS: 5 ChangeByte-ShuffleBytes-PersAutoDict-InsertByte-EraseBytes- DE: &#34;\000\000\000\000\000\000\000\000&#34;-
+#366	REDUCE cov: 42 ft: 68 corp: 10/280b lim: 4096 exec/s: 0 rss: 31Mb L: 73/146 MS: 1 EraseBytes-
+#396	REDUCE cov: 42 ft: 68 corp: 10/266b lim: 4096 exec/s: 0 rss: 31Mb L: 132/132 MS: 5 InsertByte-InsertRepeatedBytes-EraseBytes-ShuffleBytes-EraseBytes-
+	NEW_FUNC[1/1]: 0x56126e62fe30 in std::__1::basic_string&lt;char, std::__1::char_traits&lt;char&gt;, std::__1::allocator&lt;char&gt;&gt;::__shrink_or_extend[abi:v180000](unsigned long) /usr/local/bin/../include/c++/v1/string:3269
+#420	NEW    cov: 53 ft: 79 corp: 11/402b lim: 4096 exec/s: 0 rss: 31Mb L: 136/136 MS: 4 ChangeByte-InsertRepeatedBytes-ShuffleBytes-InsertRepeatedBytes-
+#462	REDUCE cov: 53 ft: 79 corp: 11/389b lim: 4096 exec/s: 0 rss: 31Mb L: 60/136 MS: 2 ChangeBinInt-EraseBytes-
+#483	NEW    cov: 59 ft: 88 corp: 12/500b lim: 4096 exec/s: 0 rss: 31Mb L: 111/136 MS: 1 EraseBytes-
+#496	REDUCE cov: 59 ft: 88 corp: 12/487b lim: 4096 exec/s: 0 rss: 31Mb L: 98/136 MS: 3 ChangeBinInt-ChangeBit-EraseBytes-
+#503	REDUCE cov: 61 ft: 91 corp: 13/585b lim: 4096 exec/s: 0 rss: 31Mb L: 98/136 MS: 2 ShuffleBytes-CrossOver-
+#511	REDUCE cov: 61 ft: 91 corp: 13/584b lim: 4096 exec/s: 0 rss: 31Mb L: 5/136 MS: 3 CrossOver-CopyPart-EraseBytes-
+#529	NEW    cov: 61 ft: 92 corp: 14/682b lim: 4096 exec/s: 0 rss: 31Mb L: 98/136 MS: 3 ChangeBinInt-ChangeBinInt-ChangeByte-
+#536	REDUCE cov: 62 ft: 94 corp: 15/695b lim: 4096 exec/s: 0 rss: 31Mb L: 13/136 MS: 2 ShuffleBytes-CrossOver-
+#548	NEW    cov: 62 ft: 97 corp: 16/708b lim: 4096 exec/s: 0 rss: 31Mb L: 13/136 MS: 2 CopyPart-ShuffleBytes-
+#555	NEW    cov: 62 ft: 99 corp: 17/721b lim: 4096 exec/s: 0 rss: 31Mb L: 13/136 MS: 2 ChangeByte-ChangeBit-
+#556	NEW    cov: 62 ft: 100 corp: 18/729b lim: 4096 exec/s: 0 rss: 31Mb L: 8/136 MS: 1 EraseBytes-
+#569	REDUCE cov: 62 ft: 100 corp: 18/727b lim: 4096 exec/s: 0 rss: 31Mb L: 58/136 MS: 3 CrossOver-ChangeBinInt-EraseBytes-
+#632	REDUCE cov: 62 ft: 100 corp: 18/708b lim: 4096 exec/s: 0 rss: 31Mb L: 79/136 MS: 3 CrossOver-ShuffleBytes-EraseBytes-
+#690	REDUCE cov: 62 ft: 100 corp: 18/705b lim: 4096 exec/s: 0 rss: 31Mb L: 6/136 MS: 3 CopyPart-ShuffleBytes-EraseBytes-
+#705	REDUCE cov: 62 ft: 101 corp: 19/708b lim: 4096 exec/s: 0 rss: 31Mb L: 3/136 MS: 5 ChangeBinInt-ChangeBinInt-EraseBytes-CopyPart-CrossOver-
+#727	REDUCE cov: 62 ft: 103 corp: 20/779b lim: 4096 exec/s: 0 rss: 31Mb L: 71/136 MS: 2 CopyPart-EraseBytes-
+#729	NEW    cov: 62 ft: 104 corp: 21/792b lim: 4096 exec/s: 0 rss: 31Mb L: 13/136 MS: 2 CrossOver-ShuffleBytes-
+#750	REDUCE cov: 62 ft: 104 corp: 21/789b lim: 4096 exec/s: 0 rss: 31Mb L: 10/136 MS: 1 EraseBytes-
+#761	NEW    cov: 62 ft: 106 corp: 22/802b lim: 4096 exec/s: 0 rss: 31Mb L: 13/136 MS: 1 CrossOver-
+#790	REDUCE cov: 62 ft: 106 corp: 22/794b lim: 4096 exec/s: 0 rss: 31Mb L: 50/136 MS: 4 InsertByte-PersAutoDict-ChangeBinInt-EraseBytes- DE: &#34;\000\000\000\000\000\000\000\000&#34;-
+#861	REDUCE cov: 62 ft: 106 corp: 22/792b lim: 4096 exec/s: 0 rss: 32Mb L: 4/136 MS: 1 EraseBytes-
+#863	NEW    cov: 62 ft: 107 corp: 23/813b lim: 4096 exec/s: 0 rss: 32Mb L: 21/136 MS: 2 ChangeBinInt-PersAutoDict- DE: &#34;\000\000\000\000\000\000\000\000&#34;-
+#904	NEW    cov: 62 ft: 109 corp: 24/834b lim: 4096 exec/s: 0 rss: 32Mb L: 21/136 MS: 1 PersAutoDict- DE: &#34;\000\000\000\000\000\000\000\000&#34;-
+#996	NEW    cov: 62 ft: 111 corp: 25/841b lim: 4096 exec/s: 0 rss: 32Mb L: 7/136 MS: 2 ChangeASCIIInt-EraseBytes-
+#1036	NEW    cov: 62 ft: 113 corp: 26/862b lim: 4096 exec/s: 0 rss: 32Mb L: 21/136 MS: 5 ShuffleBytes-CopyPart-ShuffleBytes-CopyPart-ShuffleBytes-
+#1059	REDUCE cov: 62 ft: 113 corp: 26/841b lim: 4096 exec/s: 0 rss: 32Mb L: 77/136 MS: 3 ChangeByte-ChangeBit-EraseBytes-
+#1136	NEW    cov: 62 ft: 114 corp: 27/847b lim: 4096 exec/s: 0 rss: 32Mb L: 6/136 MS: 2 CopyPart-ShuffleBytes-
+#1219	REDUCE cov: 62 ft: 114 corp: 27/846b lim: 4096 exec/s: 0 rss: 32Mb L: 5/136 MS: 3 InsertByte-InsertByte-EraseBytes-
+#1255	REDUCE cov: 62 ft: 114 corp: 27/844b lim: 4096 exec/s: 0 rss: 32Mb L: 11/136 MS: 1 EraseBytes-
+#1521	REDUCE cov: 62 ft: 114 corp: 27/838b lim: 4096 exec/s: 0 rss: 32Mb L: 15/136 MS: 1 EraseBytes-
+#1557	REDUCE cov: 62 ft: 114 corp: 27/824b lim: 4096 exec/s: 0 rss: 32Mb L: 36/136 MS: 1 EraseBytes-
+#1565	REDUCE cov: 62 ft: 114 corp: 27/823b lim: 4096 exec/s: 0 rss: 32Mb L: 4/136 MS: 3 CrossOver-ShuffleBytes-EraseBytes-
+#1586	REDUCE cov: 62 ft: 114 corp: 27/821b lim: 4096 exec/s: 0 rss: 32Mb L: 8/136 MS: 1 EraseBytes-
+#1593	REDUCE cov: 62 ft: 114 corp: 27/819b lim: 4096 exec/s: 0 rss: 32Mb L: 6/136 MS: 2 ShuffleBytes-EraseBytes-
+#1604	REDUCE cov: 62 ft: 114 corp: 27/816b lim: 4096 exec/s: 0 rss: 32Mb L: 33/136 MS: 1 EraseBytes-
+#1635	REDUCE cov: 62 ft: 114 corp: 27/814b lim: 4096 exec/s: 0 rss: 32Mb L: 7/136 MS: 1 EraseBytes-
+#1794	REDUCE cov: 62 ft: 114 corp: 27/812b lim: 4096 exec/s: 0 rss: 32Mb L: 5/136 MS: 4 InsertByte-ShuffleBytes-EraseBytes-ChangeBinInt-
+#1880	REDUCE cov: 62 ft: 114 corp: 27/809b lim: 4096 exec/s: 0 rss: 32Mb L: 3/136 MS: 1 EraseBytes-
+#1910	REDUCE cov: 62 ft: 114 corp: 27/806b lim: 4096 exec/s: 0 rss: 32Mb L: 
+...truncated...
+9979	REDUCE cov: 62 ft: 114 corp: 27/502b lim: 4096 exec/s: 0 rss: 35Mb L: 64/131 MS: 1 EraseBytes-
+#12780	REDUCE cov: 62 ft: 114 corp: 27/499b lim: 4096 exec/s: 0 rss: 36Mb L: 27/131 MS: 1 EraseBytes-
+#14155	REDUCE cov: 62 ft: 114 corp: 27/498b lim: 4096 exec/s: 0 rss: 36Mb L: 130/130 MS: 5 ChangeBit-ChangeBinInt-ShuffleBytes-ChangeByte-EraseBytes-
+#14971	REDUCE cov: 62 ft: 114 corp: 27/494b lim: 4096 exec/s: 0 rss: 36Mb L: 60/130 MS: 1 EraseBytes-
+#15924	REDUCE cov: 62 ft: 114 corp: 27/493b lim: 4096 exec/s: 0 rss: 36Mb L: 17/130 MS: 3 PersAutoDict-CopyPart-EraseBytes- DE: &#34;\000\000&#34;-
+#18050	REDUCE cov: 62 ft: 114 corp: 27/491b lim: 4096 exec/s: 0 rss: 37Mb L: 25/130 MS: 1 EraseBytes-
+#19645	REDUCE cov: 62 ft: 114 corp: 27/490b lim: 4096 exec/s: 0 rss: 37Mb L: 129/129 MS: 5 ShuffleBytes-ChangeBit-PersAutoDict-ChangeBinInt-EraseBytes- DE: &#34;\377\377\377\377&#34;-
+#20749	REDUCE cov: 62 ft: 114 corp: 27/489b lim: 4096 exec/s: 0 rss: 38Mb L: 16/129 MS: 4 ChangeBit-ChangeBit-EraseBytes-CrossOver-
+#21663	REDUCE cov: 62 ft: 114 corp: 27/488b lim: 4096 exec/s: 0 rss: 38Mb L: 15/129 MS: 4 ChangeByte-CopyPart-EraseBytes-InsertByte-
+#23644	REDUCE cov: 62 ft: 114 corp: 27/486b lim: 4096 exec/s: 0 rss: 38Mb L: 10/129 MS: 1 EraseBytes-
+#24675	REDUCE cov: 62 ft: 114 corp: 27/485b lim: 4096 exec/s: 0 rss: 39Mb L: 24/129 MS: 1 EraseBytes-
+#26452	REDUCE cov: 62 ft: 114 corp: 27/484b lim: 4096 exec/s: 0 rss: 39Mb L: 7/129 MS: 2 ShuffleBytes-EraseBytes-
+#26613	REDUCE cov: 62 ft: 114 corp: 27/482b lim: 4096 exec/s: 0 rss: 39Mb L: 58/129 MS: 1 EraseBytes-
+#28041	REDUCE cov: 62 ft: 114 corp: 27/480b lim: 4096 exec/s: 0 rss: 40Mb L: 13/129 MS: 3 EraseBytes-ShuffleBytes-InsertByte-
+#28882	REDUCE cov: 62 ft: 114 corp: 27/479b lim: 4096 exec/s: 0 rss: 40Mb L: 9/129 MS: 1 EraseBytes-
+#38418	REDUCE cov: 62 ft: 114 corp: 27/472b lim: 4096 exec/s: 0 rss: 42Mb L: 72/129 MS: 1 EraseBytes-
+#40341	REDUCE cov: 62 ft: 114 corp: 27/471b lim: 4096 exec/s: 0 rss: 43Mb L: 3/129 MS: 3 EraseBytes-ShuffleBytes-CopyPart-
+#54780	REDUCE cov: 62 ft: 114 corp: 27/467b lim: 4096 exec/s: 0 rss: 46Mb L: 54/129 MS: 4 ShuffleBytes-ChangeByte-ChangeASCIIInt-EraseBytes-
+#56661	REDUCE cov: 62 ft: 114 corp: 27/466b lim: 4096 exec/s: 0 rss: 47Mb L: 9/129 MS: 1 EraseBytes-
+#180424	REDUCE cov: 62 ft: 114 corp: 27/465b lim: 4096 exec/s: 0 rss: 56Mb L: 53/129 MS: 3 ChangeASCIIInt-ChangeBinInt-EraseBytes-
+#222058	REDUCE cov: 62 ft: 114 corp: 27/464b lim: 4096 exec/s: 0 rss: 57Mb L: 71/129 MS: 4 EraseBytes-InsertByte-CMP-CopyPart- DE: &#34;\000\000\000\004&#34;-
+#297289	REDUCE cov: 62 ft: 114 corp: 27/463b lim: 4096 exec/s: 297289 rss: 59Mb L: 70/129 MS: 1 EraseBytes-
+#297481	REDUCE cov: 62 ft: 114 corp: 27/462b lim: 4096 exec/s: 297481 rss: 59Mb L: 69/129 MS: 2 ChangeByte-EraseBytes-
+#320952	REDUCE cov: 62 ft: 114 corp: 27/461b lim: 4096 exec/s: 320952 rss: 60Mb L: 68/129 MS: 1 EraseBytes-
+#415390	REDUCE cov: 62 ft: 114 corp: 27/460b lim: 4096 exec/s: 415390 rss: 63Mb L: 52/129 MS: 3 EraseBytes-ChangeBinInt-CopyPart-
+#784138	REDUCE cov: 62 ft: 114 corp: 27/459b lim: 4096 exec/s: 392069 rss: 74Mb L: 67/129 MS: 3 ChangeBit-EraseBytes-CopyPart-
+#937781	REDUCE cov: 62 ft: 114 corp: 27/458b lim: 4096 exec/s: 312593 rss: 78Mb L: 66/129 MS: 3 ShuffleBytes-EraseBytes-CrossOver-
+#956372	REDUCE cov: 62 ft: 114 corp: 27/457b lim: 4096 exec/s: 318790 rss: 78Mb L: 65/129 MS: 1 EraseBytes-
+#1048576	pulse  cov: 62 ft: 114 corp: 27/457b lim: 4096 exec/s: 349525 rss: 81Mb
+#1917373	REDUCE cov: 62 ft: 114 corp: 27/456b lim: 4096 exec/s: 319562 rss: 107Mb L: 51/129 MS: 1 EraseBytes-
+#2097152	pulse  cov: 62 ft: 114 corp: 27/456b lim: 4096 exec/s: 299593 rss: 112Mb
+#2508537	REDUCE cov: 62 ft: 115 corp: 28/787b lim: 4096 exec/s: 313567 rss: 125Mb L: 331/331 MS: 4 EraseBytes-ShuffleBytes-InsertRepeatedBytes-CopyPart-
+#2510863	REDUCE cov: 62 ft: 115 corp: 28/782b lim: 4096 exec/s: 313857 rss: 125Mb L: 326/326 MS: 1 EraseBytes-
+#2515484	REDUCE cov: 62 ft: 115 corp: 28/772b lim: 4096 exec/s: 314435 rss: 125Mb L: 316/316 MS: 1 EraseBytes-
+#2517268	REDUCE cov: 62 ft: 115 corp: 28/749b lim: 4096 exec/s: 314658 rss: 125Mb L: 293/293 MS: 4 ChangeBinInt-ChangeBit-ChangeBinInt-EraseBytes-
+#2518884	REDUCE cov: 62 ft: 115 corp: 28/740b lim: 4096 exec/s: 314860 rss: 125Mb L: 284/284 MS: 1 EraseBytes-
+#2518950	REDUCE cov: 62 ft: 115 corp: 28/724b lim: 4096 exec/s: 314868 rss: 125Mb L: 268/268 MS: 1 EraseBytes-
+#2551941	REDUCE cov: 62 ft: 115 corp: 28/722b lim: 4096 exec/s: 318992 rss: 126Mb L: 266/266 MS: 1 EraseBytes-
+#2688480	REDUCE cov: 62 ft: 115 corp: 28/719b lim: 4096 exec/s: 298720 rss: 130Mb L: 263/263 MS: 4 ChangeByte-ChangeBit-EraseBytes-CrossOver-
+#2702381	REDUCE cov: 62 ft: 115 corp: 28/717b lim: 4096 exec/s: 300264 rss: 131Mb L: 261/261 MS: 1 EraseBytes-
+#3398010	REDUCE cov: 62 ft: 115 corp: 28/716b lim: 4096 exec/s: 308910 rss: 152Mb L: 260/260 MS: 4 EraseBytes-InsertByte-CrossOver-CrossOver-
+#4194304	pulse  cov: 62 ft: 115 corp: 28/716b lim: 4096 exec/s: 299593 rss: 177Mb
+#8388608	pulse  cov: 62 ft: 115 corp: 28/716b lim: 4096 exec/s: 299593 rss: 310Mb
+#8566230	REDUCE cov: 62 ft: 115 corp: 28/715b lim: 4096 exec/s: 295387 rss: 315Mb L: 259/259 MS: 5 CopyPart-ChangeByte-InsertByte-EraseBytes-CopyPart-
+#8901997	REDUCE cov: 62 ft: 115 corp: 28/713b lim: 4096 exec/s: 296733 rss: 326Mb L: 257/257 MS: 2 EraseBytes-CopyPart-
+#9116917	DONE   cov: 62 ft: 115 corp: 28/713b lim: 4096 exec/s: 294094 rss: 333Mb
+###### Recommended dictionary. ######
+&#34;\000\000\000\000\000\000\000\000&#34; # Uses: 183972
+&#34;\377\377\377\377&#34; # Uses: 204209
+&#34;\000\000&#34; # Uses: 220730
+&#34;\000\000\000\004&#34; # Uses: 196964
+###### End of recommended dictionary. ######
+Done 9116917 runs in 31 second(s)
+stat::number_of_executed_units: 9116917
+stat::average_exec_per_sec:     294094
+stat::new_units_added:          136
+stat::slowest_unit_time_sec:    0
+stat::peak_rss_mb:              333
+
+=================================================================
+[1m[31m==16==ERROR: LeakSanitizer: detected memory leaks
+[1m[0m
+[1m[34mDirect leak of 61458177 byte(s) in 6668576 object(s) allocated from:
+[1m[0m    #0 0x56126e5efa7e in malloc /src/llvm-project/compiler-rt/lib/asan/asan_malloc_linux.cpp:69:3
+    #1 0x56126e630c48 in gmalloc /src/xpdf-4.05/goo/gmem.cc:148:13
+    #2 0x56126e630c48 in copyString(char const*) /src/xpdf-4.05/goo/gmem.cc:393:16
+    #3 0x56126e62f04f in initName /src/xpdf-4.05/build/../xpdf/Object.h:97:32
+    #4 0x56126e62f04f in LLVMFuzzerTestOneInput /src/xpdf-4.05/build/fuzz_JBIG2.cc:47:13
+    #5 0x56126e4e14e0 in fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:614:13
+    #6 0x56126e4e0d05 in fuzzer::Fuzzer::RunOne(unsigned char const*, unsigned long, bool, fuzzer::InputInfo*, bool, bool*) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:516:7
+    #7 0x56126e4e24d5 in fuzzer::Fuzzer::MutateAndTestOne() /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:760:19
+    #8 0x56126e4e32c5 in fuzzer::Fuzzer::Loop(std::__Fuzzer::vector&lt;fuzzer::SizedFile, std::__Fuzzer::allocator&lt;fuzzer::SizedFile&gt;&gt;&amp;) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:905:5
+    #9 0x56126e4d15d6 in fuzzer::FuzzerDriver(int*, char***, int (*)(unsigned char const*, unsigned long)) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:914:6
+    #10 0x56126e4fdb02 in main /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMain.cpp:20:10
+    #11 0x7f73f412c082 in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x24082) (BuildId: 0702430aef5fa3dda43986563e9ffcc47efbd75e)
+
+DEDUP_TOKEN: __interceptor_malloc--gmalloc--copyString(char const*)
+SUMMARY: AddressSanitizer: 61458177 byte(s) leaked in 6668576 allocation(s).
+MS: 5 EraseBytes-CrossOver-InsertRepeatedBytes-CopyPart-InsertByte-; base unit: de79b6bb9eb59f99417f94b3ab9af1e6a45af61d
+
+
+artifact_prefix=&#39;./&#39;; Test unit written to ./crash-da39a3ee5e6b4b0d3255bfef95601890afd80709
+Base64: 
+stat::number_of_executed_units: 9116917
+stat::average_exec_per_sec:     294094
+stat::new_units_added:          136
+stat::slowest_unit_time_sec:    0
+stat::peak_rss_mb:              589
+
+</pre>
+
+
+</body>

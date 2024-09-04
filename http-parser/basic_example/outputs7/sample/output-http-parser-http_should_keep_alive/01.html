@@ -1,0 +1,272 @@
+<!doctype html>
+
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Experiment results</title>
+<style>
+* {
+    box-sizing: border-box;
+}
+
+html {
+    line-height: 1.15;
+}
+
+body {
+    font-family: sans-serif;
+    font-size: 16px;
+}
+
+table {
+    border-collapse: collapse;
+    border-spacing: 0;
+}
+
+td, th {
+    border-right: 1px #dedede solid;
+    border-bottom: 1px #dedede solid;
+    padding: 5px;
+    text-align: left;
+}
+td:first-child, th:first-child {
+    border-left: 1px #dedede solid;
+}
+th {
+    border-top: 1px #dedede solid;
+}
+
+tbody tr:nth-child(odd) {
+    background-color: #f4f5ff;
+}
+</style>
+<body>
+    LLM: 
+    
+<h1>output-http-parser-http_should_keep_alive / 01</h1>
+Bug: False
+<br>
+Crash reason: NO_SEMANTIC_ERR
+<br>
+<br>
+
+<h2>Triage</h2>
+<pre>
+
+</pre>
+<br>
+
+
+
+
+
+<h3>Final code</h3>
+
+<pre>
+#include &#34;http_parser.h&#34;
+#include &lt;stdint.h&gt;
+#include &lt;stdlib.h&gt;
+
+int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  if (size &lt; sizeof(uint64_t) * 4 + sizeof(unsigned int) * 2) {
+    return 0;
+  }
+
+  http_parser parser = {};
+  
+  parser.http_major = *(unsigned int *)data;
+  parser.http_major = parser.http_major &gt;= 1 ? 1 : 0;
+  data += sizeof(unsigned int);
+  
+  parser.http_minor = *(unsigned int *)data;
+  data += sizeof(unsigned int);
+  
+  parser.flags = *(uint64_t *)data;
+  data += sizeof(uint64_t);
+  
+  parser.content_length = *(uint64_t *)data;
+  data += sizeof(uint64_t);
+
+  parser.http_errno = *(uint64_t *)data;
+  data += sizeof(uint64_t);
+
+  parser.upgrade = *(unsigned int *)data % 2;
+  
+  http_should_keep_alive(&amp;parser);
+  
+  return 0;
+}
+</pre>
+
+
+<h3>Fixer prompt #1</h3>
+<pre>
+
+Given the following C fuzz harness and its build error message, fix the code to make it build for fuzzing.
+
+If there is undeclared identifier or unknown type name error, fix it by finding and including the related libraries.
+
+MUST RETURN THE FULL CODE, INCLUDING UNCHANGED PARTS.
+
+Below is the code needs to be built:
+&lt;code&gt;
+#include &#34;http_parser.h&#34;
+#include &lt;stdint.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  http_parser parser = {};
+  FuzzedDataProvider provider(data, size);
+  
+  parser.http_major = provider.ConsumeIntegral&lt;unsigned int&gt;();
+  parser.http_major = parser.http_major &gt;= 1 ? 1 : 0;
+  parser.http_minor = provider.ConsumeIntegral&lt;unsigned int&gt;();
+  parser.flags      = provider.ConsumeIntegral&lt;typeof(http_parser::flags)&gt;();
+  parser.content_length = provider.ConsumeIntegral&lt;uint64_t&gt;();
+  parser.http_errno = provider.ConsumeIntegral&lt;typeof(http_parser::http_errno)&gt;();
+  parser.upgrade    = provider.ConsumeBool();
+
+  http_should_keep_alive(&amp;parser);
+  
+  return 0;
+}
+&lt;/code&gt;
+
+Below is the error to fix:
+The code has the following build issues:
+&lt;error&gt;
+(.text.main+0x12): undefined reference to `LLVMFuzzerTestOneInput&#39;
+&lt;/error&gt;
+
+
+Below are instructions to assist you in fixing the error.
+&lt;instruction&gt;
+Please modify the generated C fuzz target to remove&lt;code&gt;FuzzedDataProvider&lt;/code&gt; and replace all its functionalities with equivalent C code, because it will cause build failure in C fuzz targets.
+Also, ensure the whole fuzz target must be compatible with plain C and does not include any C++ specific code or dependencies.
+
+&lt;/instruction&gt;
+
+Fix code:
+1. Consider possible solutions for the issues listed above.
+2. Choose a solution that can maximize fuzzing result, which is utilizing the function under test and feeding it not null input.
+3. Apply the solutions to the original code.
+It&#39;s important to show the complete code, not only the fixed line.
+&lt;solution&gt;
+</pre>
+
+
+
+<h3>Code #1</h3>
+
+<pre>
+#include &#34;http_parser.h&#34;
+#include &lt;stdint.h&gt;
+#include &lt;stdlib.h&gt;
+
+int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  if (size &lt; sizeof(uint64_t) * 4 + sizeof(unsigned int) * 2) {
+    return 0;
+  }
+
+  http_parser parser = {};
+  
+  parser.http_major = *(unsigned int *)data;
+  parser.http_major = parser.http_major &gt;= 1 ? 1 : 0;
+  data += sizeof(unsigned int);
+  
+  parser.http_minor = *(unsigned int *)data;
+  data += sizeof(unsigned int);
+  
+  parser.flags = *(uint64_t *)data;
+  data += sizeof(uint64_t);
+  
+  parser.content_length = *(uint64_t *)data;
+  data += sizeof(uint64_t);
+
+  parser.http_errno = *(uint64_t *)data;
+  data += sizeof(uint64_t);
+
+  parser.upgrade = *(unsigned int *)data % 2;
+  
+  http_should_keep_alive(&amp;parser);
+  
+  return 0;
+}
+</pre>
+
+
+<h2>Logs</h2>
+<pre>
+Fixing /home/chyun/oss-fuzz-gen1/results7/output-http-parser-http_should_keep_alive/fixed_targets/01.c with gpt-4, attempt 1.
+Successfully built /home/chyun/oss-fuzz-gen1/results7/output-http-parser-http_should_keep_alive/fixed_targets/01.c with gpt-4 in 1 iterations of fixing.
+Triaging the crash related to /home/chyun/oss-fuzz-gen1/results7/output-http-parser-http_should_keep_alive/fixed_targets/01.c with gpt-4.
+Warning: no crash info in http-parser-http_should_keep_alive-01.
+Result for http-parser-http_should_keep_alive-01: crashes=False, coverage=0.012154696132596685 (11/905), coverage diff=0.005031446540880503 (8/1590)
+
+</pre>
+
+<h2>Run logs</h2>
+<pre>
+INFO:__main__:Running: docker run --privileged --shm-size=2g --platform linux/amd64 --rm -e FUZZING_ENGINE=libfuzzer -e SANITIZER=address -e RUN_FUZZER_MODE=interactive -e HELPER=True -v /home/chyun/oss-fuzz-gen1/results7/output-http-parser-http_should_keep_alive/corpora/01.c:/tmp/fuzz_url_corpus -v /tmp/tmpo1ri2qdr/build/out/http-parser-http_should_keep_alive-01:/out -t gcr.io/oss-fuzz-base/base-runner run_fuzzer fuzz_url -print_final_stats=1 -max_total_time=30 -len_control=0 -timeout=30.
+vm.mmap_rnd_bits = 28
+rm: cannot remove &#39;/tmp/fuzz_url_corpus&#39;: Device or resource busy
+/out/fuzz_url -rss_limit_mb=2560 -timeout=25 -print_final_stats=1 -max_total_time=30 -len_control=0 -timeout=30 /tmp/fuzz_url_corpus &lt; /dev/null
+INFO: Running with entropic power schedule (0xFF, 100).
+INFO: Seed: 4211673524
+INFO: Loaded 1 modules   (905 inline 8-bit counters): 905 [0x56474ced3ab0, 0x56474ced3e39), 
+INFO: Loaded 1 PC tables (905 PCs): 905 [0x56474ced3e40,0x56474ced76d0), 
+INFO:        0 files found in /tmp/fuzz_url_corpus
+INFO: -max_len is not provided; libFuzzer will not generate inputs larger than 4096 bytes
+INFO: A corpus is not provided, starting from an empty corpus
+#2	INITED cov: 2 ft: 2 corp: 1/1b exec/s: 0 rss: 30Mb
+	NEW_FUNC[1/1]: 0x56474ce63930 in http_should_keep_alive /src/http-parser/http_parser.c:2190
+#8	NEW    cov: 6 ft: 6 corp: 2/111b lim: 4096 exec/s: 0 rss: 30Mb L: 110/110 MS: 1 InsertRepeatedBytes-
+#15	REDUCE cov: 6 ft: 6 corp: 2/66b lim: 4096 exec/s: 0 rss: 30Mb L: 65/65 MS: 2 CrossOver-EraseBytes-
+#19	REDUCE cov: 7 ft: 7 corp: 3/220b lim: 4096 exec/s: 0 rss: 30Mb L: 154/154 MS: 4 EraseBytes-ShuffleBytes-ChangeByte-InsertRepeatedBytes-
+#47	REDUCE cov: 7 ft: 7 corp: 3/195b lim: 4096 exec/s: 0 rss: 30Mb L: 40/154 MS: 3 ChangeByte-ChangeByte-EraseBytes-
+#54	NEW    cov: 9 ft: 9 corp: 4/236b lim: 4096 exec/s: 0 rss: 30Mb L: 41/154 MS: 2 CopyPart-CrossOver-
+#74	NEW    cov: 10 ft: 10 corp: 5/373b lim: 4096 exec/s: 0 rss: 30Mb L: 137/154 MS: 5 ChangeBinInt-InsertRepeatedBytes-ChangeByte-InsertRepeatedBytes-CMP- DE: &#34;\377\377&#34;-
+#81	NEW    cov: 11 ft: 11 corp: 6/529b lim: 4096 exec/s: 0 rss: 30Mb L: 156/156 MS: 2 PersAutoDict-PersAutoDict- DE: &#34;\377\377&#34;-&#34;\377\377&#34;-
+#137	REDUCE cov: 11 ft: 11 corp: 6/524b lim: 4096 exec/s: 0 rss: 30Mb L: 151/154 MS: 1 EraseBytes-
+#231	REDUCE cov: 11 ft: 11 corp: 6/514b lim: 4096 exec/s: 0 rss: 31Mb L: 141/154 MS: 4 ChangeBinInt-InsertByte-InsertByte-EraseBytes-
+#237	REDUCE cov: 11 ft: 11 corp: 6/493b lim: 4096 exec/s: 0 rss: 31Mb L: 133/141 MS: 1 EraseBytes-
+#260	REDUCE cov: 11 ft: 11 corp: 6/491b lim: 4096 exec/s: 0 rss: 31Mb L: 131/141 MS: 3 PersAutoDict-ChangeBit-EraseBytes- DE: &#34;\377\377&#34;-
+#293	REDUCE cov: 11 ft: 11 corp: 6/462b lim: 4096 exec/s: 0 rss: 31Mb L: 112/137 MS: 3 PersAutoDict-InsertRepeatedBytes-EraseBytes- DE: &#34;\377\377&#34;-
+#305	REDUCE cov: 11 ft: 11 corp: 6/456b lim: 4096 exec/s: 0 rss: 31Mb L: 131/131 MS: 2 CrossOver-EraseBytes-
+#359	REDUCE cov: 11 ft: 11 corp: 6/421b lim: 4096 exec/s: 0 rss: 31Mb L: 96/131 MS: 4 ChangeByte-ChangeByte-ShuffleBytes-EraseBytes-
+#365	REDUCE cov: 11 ft: 11 corp: 6/405b lim: 4096 exec/s: 0 rss: 31Mb L: 115/115 MS: 1 EraseBytes-
+#427	REDUCE cov: 11 ft: 11 corp: 6/388b lim: 4096 exec/s: 0 rss: 31Mb L: 98/112 MS: 2 ChangeBit-EraseBytes-
+#429	REDUCE cov: 11 ft: 11 corp: 6/344b lim: 4096 exec/s: 0 rss: 31Mb L: 52/112 MS: 2 CrossOver-EraseBytes-
+#451	REDUCE cov: 11 ft: 11 corp: 6/334b lim: 4096 exec/s: 0 rss: 31Mb L: 102/102 MS: 2 ShuffleBytes-EraseBytes-
+#499	REDUCE cov: 11 ft: 11 corp: 6/305b lim: 4096 exec/s: 0 rss: 31Mb L: 69/102 MS: 3 CopyPart-ChangeBit-EraseBytes-
+#580	REDUCE cov: 11 ft: 11 corp: 6/304b lim: 4096 exec/s: 0 rss: 31Mb L: 51/102 MS: 1 EraseBytes-
+#582	REDUCE cov: 11 ft: 11 corp: 6/294b lim: 4096 exec/s: 0 rss: 31Mb L: 92/92 MS: 2 InsertByte-EraseBytes-
+#608	REDUCE cov: 11 ft: 11 corp: 6/289b lim: 4096 exec/s: 0 rss: 31Mb L: 64/92 MS: 1 EraseBytes-
+#649	REDUCE cov: 11 ft: 11 corp: 6/271b lim: 4096 exec/s: 0 rss: 31Mb L: 46/92 MS: 1 EraseBytes-
+#728	REDUCE cov: 11 ft: 11 corp: 6/269b lim: 4096 exec/s: 0 rss: 31Mb L: 49/92 MS: 4 ShuffleBytes-PersAutoDict-CMP-EraseBytes- DE: &#34;\377\377&#34;-&#34;(\000\000\000\000\000\000\000&#34;-
+#730	REDUCE cov: 11 ft: 11 corp: 6/238b lim: 4096 exec/s: 0 rss: 31Mb L: 61/61 MS: 2 PersAutoDict-EraseBytes- DE: &#34;(\000\000\000\000\000\000\000&#34;-
+#733	REDUCE cov: 11 ft: 11 corp: 6/217b lim: 4096 exec/s: 0 rss: 31Mb L: 40/49 MS: 3 EraseBytes-ShuffleBytes-InsertByte-
+#904	REDUCE cov: 11 ft: 11 corp: 6/208b lim: 4096 exec/s: 0 rss: 31Mb L: 40/46 MS: 1 EraseBytes-
+#1294	REDUCE cov: 11 ft: 11 corp: 6/207b lim: 4096 exec/s: 0 rss: 31Mb L: 40/46 MS: 5 ShuffleBytes-ChangeBinInt-CrossOver-CrossOver-EraseBytes-
+#2729	REDUCE cov: 11 ft: 11 corp: 6/202b lim: 4096 exec/s: 0 rss: 31Mb L: 41/41 MS: 5 ChangeByte-ChangeBinInt-ShuffleBytes-CopyPart-EraseBytes-
+#2975	REDUCE cov: 11 ft: 11 corp: 6/201b lim: 4096 exec/s: 0 rss: 31Mb L: 40/40 MS: 1 EraseBytes-
+#1048576	pulse  cov: 11 ft: 11 corp: 6/201b lim: 4096 exec/s: 524288 rss: 50Mb
+#2097152	pulse  cov: 11 ft: 11 corp: 6/201b lim: 4096 exec/s: 699050 rss: 51Mb
+#4194304	pulse  cov: 11 ft: 11 corp: 6/201b lim: 4096 exec/s: 599186 rss: 51Mb
+#8388608	pulse  cov: 11 ft: 11 corp: 6/201b lim: 4096 exec/s: 466033 rss: 51Mb
+#14190440	DONE   cov: 11 ft: 11 corp: 6/201b lim: 4096 exec/s: 457756 rss: 51Mb
+###### Recommended dictionary. ######
+&#34;\377\377&#34; # Uses: 663123
+&#34;(\000\000\000\000\000\000\000&#34; # Uses: 652283
+###### End of recommended dictionary. ######
+Done 14190440 runs in 31 second(s)
+stat::number_of_executed_units: 14190440
+stat::average_exec_per_sec:     457756
+stat::new_units_added:          30
+stat::slowest_unit_time_sec:    0
+stat::peak_rss_mb:              51
+
+</pre>
+
+
+</body>

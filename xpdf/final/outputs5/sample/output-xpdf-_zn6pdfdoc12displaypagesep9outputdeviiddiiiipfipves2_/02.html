@@ -1,0 +1,476 @@
+<!doctype html>
+
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Experiment results</title>
+<style>
+* {
+    box-sizing: border-box;
+}
+
+html {
+    line-height: 1.15;
+}
+
+body {
+    font-family: sans-serif;
+    font-size: 16px;
+}
+
+table {
+    border-collapse: collapse;
+    border-spacing: 0;
+}
+
+td, th {
+    border-right: 1px #dedede solid;
+    border-bottom: 1px #dedede solid;
+    padding: 5px;
+    text-align: left;
+}
+td:first-child, th:first-child {
+    border-left: 1px #dedede solid;
+}
+th {
+    border-top: 1px #dedede solid;
+}
+
+tbody tr:nth-child(odd) {
+    background-color: #f4f5ff;
+}
+</style>
+<body>
+    LLM: 
+    
+<h1>output-xpdf-_zn6pdfdoc12displaypagesep9outputdeviiddiiiipfipves2_ / 02</h1>
+Bug: True
+<br>
+Crash reason: NO_SEMANTIC_ERR
+<br>
+<br>
+
+<h2>Triage</h2>
+<pre>
+Crash is caused by bug in fuzz driver.
+
+The crash report shows a null-dereference error in the MemStream function call at line 34 in the fuzz driver. The MemStream function is trying to access memory that hasn&#39;t been initialized. This is likely because the &#39;buf&#39; vector in the fuzz driver is empty when the MemStream function is called. The driver code checks if &#39;buf&#39; is empty and returns 0 if it is, but it does not prevent the MemStream function from being called afterwards. This causes the MemStream function to attempt to read from an empty vector, leading to the crash.
+</pre>
+<br>
+
+
+
+
+
+<h3>Final code</h3>
+
+<pre>
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+#include &lt;aconf.h&gt;
+#include &lt;stddef.h&gt;
+#include &lt;stdint.h&gt;
+#include &lt;vector&gt;
+
+#include &#34;GlobalParams.h&#34;
+#include &#34;PDFDoc.h&#34;
+#include &#34;config.h&#34;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  if (size &lt; sizeof(int))
+    return 0;
+
+  FuzzedDataProvider fdp(data, size);
+  double hDPI = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  double vDPI = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  int rotate = fdp.ConsumeIntegral&lt;int&gt;();
+  GBool useMediaBox = fdp.ConsumeBool();
+  GBool crop = fdp.ConsumeBool();
+  GBool printing = fdp.ConsumeBool();
+
+  std::vector&lt;char&gt; buf = fdp.ConsumeRemainingBytes&lt;char&gt;();
+
+  globalParams = new GlobalParams(&#34;/usr/local/etc/xpdfrc&#34;);
+  globalParams-&gt;setupBaseFonts(&#34;/usr/share/ghostscript/9.25/Resource/cidfmap&#34;);
+
+  if (buf.size() == 0) {
+    delete globalParams;
+    return 0;
+  }
+
+  MemStream *str = new MemStream(buf.data(), 0, buf.size(), NULL);
+  PDFDoc *pdf_doc = new PDFDoc(str, NULL, NULL, NULL);
+  
+  if (pdf_doc-&gt;isOk()) {
+    pdf_doc-&gt;displayPages(NULL, 1, 1, hDPI, vDPI, rotate, useMediaBox, crop, printing, NULL, NULL);
+  }
+
+  delete pdf_doc;
+  delete globalParams;
+  return 0;
+}
+</pre>
+
+
+<h3>Fixer prompt #1</h3>
+<pre>
+
+Given the following C++ fuzz harness and its build error message, fix the code to make it build for fuzzing.
+
+If there is undeclared identifier or unknown type name error, fix it by finding and including the related libraries.
+
+MUST RETURN THE FULL CODE, INCLUDING UNCHANGED PARTS.
+
+Below is the code needs to be built:
+&lt;code&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+#include &lt;aconf.h&gt;
+#include &lt;stddef.h&gt;
+#include &lt;stdint.h&gt;
+#include &lt;vector&gt;
+
+#include &#34;GlobalParams.h&#34;
+#include &#34;PDFDoc.h&#34;
+#include &#34;config.h&#34;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  if (size &lt; sizeof(int))
+    return 0;
+
+  FuzzedDataProvider fdp(data, size);
+  double hDPI = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  double vDPI = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  int rotate = fdp.ConsumeIntegral&lt;int&gt;();
+  GBool useMediaBox = fdp.ConsumeBool();
+  GBool crop = fdp.ConsumeBool();
+  GBool printing = fdp.ConsumeBool();
+
+  std::vector&lt;char&gt; buf = fdp.ConsumeRemainingBytes&lt;char&gt;();
+
+  globalParams = new GlobalParams(&#34;/usr/local/etc/xpdfrc&#34;);
+  globalParams-&gt;setupBaseFonts(&#34;/usr/share/ghostscript/9.25/Resource/cidfmap&#34;);
+
+  Object obj = Object(buf.data());
+  MemStream *str = new MemStream(buf.data(), 0, size, &amp;obj);
+  PDFDoc *pdf_doc = new PDFDoc(str, NULL, NULL, NULL);
+  
+  if (pdf_doc-&gt;isOk()) {
+    pdf_doc-&gt;displayPages(NULL, 1, 1, hDPI, vDPI, rotate, useMediaBox, crop, printing, NULL, NULL);
+  }
+
+  delete pdf_doc;
+  delete globalParams;
+  return 0;
+}
+&lt;/code&gt;
+
+Below is the error to fix:
+The code has the following build issues:
+&lt;error&gt;
+fuzz_JBIG2.cc:29:16: error: no matching conversion for functional-style cast from &#39;value_type *&#39; (aka &#39;char *&#39;) to &#39;Object&#39;
+   29 |   Object obj = Object(buf.data());
+      |                ^~~~~~~~~~~~~~~~~
+../xpdf/Object.h:80:7: note: candidate constructor (the implicit copy constructor) not viable: no known conversion from &#39;value_type *&#39; (aka &#39;char *&#39;) to &#39;const Object&#39; for 1st argument
+   80 | class Object {
+      |       ^~~~~~
+../xpdf/Object.h:80:7: note: candidate constructor (the implicit move constructor) not viable: no known conversion from &#39;value_type *&#39; (aka &#39;char *&#39;) to &#39;Object&#39; for 1st argument
+   80 | class Object {
+      |       ^~~~~~
+../xpdf/Object.h:84:3: note: candidate constructor not viable: requires 0 arguments, but 1 was provided
+   84 |   Object():
+      |   ^
+&lt;/error&gt;
+
+
+
+
+Fix code:
+1. Consider possible solutions for the issues listed above.
+2. Choose a solution that can maximize fuzzing result, which is utilizing the function under test and feeding it not null input.
+3. Apply the solutions to the original code.
+It&#39;s important to show the complete code, not only the fixed line.
+&lt;solution&gt;
+</pre>
+
+
+
+<h3>Code #1</h3>
+
+<pre>
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+#include &lt;aconf.h&gt;
+#include &lt;stddef.h&gt;
+#include &lt;stdint.h&gt;
+#include &lt;vector&gt;
+
+#include &#34;GlobalParams.h&#34;
+#include &#34;PDFDoc.h&#34;
+#include &#34;config.h&#34;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  if (size &lt; sizeof(int))
+    return 0;
+
+  FuzzedDataProvider fdp(data, size);
+  double hDPI = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  double vDPI = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  int rotate = fdp.ConsumeIntegral&lt;int&gt;();
+  GBool useMediaBox = fdp.ConsumeBool();
+  GBool crop = fdp.ConsumeBool();
+  GBool printing = fdp.ConsumeBool();
+
+  std::vector&lt;char&gt; buf = fdp.ConsumeRemainingBytes&lt;char&gt;();
+
+  globalParams = new GlobalParams(&#34;/usr/local/etc/xpdfrc&#34;);
+  globalParams-&gt;setupBaseFonts(&#34;/usr/share/ghostscript/9.25/Resource/cidfmap&#34;);
+
+  MemStream *str = new MemStream(buf.data(), 0, size, NULL);
+  PDFDoc *pdf_doc = new PDFDoc(str, NULL, NULL, NULL);
+  
+  if (pdf_doc-&gt;isOk()) {
+    pdf_doc-&gt;displayPages(NULL, 1, 1, hDPI, vDPI, rotate, useMediaBox, crop, printing, NULL, NULL);
+  }
+
+  delete pdf_doc;
+  delete globalParams;
+  return 0;
+}
+&lt;/solution&gt;
+</pre>
+
+
+<h3>Fixer prompt #2</h3>
+<pre>
+
+Given the following C++ fuzz harness and its build error message, fix the code to make it build for fuzzing.
+
+If there is undeclared identifier or unknown type name error, fix it by finding and including the related libraries.
+
+MUST RETURN THE FULL CODE, INCLUDING UNCHANGED PARTS.
+
+Below is the code needs to be built:
+&lt;code&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+#include &lt;aconf.h&gt;
+#include &lt;stddef.h&gt;
+#include &lt;stdint.h&gt;
+#include &lt;vector&gt;
+
+#include &#34;GlobalParams.h&#34;
+#include &#34;PDFDoc.h&#34;
+#include &#34;config.h&#34;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  if (size &lt; sizeof(int))
+    return 0;
+
+  FuzzedDataProvider fdp(data, size);
+  double hDPI = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  double vDPI = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  int rotate = fdp.ConsumeIntegral&lt;int&gt;();
+  GBool useMediaBox = fdp.ConsumeBool();
+  GBool crop = fdp.ConsumeBool();
+  GBool printing = fdp.ConsumeBool();
+
+  std::vector&lt;char&gt; buf = fdp.ConsumeRemainingBytes&lt;char&gt;();
+
+  globalParams = new GlobalParams(&#34;/usr/local/etc/xpdfrc&#34;);
+  globalParams-&gt;setupBaseFonts(&#34;/usr/share/ghostscript/9.25/Resource/cidfmap&#34;);
+
+  MemStream *str = new MemStream(buf.data(), 0, size, NULL);
+  PDFDoc *pdf_doc = new PDFDoc(str, NULL, NULL, NULL);
+  
+  if (pdf_doc-&gt;isOk()) {
+    pdf_doc-&gt;displayPages(NULL, 1, 1, hDPI, vDPI, rotate, useMediaBox, crop, printing, NULL, NULL);
+  }
+
+  delete pdf_doc;
+  delete globalParams;
+  return 0;
+}
+&lt;/code&gt;
+
+Below is the error to fix:
+The code can build successfully but has a runtime issue: Fuzzing crashed immediately at runtime (ASAN-ERROR: AddressSanitizer: SEGV on unknown address 0x000000000000 (pc 0x7fc6b08adaeb bp 0x7fff43c45a60 sp 0x7fff43c45218 T0)), indicating fuzz target code for invoking the function under test is incorrect or unrobust.
+&lt;error&gt;
+Crash stacks:
+Stack 0:
+#0 0x7fc6b08adaeb in memcpy (/lib/x86_64-linux-gnu/libc.so.6+0xbbaeb) (BuildId: 0702430aef5fa3dda43986563e9ffcc47efbd75e)
+#1 0x55c00854ba24 in __asan_memcpy /src/llvm-project/compiler-rt/lib/asan/asan_interceptors_memintrinsics.cpp:63:3
+#2 0x55c0085b7d1c in BaseStream /src/xpdf-4.05/xpdf/Stream.cc:326:8
+#3 0x55c0085b7d1c in MemStream::MemStream(char*, unsigned int, unsigned int, Object*) /src/xpdf-4.05/xpdf/Stream.cc:873:5
+#4 0x55c00858d396 in LLVMFuzzerTestOneInput /src/xpdf-4.05/build/fuzz_JBIG2.cc:29:24
+#5 0x55c00843f600 in fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:614:13
+#6 0x55c00843ee25 in fuzzer::Fuzzer::RunOne(unsigned char const*, unsigned long, bool, fuzzer::InputInfo*, bool, bool*) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:516:7
+#7 0x55c0084405f5 in fuzzer::Fuzzer::MutateAndTestOne() /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:760:19
+#8 0x55c0084413e5 in fuzzer::Fuzzer::Loop(std::__Fuzzer::vector&lt;fuzzer::SizedFile, std::__Fuzzer::allocator&lt;fuzzer::SizedFile&gt;&gt;&amp;) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:905:5
+#9 0x55c00842f6f6 in fuzzer::FuzzerDriver(int*, char***, int (*)(unsigned char const*, unsigned long)) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:914:6
+#10 0x55c00845bc22 in main /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMain.cpp:20:10
+#11 0x7fc6b0816082 in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x24082) (BuildId: 0702430aef5fa3dda43986563e9ffcc47efbd75e)
+#12 0x55c00842086d in _start (/out/fuzz_JBIG2+0x1c986d)
+&lt;/error&gt;
+
+
+
+
+Fix code:
+1. Consider possible solutions for the issues listed above.
+2. Choose a solution that can maximize fuzzing result, which is utilizing the function under test and feeding it not null input.
+3. Apply the solutions to the original code.
+It&#39;s important to show the complete code, not only the fixed line.
+&lt;solution&gt;
+</pre>
+
+
+
+<h3>Code #2</h3>
+
+<pre>
+&lt;code&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+#include &lt;aconf.h&gt;
+#include &lt;stddef.h&gt;
+#include &lt;stdint.h&gt;
+#include &lt;vector&gt;
+
+#include &#34;GlobalParams.h&#34;
+#include &#34;PDFDoc.h&#34;
+#include &#34;config.h&#34;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  if (size &lt; sizeof(int))
+    return 0;
+
+  FuzzedDataProvider fdp(data, size);
+  double hDPI = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  double vDPI = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  int rotate = fdp.ConsumeIntegral&lt;int&gt;();
+  GBool useMediaBox = fdp.ConsumeBool();
+  GBool crop = fdp.ConsumeBool();
+  GBool printing = fdp.ConsumeBool();
+
+  std::vector&lt;char&gt; buf = fdp.ConsumeRemainingBytes&lt;char&gt;();
+
+  globalParams = new GlobalParams(&#34;/usr/local/etc/xpdfrc&#34;);
+  globalParams-&gt;setupBaseFonts(&#34;/usr/share/ghostscript/9.25/Resource/cidfmap&#34;);
+
+  if (buf.size() == 0) {
+    delete globalParams;
+    return 0;
+  }
+
+  MemStream *str = new MemStream(buf.data(), 0, buf.size(), NULL);
+  PDFDoc *pdf_doc = new PDFDoc(str, NULL, NULL, NULL);
+  
+  if (pdf_doc-&gt;isOk()) {
+    pdf_doc-&gt;displayPages(NULL, 1, 1, hDPI, vDPI, rotate, useMediaBox, crop, printing, NULL, NULL);
+  }
+
+  delete pdf_doc;
+  delete globalParams;
+  return 0;
+}
+&lt;/code&gt;
+&lt;solution&gt; 
+
+The issue was that the MemStream was being created with the size of the original data, not the size of the remaining data in the buffer after the other variables were consumed. The fix is to check if the buffer size is 0 before creating the MemStream and to use buf.size() when creating the MemStream.
+</pre>
+
+
+<h2>Logs</h2>
+<pre>
+Fixing /home/chyun/oss-fuzz-gen/results5/output-xpdf-_zn6pdfdoc12displaypagesep9outputdeviiddiiiipfipves2_/fixed_targets/02.cc with gpt-4, attempt 1.
+Fixing /home/chyun/oss-fuzz-gen/results5/output-xpdf-_zn6pdfdoc12displaypagesep9outputdeviiddiiiipfipves2_/fixed_targets/02.cc with gpt-4, attempt 2.
+Successfully built /home/chyun/oss-fuzz-gen/results5/output-xpdf-_zn6pdfdoc12displaypagesep9outputdeviiddiiiipfipves2_/fixed_targets/02.cc with gpt-4 in 2 iterations of fixing.
+Triaging the crash related to /home/chyun/oss-fuzz-gen/results5/output-xpdf-_zn6pdfdoc12displaypagesep9outputdeviiddiiiipfipves2_/fixed_targets/02.cc with gpt-4.
+Result for xpdf-zn6pdfdoc12displaypagesep9outputdeviiddiiiipfipves2-02: crashes=True, coverage=0.010547034574961934 (284/26927), coverage diff=0.000240517593861991 (30/124731)
+
+</pre>
+
+<h2>Run logs</h2>
+<pre>
+INFO:__main__:Running: docker run --privileged --shm-size=2g --platform linux/amd64 --rm -e FUZZING_ENGINE=libfuzzer -e SANITIZER=address -e RUN_FUZZER_MODE=interactive -e HELPER=True -v /home/chyun/oss-fuzz-gen/results5/output-xpdf-_zn6pdfdoc12displaypagesep9outputdeviiddiiiipfipves2_/corpora/02.cc:/tmp/fuzz_JBIG2_corpus -v /tmp/tmpkelzbyqy/build/out/xpdf-zn6pdfdoc12displaypagesep9outputdeviiddiiiipfipves2-02:/out -t gcr.io/oss-fuzz-base/base-runner run_fuzzer fuzz_JBIG2 -print_final_stats=1 -max_total_time=30 -len_control=0 -timeout=30.
+vm.mmap_rnd_bits = 28
+rm: cannot remove &#39;/tmp/fuzz_JBIG2_corpus&#39;: Device or resource busy
+/out/fuzz_JBIG2 -rss_limit_mb=2560 -timeout=25 -print_final_stats=1 -max_total_time=30 -len_control=0 -timeout=30 /tmp/fuzz_JBIG2_corpus -detect_leaks=0 &lt; /dev/null
+INFO: Running with entropic power schedule (0xFF, 100).
+INFO: Seed: 1386103975
+INFO: Loaded 1 modules   (26927 inline 8-bit counters): 26927 [0x55c6237f54d8, 0x55c6237fbe07), 
+INFO: Loaded 1 PC tables (26927 PCs): 26927 [0x55c6237fbe08,0x55c6238650f8), 
+INFO:        0 files found in /tmp/fuzz_JBIG2_corpus
+INFO: -max_len is not provided; libFuzzer will not generate inputs larger than 4096 bytes
+INFO: A corpus is not provided, starting from an empty corpus
+#2	INITED cov: 2 ft: 2 corp: 1/1b exec/s: 0 rss: 33Mb
+Config Error: No display font for &#39;Courier&#39;
+Config Error: No display font for &#39;Courier-Bold&#39;
+Config Error: No display font for &#39;Courier-BoldOblique&#39;
+Config Error: No display font for &#39;Courier-Oblique&#39;
+Config Error: No display font for &#39;Helvetica&#39;
+Config Error: No display font for &#39;Helvetica-Bold&#39;
+Config Error: No display font for &#39;Helvetica-BoldOblique&#39;
+Config Error: No display font for &#39;Helvetica-Oblique&#39;
+Config Error: No display font for &#39;Symbol&#39;
+Config Error: No display font for &#39;Times-Bold&#39;
+Config Error: No display font for &#39;Times-BoldItalic&#39;
+Config Error: No display font for &#39;Times-Italic&#39;
+Config Error: No display font for &#39;Times-Roman&#39;
+Config Error: No display font for &#39;ZapfDingbats&#39;
+	NEW_FUNC[1/54]: 0x55c6233dd840 in std::__1::vector&lt;char, std::__1::allocator&lt;char&gt;&gt;::vector(unsigned long) /usr/local/bin/../include/c++/v1/vector:1191
+	NEW_FUNC[2/54]: 0x55c6233e0110 in SysFontList::SysFontList() /src/xpdf-4.05/xpdf/GlobalParams.cc:374
+#10	NEW    cov: 284 ft: 285 corp: 2/5b lim: 4096 exec/s: 0 rss: 38Mb L: 4/4 MS: 3 CrossOver-CopyPart-CopyPart-
+Config Error: No display font for &#39;Courier&#39;
+Config Error: No display font for &#39;Courier-Bold&#39;
+Config Error: No display font for &#39;Courier-BoldOblique&#39;
+Config Error: No display font for &#39;Courier-Oblique&#39;
+Config Error: No display font for &#39;Helvetica&#39;
+Config Error: No display font for &#39;Helvetica-Bold&#39;
+Config Error: No display font for &#39;Helvetica-BoldOblique&#39;
+Config Error: No display font for &#39;Helvetica-Oblique&#39;
+Config Error: No display font for &#39;Symbol&#39;
+Config Error: No display font for &#39;Times-Bold&#39;
+Config Error: No display font for &#39;Times-BoldItalic&#39;
+Config Error: No display font for &#39;Times-Italic&#39;
+Config Error: No display font for &#39;Times-Roman&#39;
+Config Error: No display font for &#39;ZapfDingbats&#39;
+AddressSanitizer:DEADLYSIGNAL
+=================================================================
+[1m[31m==15==ERROR: AddressSanitizer: SEGV on unknown address 0x000000000000 (pc 0x7ffa35681aeb bp 0x7ffca50a0320 sp 0x7ffca509fad8 T0)
+[1m[0m==15==The signal is caused by a READ memory access.
+==15==Hint: address points to the zero page.
+SCARINESS: 10 (null-deref)
+    #0 0x7ffa35681aeb in memcpy (/lib/x86_64-linux-gnu/libc.so.6+0xbbaeb) (BuildId: 0702430aef5fa3dda43986563e9ffcc47efbd75e)
+    #1 0x55c62339ba24 in __asan_memcpy /src/llvm-project/compiler-rt/lib/asan/asan_interceptors_memintrinsics.cpp:63:3
+    #2 0x55c623407d9c in BaseStream /src/xpdf-4.05/xpdf/Stream.cc:326:8
+    #3 0x55c623407d9c in MemStream::MemStream(char*, unsigned int, unsigned int, Object*) /src/xpdf-4.05/xpdf/Stream.cc:873:5
+    #4 0x55c6233dd3ce in LLVMFuzzerTestOneInput /src/xpdf-4.05/build/fuzz_JBIG2.cc:34:24
+    #5 0x55c62328f600 in fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:614:13
+    #6 0x55c62328ee25 in fuzzer::Fuzzer::RunOne(unsigned char const*, unsigned long, bool, fuzzer::InputInfo*, bool, bool*) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:516:7
+    #7 0x55c6232905f5 in fuzzer::Fuzzer::MutateAndTestOne() /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:760:19
+    #8 0x55c6232913e5 in fuzzer::Fuzzer::Loop(std::__Fuzzer::vector&lt;fuzzer::SizedFile, std::__Fuzzer::allocator&lt;fuzzer::SizedFile&gt;&gt;&amp;) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:905:5
+    #9 0x55c62327f6f6 in fuzzer::FuzzerDriver(int*, char***, int (*)(unsigned char const*, unsigned long)) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:914:6
+    #10 0x55c6232abc22 in main /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMain.cpp:20:10
+    #11 0x7ffa355ea082 in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x24082) (BuildId: 0702430aef5fa3dda43986563e9ffcc47efbd75e)
+    #12 0x55c62327086d in _start (/out/fuzz_JBIG2+0x1c986d)
+
+DEDUP_TOKEN: memcpy--__asan_memcpy--BaseStream
+AddressSanitizer can not provide additional info.
+SUMMARY: AddressSanitizer: SEGV (/lib/x86_64-linux-gnu/libc.so.6+0xbbaeb) (BuildId: 0702430aef5fa3dda43986563e9ffcc47efbd75e) in memcpy
+==15==ABORTING
+MS: 1 InsertRepeatedBytes-; base unit: adc83b19e793491b1c6ea0fd8b46cd9f32e592fc
+0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0xa,
+\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\012
+artifact_prefix=&#39;./&#39;; Test unit written to ./crash-d72f3d4f8a6212b77de961796788831a321b627c
+Base64: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK
+stat::number_of_executed_units: 16
+stat::average_exec_per_sec:     0
+stat::new_units_added:          1
+stat::slowest_unit_time_sec:    0
+stat::peak_rss_mb:              39
+
+</pre>
+
+
+</body>

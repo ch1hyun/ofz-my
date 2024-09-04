@@ -1,0 +1,585 @@
+<!doctype html>
+
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Experiment results</title>
+<style>
+* {
+    box-sizing: border-box;
+}
+
+html {
+    line-height: 1.15;
+}
+
+body {
+    font-family: sans-serif;
+    font-size: 16px;
+}
+
+table {
+    border-collapse: collapse;
+    border-spacing: 0;
+}
+
+td, th {
+    border-right: 1px #dedede solid;
+    border-bottom: 1px #dedede solid;
+    padding: 5px;
+    text-align: left;
+}
+td:first-child, th:first-child {
+    border-left: 1px #dedede solid;
+}
+th {
+    border-top: 1px #dedede solid;
+}
+
+tbody tr:nth-child(odd) {
+    background-color: #f4f5ff;
+}
+</style>
+<body>
+    LLM: 
+    
+<h1>output-http-parser-http_errno_name / 02</h1>
+Bug: False
+<br>
+Crash reason: -
+<br>
+<br>
+
+<h2>Triage</h2>
+<pre>
+
+</pre>
+<br>
+
+
+
+
+
+<h3>Final code</h3>
+
+<pre>
+#include &lt;stdint.h&gt;
+#include &lt;stddef.h&gt;
+#include &#34;http_parser.h&#34;
+
+// Fuzzer entry point
+int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  if (size == 0) {
+    return 0;
+  }
+
+  /* Extract enum http_errno from data. Cast data to a pointer to 
+     enum http_errno, then dereference that pointer to get enum http_errno value */
+  enum http_errno err_no = (enum http_errno)(*data % HTTP_ERRNO_MAX);
+
+  // Call the function under test
+  const char* err_no_name = http_errno_name(err_no);
+
+  return 0;
+} 
+</pre>
+
+
+<h3>Fixer prompt #1</h3>
+<pre>
+
+Given the following C fuzz harness and its build error message, fix the code to make it build for fuzzing.
+
+If there is undeclared identifier or unknown type name error, fix it by finding and including the related libraries.
+
+MUST RETURN THE FULL CODE, INCLUDING UNCHANGED PARTS.
+
+Below is the code needs to be built:
+&lt;code&gt;
+#include &#34;http_parser.h&#34;
+#include &lt;stdint.h&gt;
+
+// Fuzzer entry point
+int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  if (size != sizeof(enum http_errno)) {
+    return 0;
+  }
+
+  /* Extract enum http_errno from data. Cast data to a pointer to 
+     enum http_errno, then dereference that pointer to get enum http_errno value */
+  enum http_errno err_no = *((enum http_errno*)data);
+
+  // Call the function under test
+  const char* err_no_name = http_errno_name(err_no);
+
+  return 0;
+}
+&lt;/code&gt;
+
+Below is the error to fix:
+The code can build successfully but has a runtime issue: Fuzzing crashed immediately at runtime (ASAN-ERROR: AddressSanitizer: ABRT on unknown address 0x00000000000c (pc 0x7f613c6ac00b bp 0x7f613c821588 sp 0x7ffda5b49d10 T0)), indicating fuzz target code for invoking the function under test is incorrect or unrobust.
+&lt;error&gt;
+Crash stacks:
+Stack 0:
+#0 0x7f613c6ac00b in raise (/lib/x86_64-linux-gnu/libc.so.6+0x4300b) (BuildId: 0702430aef5fa3dda43986563e9ffcc47efbd75e)
+#1 0x7f613c68b858 in abort (/lib/x86_64-linux-gnu/libc.so.6+0x22858) (BuildId: 0702430aef5fa3dda43986563e9ffcc47efbd75e)
+#2 0x7f613c68b728  (/lib/x86_64-linux-gnu/libc.so.6+0x22728) (BuildId: 0702430aef5fa3dda43986563e9ffcc47efbd75e)
+#3 0x7f613c69cfd5 in __assert_fail (/lib/x86_64-linux-gnu/libc.so.6+0x33fd5) (BuildId: 0702430aef5fa3dda43986563e9ffcc47efbd75e)
+#4 0x55c80c42f359 in http_errno_name /src/http-parser/http_parser.c:2243:3
+#5 0x55c80c430b55 in LLVMFuzzerTestOneInput /src/http-parser/fuzzers/fuzz_url.c:15:29
+#6 0x55c80c2d5470 in fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:614:13
+#7 0x55c80c2d4c95 in fuzzer::Fuzzer::RunOne(unsigned char const*, unsigned long, bool, fuzzer::InputInfo*, bool, bool*) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:516:7
+#8 0x55c80c2d6465 in fuzzer::Fuzzer::MutateAndTestOne() /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:760:19
+#9 0x55c80c2d7255 in fuzzer::Fuzzer::Loop(std::__Fuzzer::vector&lt;fuzzer::SizedFile, std::__Fuzzer::allocator&lt;fuzzer::SizedFile&gt;&gt;&amp;) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:905:5
+#10 0x55c80c2c5566 in fuzzer::FuzzerDriver(int*, char***, int (*)(unsigned char const*, unsigned long)) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:914:6
+#11 0x55c80c2f1a92 in main /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMain.cpp:20:10
+#12 0x7f613c68d082 in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x24082) (BuildId: 0702430aef5fa3dda43986563e9ffcc47efbd75e)
+#13 0x55c80c2b66dd in _start (/out/fuzz_url+0x466dd)
+&lt;/error&gt;
+
+
+
+
+Fix code:
+1. Consider possible solutions for the issues listed above.
+2. Choose a solution that can maximize fuzzing result, which is utilizing the function under test and feeding it not null input.
+3. Apply the solutions to the original code.
+It&#39;s important to show the complete code, not only the fixed line.
+&lt;solution&gt;
+</pre>
+
+
+
+<h3>Code #1</h3>
+
+<pre>
+#include &#34;http_parser.h&#34;
+#include &lt;stdint.h&gt;
+
+// Fuzzer entry point
+int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  if (size == 0) {
+    return 0;
+  }
+
+  /* Extract enum http_errno from data. Cast data to a pointer to 
+     enum http_errno, then dereference that pointer to get enum http_errno value */
+  enum http_errno err_no = (enum http_errno)(*data % HTTP_ERRNO_MAX);
+
+  // Call the function under test
+  const char* err_no_name = http_errno_name(err_no);
+
+  return 0;
+}
+</pre>
+
+
+<h3>Fixer prompt #2</h3>
+<pre>
+
+Given the following C fuzz harness and its build error message, fix the code to make it build for fuzzing.
+
+If there is undeclared identifier or unknown type name error, fix it by finding and including the related libraries.
+
+MUST RETURN THE FULL CODE, INCLUDING UNCHANGED PARTS.
+
+Below is the code needs to be built:
+&lt;code&gt;
+#include &#34;http_parser.h&#34;
+#include &lt;stdint.h&gt;
+
+// Fuzzer entry point
+int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  if (size == 0) {
+    return 0;
+  }
+
+  /* Extract enum http_errno from data. Cast data to a pointer to 
+     enum http_errno, then dereference that pointer to get enum http_errno value */
+  enum http_errno err_no = (enum http_errno)(*data % HTTP_ERRNO_MAX);
+
+  // Call the function under test
+  const char* err_no_name = http_errno_name(err_no);
+
+  return 0;
+}
+&lt;/code&gt;
+
+Below is the error to fix:
+The code has the following build issues:
+&lt;error&gt;
+fuzzers/fuzz_url.c:12:54: error: use of undeclared identifier &#39;HTTP_ERRNO_MAX&#39;
+   12 |   enum http_errno err_no = (enum http_errno)(*data % HTTP_ERRNO_MAX);
+      |                                                      ^
+&lt;/error&gt;
+
+
+
+
+Fix code:
+1. Consider possible solutions for the issues listed above.
+2. Choose a solution that can maximize fuzzing result, which is utilizing the function under test and feeding it not null input.
+3. Apply the solutions to the original code.
+It&#39;s important to show the complete code, not only the fixed line.
+&lt;solution&gt;
+</pre>
+
+
+
+<h3>Code #2</h3>
+
+<pre>
+#include &#34;http_parser.h&#34;
+#include &lt;stdint.h&gt;
+
+// Fuzzer entry point
+int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  if (size == 0) {
+    return 0;
+  }
+
+  /* Extract enum http_errno from data. Cast data to a pointer to 
+     enum http_errno, then dereference that pointer to get enum http_errno value */
+  enum http_errno err_no = (enum http_errno)(*data % _HTTP_ERRNO_MAX);
+
+  // Call the function under test
+  const char* err_no_name = http_errno_name(err_no);
+
+  return 0;
+} 
+
+The error was due to an incorrect identifier for the maximum HTTP error number. The correct identifier is _HTTP_ERRNO_MAX, not HTTP_ERRNO_MAX.
+</pre>
+
+
+<h3>Fixer prompt #3</h3>
+<pre>
+
+Given the following C fuzz harness and its build error message, fix the code to make it build for fuzzing.
+
+If there is undeclared identifier or unknown type name error, fix it by finding and including the related libraries.
+
+MUST RETURN THE FULL CODE, INCLUDING UNCHANGED PARTS.
+
+Below is the code needs to be built:
+&lt;code&gt;
+#include &#34;http_parser.h&#34;
+#include &lt;stdint.h&gt;
+
+// Fuzzer entry point
+int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  if (size == 0) {
+    return 0;
+  }
+
+  /* Extract enum http_errno from data. Cast data to a pointer to 
+     enum http_errno, then dereference that pointer to get enum http_errno value */
+  enum http_errno err_no = (enum http_errno)(*data % _HTTP_ERRNO_MAX);
+
+  // Call the function under test
+  const char* err_no_name = http_errno_name(err_no);
+
+  return 0;
+} 
+
+The error was due to an incorrect identifier for the maximum HTTP error number. The correct identifier is _HTTP_ERRNO_MAX, not HTTP_ERRNO_MAX.
+&lt;/code&gt;
+
+Below is the error to fix:
+The code has the following build issues:
+&lt;error&gt;
+fuzzers/fuzz_url.c:12:54: error: use of undeclared identifier &#39;_HTTP_ERRNO_MAX&#39;
+   12 |   enum http_errno err_no = (enum http_errno)(*data % _HTTP_ERRNO_MAX);
+      |                                                      ^
+fuzzers/fuzz_url.c:20:1: error: unknown type name &#39;The&#39;
+   20 | The error was due to an incorrect identifier for the maximum HTTP error number. The correct identifier is _HTTP_ERRNO_MAX, not HTTP_ERRNO_MAX.
+      | ^
+fuzzers/fuzz_url.c:20:10: error: expected &#39;;&#39; after top level declarator
+   20 | The error was due to an incorrect identifier for the maximum HTTP error number. The correct identifier is _HTTP_ERRNO_MAX, not HTTP_ERRNO_MAX.
+      |          ^
+      |          ;
+&lt;/error&gt;
+
+
+Below are instructions to assist you in fixing the error.
+&lt;instruction&gt;
+IMPORTANT: ALWAYS INCLUDE STANDARD LIBRARIES BEFORE PROJECT-SPECIFIC (http-parser) LIBRARIES. This order prevents errors like &#34;unknown type name&#34; for basic types. Additionally, include project-specific libraries that contain declarations before those thatuse these declared symbols.
+&lt;/instruction&gt;
+
+Fix code:
+1. Consider possible solutions for the issues listed above.
+2. Choose a solution that can maximize fuzzing result, which is utilizing the function under test and feeding it not null input.
+3. Apply the solutions to the original code.
+It&#39;s important to show the complete code, not only the fixed line.
+&lt;solution&gt;
+</pre>
+
+
+
+<h3>Code #3</h3>
+
+<pre>
+#include &lt;stdint.h&gt;
+#include &#34;http_parser.h&#34;
+
+// Fuzzer entry point
+int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  if (size == 0) {
+    return 0;
+  }
+
+  /* Extract enum http_errno from data. Cast data to a pointer to 
+     enum http_errno, then dereference that pointer to get enum http_errno value */
+  enum http_errno err_no = (enum http_errno)(*data % HTTP_ERRNO_MAX);
+
+  // Call the function under test
+  const char* err_no_name = http_errno_name(err_no);
+
+  return 0;
+} 
+The error was due to an incorrect identifier for the maximum HTTP error number. The correct identifier is HTTP_ERRNO_MAX, not _HTTP_ERRNO_MAX.
+</pre>
+
+
+<h3>Fixer prompt #4</h3>
+<pre>
+
+Given the following C fuzz harness and its build error message, fix the code to make it build for fuzzing.
+
+If there is undeclared identifier or unknown type name error, fix it by finding and including the related libraries.
+
+MUST RETURN THE FULL CODE, INCLUDING UNCHANGED PARTS.
+
+Below is the code needs to be built:
+&lt;code&gt;
+#include &lt;stdint.h&gt;
+#include &#34;http_parser.h&#34;
+
+// Fuzzer entry point
+int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  if (size == 0) {
+    return 0;
+  }
+
+  /* Extract enum http_errno from data. Cast data to a pointer to 
+     enum http_errno, then dereference that pointer to get enum http_errno value */
+  enum http_errno err_no = (enum http_errno)(*data % HTTP_ERRNO_MAX);
+
+  // Call the function under test
+  const char* err_no_name = http_errno_name(err_no);
+
+  return 0;
+} 
+The error was due to an incorrect identifier for the maximum HTTP error number. The correct identifier is HTTP_ERRNO_MAX, not _HTTP_ERRNO_MAX.
+&lt;/code&gt;
+
+Below is the error to fix:
+The code has the following build issues:
+&lt;error&gt;
+fuzzers/fuzz_url.c:12:54: error: use of undeclared identifier &#39;HTTP_ERRNO_MAX&#39;
+   12 |   enum http_errno err_no = (enum http_errno)(*data % HTTP_ERRNO_MAX);
+      |                                                      ^
+fuzzers/fuzz_url.c:19:1: error: unknown type name &#39;The&#39;
+   19 | The error was due to an incorrect identifier for the maximum HTTP error number. The correct identifier is HTTP_ERRNO_MAX, not _HTTP_ERRNO_MAX.
+      | ^
+fuzzers/fuzz_url.c:19:10: error: expected &#39;;&#39; after top level declarator
+   19 | The error was due to an incorrect identifier for the maximum HTTP error number. The correct identifier is HTTP_ERRNO_MAX, not _HTTP_ERRNO_MAX.
+      |          ^
+      |          ;
+&lt;/error&gt;
+
+
+Below are instructions to assist you in fixing the error.
+&lt;instruction&gt;
+IMPORTANT: ALWAYS INCLUDE STANDARD LIBRARIES BEFORE PROJECT-SPECIFIC (http-parser) LIBRARIES. This order prevents errors like &#34;unknown type name&#34; for basic types. Additionally, include project-specific libraries that contain declarations before those thatuse these declared symbols.
+&lt;/instruction&gt;
+
+Fix code:
+1. Consider possible solutions for the issues listed above.
+2. Choose a solution that can maximize fuzzing result, which is utilizing the function under test and feeding it not null input.
+3. Apply the solutions to the original code.
+It&#39;s important to show the complete code, not only the fixed line.
+&lt;solution&gt;
+</pre>
+
+
+
+<h3>Code #4</h3>
+
+<pre>
+#include &lt;stdint.h&gt;
+#include &lt;stddef.h&gt;
+#include &#34;http_parser.h&#34;
+
+// Fuzzer entry point
+int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  if (size == 0) {
+    return 0;
+  }
+
+  /* Extract enum http_errno from data. Cast data to a pointer to 
+     enum http_errno, then dereference that pointer to get enum http_errno value */
+  enum http_errno err_no = (enum http_errno)(*data % HTTP_ERRNO_MAX);
+
+  // Call the function under test
+  const char* err_no_name = http_errno_name(err_no);
+
+  return 0;
+} 
+The error was due to an incorrect identifier for the maximum HTTP error number. The correct identifier is HTTP_ERRNO_MAX, not _HTTP_ERRNO_MAX.
+</pre>
+
+
+<h3>Fixer prompt #5</h3>
+<pre>
+
+Given the following C fuzz harness and its build error message, fix the code to make it build for fuzzing.
+
+If there is undeclared identifier or unknown type name error, fix it by finding and including the related libraries.
+
+MUST RETURN THE FULL CODE, INCLUDING UNCHANGED PARTS.
+
+Below is the code needs to be built:
+&lt;code&gt;
+#include &lt;stdint.h&gt;
+#include &lt;stddef.h&gt;
+#include &#34;http_parser.h&#34;
+
+// Fuzzer entry point
+int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  if (size == 0) {
+    return 0;
+  }
+
+  /* Extract enum http_errno from data. Cast data to a pointer to 
+     enum http_errno, then dereference that pointer to get enum http_errno value */
+  enum http_errno err_no = (enum http_errno)(*data % HTTP_ERRNO_MAX);
+
+  // Call the function under test
+  const char* err_no_name = http_errno_name(err_no);
+
+  return 0;
+} 
+The error was due to an incorrect identifier for the maximum HTTP error number. The correct identifier is HTTP_ERRNO_MAX, not _HTTP_ERRNO_MAX.
+&lt;/code&gt;
+
+Below is the error to fix:
+The code has the following build issues:
+&lt;error&gt;
+fuzzers/fuzz_url.c:13:54: error: use of undeclared identifier &#39;HTTP_ERRNO_MAX&#39;
+   13 |   enum http_errno err_no = (enum http_errno)(*data % HTTP_ERRNO_MAX);
+      |                                                      ^
+fuzzers/fuzz_url.c:20:1: error: unknown type name &#39;The&#39;
+   20 | The error was due to an incorrect identifier for the maximum HTTP error number. The correct identifier is HTTP_ERRNO_MAX, not _HTTP_ERRNO_MAX.
+      | ^
+fuzzers/fuzz_url.c:20:10: error: expected &#39;;&#39; after top level declarator
+   20 | The error was due to an incorrect identifier for the maximum HTTP error number. The correct identifier is HTTP_ERRNO_MAX, not _HTTP_ERRNO_MAX.
+      |          ^
+      |          ;
+&lt;/error&gt;
+
+
+Below are instructions to assist you in fixing the error.
+&lt;instruction&gt;
+IMPORTANT: ALWAYS INCLUDE STANDARD LIBRARIES BEFORE PROJECT-SPECIFIC (http-parser) LIBRARIES. This order prevents errors like &#34;unknown type name&#34; for basic types. Additionally, include project-specific libraries that contain declarations before those thatuse these declared symbols.
+&lt;/instruction&gt;
+
+Fix code:
+1. Consider possible solutions for the issues listed above.
+2. Choose a solution that can maximize fuzzing result, which is utilizing the function under test and feeding it not null input.
+3. Apply the solutions to the original code.
+It&#39;s important to show the complete code, not only the fixed line.
+&lt;solution&gt;
+</pre>
+
+
+
+<h3>Code #5</h3>
+
+<pre>
+#include &lt;stdint.h&gt;
+#include &lt;stddef.h&gt;
+#include &#34;http_parser.h&#34;
+
+// Fuzzer entry point
+int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  if (size == 0) {
+    return 0;
+  }
+
+  /* Extract enum http_errno from data. Cast data to a pointer to 
+     enum http_errno, then dereference that pointer to get enum http_errno value */
+  enum http_errno err_no = (enum http_errno)(*data % HTTP_ERRNO_MAX);
+
+  // Call the function under test
+  const char* err_no_name = http_errno_name(err_no);
+
+  return 0;
+} 
+&lt;/solution&gt;
+</pre>
+
+
+<h2>Logs</h2>
+<pre>
+Fixing /home/chyun/oss-fuzz-gen1/results3/output-http-parser-http_errno_name/fixed_targets/02.c with gpt-4, attempt 1.
+Fixing /home/chyun/oss-fuzz-gen1/results3/output-http-parser-http_errno_name/fixed_targets/02.c with gpt-4, attempt 2.
+Fixing /home/chyun/oss-fuzz-gen1/results3/output-http-parser-http_errno_name/fixed_targets/02.c with gpt-4, attempt 3.
+Fixing /home/chyun/oss-fuzz-gen1/results3/output-http-parser-http_errno_name/fixed_targets/02.c with gpt-4, attempt 4.
+Fixing /home/chyun/oss-fuzz-gen1/results3/output-http-parser-http_errno_name/fixed_targets/02.c with gpt-4, attempt 5.
+Failed to build /home/chyun/oss-fuzz-gen1/results3/output-http-parser-http_errno_name/fixed_targets/02.c with gpt-4 in 5 iterations of fixing.
+
+</pre>
+
+<h2>Run logs</h2>
+<pre>
+INFO:__main__:Running: docker run --privileged --shm-size=2g --platform linux/amd64 --rm -e FUZZING_ENGINE=libfuzzer -e SANITIZER=address -e RUN_FUZZER_MODE=interactive -e HELPER=True -v /home/chyun/oss-fuzz-gen1/results3/output-http-parser-http_errno_name/corpora/02.c:/tmp/fuzz_url_corpus -v /tmp/tmp036jzme6/build/out/http-parser-http_errno_name-02:/out -t gcr.io/oss-fuzz-base/base-runner run_fuzzer fuzz_url -print_final_stats=1 -max_total_time=30 -len_control=0 -timeout=30.
+vm.mmap_rnd_bits = 28
+rm: cannot remove &#39;/tmp/fuzz_url_corpus&#39;: Device or resource busy
+/out/fuzz_url -rss_limit_mb=2560 -timeout=25 -print_final_stats=1 -max_total_time=30 -len_control=0 -timeout=30 /tmp/fuzz_url_corpus &lt; /dev/null
+INFO: Running with entropic power schedule (0xFF, 100).
+INFO: Seed: 3173352651
+INFO: Loaded 1 modules   (905 inline 8-bit counters): 905 [0x55c80c49eab0, 0x55c80c49ee39), 
+INFO: Loaded 1 PC tables (905 PCs): 905 [0x55c80c49ee40,0x55c80c4a26d0), 
+INFO:        0 files found in /tmp/fuzz_url_corpus
+INFO: -max_len is not provided; libFuzzer will not generate inputs larger than 4096 bytes
+INFO: A corpus is not provided, starting from an empty corpus
+#2	INITED cov: 2 ft: 2 corp: 1/1b exec/s: 0 rss: 30Mb
+fuzz_url: http_parser.c:2243: const char *http_errno_name(enum http_errno): Assertion `((size_t) err) &lt; ARRAY_SIZE(http_strerror_tab)&#39; failed.
+AddressSanitizer:DEADLYSIGNAL
+=================================================================
+[1m[31m==12==ERROR: AddressSanitizer: ABRT on unknown address 0x00000000000c (pc 0x7f613c6ac00b bp 0x7f613c821588 sp 0x7ffda5b49d10 T0)
+[1m[0mSCARINESS: 10 (signal)
+    #0 0x7f613c6ac00b in raise (/lib/x86_64-linux-gnu/libc.so.6+0x4300b) (BuildId: 0702430aef5fa3dda43986563e9ffcc47efbd75e)
+    #1 0x7f613c68b858 in abort (/lib/x86_64-linux-gnu/libc.so.6+0x22858) (BuildId: 0702430aef5fa3dda43986563e9ffcc47efbd75e)
+    #2 0x7f613c68b728  (/lib/x86_64-linux-gnu/libc.so.6+0x22728) (BuildId: 0702430aef5fa3dda43986563e9ffcc47efbd75e)
+    #3 0x7f613c69cfd5 in __assert_fail (/lib/x86_64-linux-gnu/libc.so.6+0x33fd5) (BuildId: 0702430aef5fa3dda43986563e9ffcc47efbd75e)
+    #4 0x55c80c42f359 in http_errno_name /src/http-parser/http_parser.c:2243:3
+    #5 0x55c80c430b55 in LLVMFuzzerTestOneInput /src/http-parser/fuzzers/fuzz_url.c:15:29
+    #6 0x55c80c2d5470 in fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:614:13
+    #7 0x55c80c2d4c95 in fuzzer::Fuzzer::RunOne(unsigned char const*, unsigned long, bool, fuzzer::InputInfo*, bool, bool*) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:516:7
+    #8 0x55c80c2d6465 in fuzzer::Fuzzer::MutateAndTestOne() /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:760:19
+    #9 0x55c80c2d7255 in fuzzer::Fuzzer::Loop(std::__Fuzzer::vector&lt;fuzzer::SizedFile, std::__Fuzzer::allocator&lt;fuzzer::SizedFile&gt;&gt;&amp;) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:905:5
+    #10 0x55c80c2c5566 in fuzzer::FuzzerDriver(int*, char***, int (*)(unsigned char const*, unsigned long)) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:914:6
+    #11 0x55c80c2f1a92 in main /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMain.cpp:20:10
+    #12 0x7f613c68d082 in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x24082) (BuildId: 0702430aef5fa3dda43986563e9ffcc47efbd75e)
+    #13 0x55c80c2b66dd in _start (/out/fuzz_url+0x466dd)
+
+DEDUP_TOKEN: raise--abort--
+AddressSanitizer can not provide additional info.
+SUMMARY: AddressSanitizer: ABRT (/lib/x86_64-linux-gnu/libc.so.6+0x4300b) (BuildId: 0702430aef5fa3dda43986563e9ffcc47efbd75e) in raise
+==12==ABORTING
+MS: 5 InsertByte-InsertByte-ChangeBit-ChangeByte-CrossOver-; base unit: adc83b19e793491b1c6ea0fd8b46cd9f32e592fc
+0xa,0x4a,0x0,0xfc,
+\012J\000\374
+artifact_prefix=&#39;./&#39;; Test unit written to ./crash-ca1debec0aeae1eceed3ded0a28b43c053537779
+Base64: CkoA/A==
+stat::number_of_executed_units: 37
+stat::average_exec_per_sec:     0
+stat::new_units_added:          0
+stat::slowest_unit_time_sec:    0
+stat::peak_rss_mb:              31
+
+</pre>
+
+
+</body>

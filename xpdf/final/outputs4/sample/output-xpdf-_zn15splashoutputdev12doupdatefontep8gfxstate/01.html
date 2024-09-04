@@ -1,0 +1,682 @@
+<!doctype html>
+
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Experiment results</title>
+<style>
+* {
+    box-sizing: border-box;
+}
+
+html {
+    line-height: 1.15;
+}
+
+body {
+    font-family: sans-serif;
+    font-size: 16px;
+}
+
+table {
+    border-collapse: collapse;
+    border-spacing: 0;
+}
+
+td, th {
+    border-right: 1px #dedede solid;
+    border-bottom: 1px #dedede solid;
+    padding: 5px;
+    text-align: left;
+}
+td:first-child, th:first-child {
+    border-left: 1px #dedede solid;
+}
+th {
+    border-top: 1px #dedede solid;
+}
+
+tbody tr:nth-child(odd) {
+    background-color: #f4f5ff;
+}
+</style>
+<body>
+    LLM: 
+    
+<h1>output-xpdf-_zn15splashoutputdev12doupdatefontep8gfxstate / 01</h1>
+Bug: False
+<br>
+Crash reason: NO_SEMANTIC_ERR
+<br>
+<br>
+
+<h2>Triage</h2>
+<pre>
+
+</pre>
+<br>
+
+
+
+
+
+<h3>Final code</h3>
+
+<pre>
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+#include &lt;stddef.h&gt;
+#include &lt;stdint.h&gt;
+
+#include &#34;PDFDoc.h&#34;
+#include &#34;OutputDev.h&#34;
+#include &#34;/src/xpdf-4.05/xpdf/SplashOutputDev.h&#34;
+#include &#34;GlobalParams.h&#34;
+#include &#34;Stream.h&#34;
+#include &#34;Object.h&#34;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  FuzzedDataProvider fdp(data, size);
+  
+  double hDPI = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  double vDPI = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  bool useMediaBox = fdp.ConsumeBool();
+  bool crop = fdp.ConsumeBool();
+  bool printing = fdp.ConsumeBool();
+  std::vector&lt;char&gt; payload = fdp.ConsumeRemainingBytes&lt;char&gt;();
+  
+  // Initialize libraries
+  globalParams = new GlobalParams(NULL);
+  globalParams-&gt;setupBaseFonts(NULL);
+  
+  // Initialize a document
+  Object obj;
+  obj.initNull();
+  MemStream *str = new MemStream(payload.data(), 0, payload.size(), &amp;obj);
+  PDFDoc *doc = new PDFDoc(str, NULL, NULL, NULL);
+
+  if (doc-&gt;isOk()) {
+    SplashColor paperColor;
+    paperColor[0] = paperColor[1] = paperColor[2] = 255;
+
+    SplashOutputDev *splashOut = new SplashOutputDev(splashModeRGB8, 4, gFalse, paperColor, gTrue);
+    splashOut-&gt;startDoc(doc-&gt;getXRef());
+    Page *page = doc-&gt;getCatalog()-&gt;getPage(1); // Fix for &#39;getPage&#39; error
+
+    PDFRectangle box;
+    GfxState *state = new GfxState(hDPI, vDPI, &amp;box, 0, gFalse);
+    splashOut-&gt;updateFont(state); // Fix for &#39;doUpdateFont&#39; error
+
+    delete state;
+    delete splashOut;
+    delete doc;
+    delete globalParams;
+  }
+
+   return 0;
+}
+</pre>
+
+
+<h3>Fixer prompt #1</h3>
+<pre>
+
+Given the following C++ fuzz harness and its build error message, fix the code to make it build for fuzzing.
+
+If there is undeclared identifier or unknown type name error, fix it by finding and including the related libraries.
+
+MUST RETURN THE FULL CODE, INCLUDING UNCHANGED PARTS.
+
+Below is the code needs to be built:
+&lt;code&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+#include &lt;stddef.h&gt;
+#include &lt;stdint.h&gt;
+
+#include &#34;PDFDoc.h&#34;
+#include &#34;OutputDev.h&#34;
+#include &#34;SplashOutputDev.h&#34;
+#include &#34;GlobalParams.h&#34;
+#include &#34;Stream.h&#34;
+#include &#34;Object.h&#34;
+#include &#34;SplashColor.h&#34;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  FuzzedDataProvider fdp(data, size);
+  
+  double hDPI = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  double vDPI = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  bool useMediaBox = fdp.ConsumeBool();
+  bool crop = fdp.ConsumeBool();
+  bool printing = fdp.ConsumeBool();
+  std::vector&lt;char&gt; payload = fdp.ConsumeRemainingBytes&lt;char&gt;();
+  
+  // Initialize libraries
+  globalParams = new GlobalParams(NULL);
+  globalParams-&gt;setupBaseFonts(NULL);
+  
+  // Initialize a document
+  Object obj;
+  obj.initNull();
+  MemStream *str = new MemStream(payload.data(), 0, payload.size(), &amp;obj);
+  PDFDoc *doc = new PDFDoc(str, NULL, NULL, NULL);
+
+  if (doc-&gt;isOk()) {
+    SplashColor paperColor;
+    paperColor[0] = paperColor[1] = paperColor[2] = 255;
+
+    SplashOutputDev *splashOut = new SplashOutputDev(splashModeRGB8, 4, gFalse, paperColor, gTrue);
+    splashOut-&gt;startDoc(doc-&gt;getXRef());
+    doc-&gt;getPage(1);
+
+    PDFRectangle box;
+    GfxState *state = new GfxState(hDPI, vDPI, &amp;box, 0, gFalse);
+    splashOut-&gt;doUpdateFont(state);
+
+    delete state;
+    delete splashOut;
+    delete doc;
+    delete globalParams;
+  }
+
+   return 0;
+}
+&lt;/code&gt;
+
+Below is the error to fix:
+The code has the following build issues:
+&lt;error&gt;
+fuzz_JBIG2.cc:12:10: fatal error: &#39;SplashColor.h&#39; file not found
+   12 | #include &#34;SplashColor.h&#34;
+      |          ^~~~~~~~~~~~~~~
+&lt;/error&gt;
+
+
+Below are instructions to assist you in fixing the error.
+&lt;instruction&gt;
+IMPORTANT: DO NOT include the header file SplashColor.h in the generated fuzz target again, the file does not exist in the project-under-test.
+If the non-existent &lt;filepath&gt;SplashColor.h&lt;/filepath&gt; was included for the declaration of &lt;code&gt;void SplashOutputDev::doUpdateFont(GfxState *)&lt;/code&gt;, you must replace it with the EXACT path of the actual file &lt;filepath&gt;#include &#34;/src/xpdf-4.05/xpdf/SplashOutputDev.h&#34;&lt;/filepath&gt;. For example:
+&lt;code&gt;
+#include &#34;#include &#34;/src/xpdf-4.05/xpdf/SplashOutputDev.h&#34;&#34;
+&lt;/code&gt;
+Otherwise, consider replacing it with some of the following statementsthat may be correct alternatives:
+&lt;code&gt;
+#include &#34;/src/xpdf-4.05/splash/SplashClip.h&#34;
+#include &#34;/src/xpdf-4.05/splash/SplashFontFile.h&#34;
+#include &#34;/src/xpdf-4.05/splash/SplashFont.h&#34;
+#include &#34;/src/xpdf-4.05/splash/SplashFontFileID.h&#34;
+#include &#34;/src/xpdf-4.05/splash/SplashFTFontFile.h&#34;
+&lt;/code&gt;
+
+&lt;/instruction&gt;
+
+Fix code:
+1. Consider possible solutions for the issues listed above.
+2. Choose a solution that can maximize fuzzing result, which is utilizing the function under test and feeding it not null input.
+3. Apply the solutions to the original code.
+It&#39;s important to show the complete code, not only the fixed line.
+&lt;solution&gt;
+</pre>
+
+
+
+<h3>Code #1</h3>
+
+<pre>
+&lt;code&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+#include &lt;stddef.h&gt;
+#include &lt;stdint.h&gt;
+
+#include &#34;PDFDoc.h&#34;
+#include &#34;OutputDev.h&#34;
+#include &#34;/src/xpdf-4.05/xpdf/SplashOutputDev.h&#34;
+#include &#34;GlobalParams.h&#34;
+#include &#34;Stream.h&#34;
+#include &#34;Object.h&#34;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  FuzzedDataProvider fdp(data, size);
+  
+  double hDPI = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  double vDPI = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  bool useMediaBox = fdp.ConsumeBool();
+  bool crop = fdp.ConsumeBool();
+  bool printing = fdp.ConsumeBool();
+  std::vector&lt;char&gt; payload = fdp.ConsumeRemainingBytes&lt;char&gt;();
+  
+  // Initialize libraries
+  globalParams = new GlobalParams(NULL);
+  globalParams-&gt;setupBaseFonts(NULL);
+  
+  // Initialize a document
+  Object obj;
+  obj.initNull();
+  MemStream *str = new MemStream(payload.data(), 0, payload.size(), &amp;obj);
+  PDFDoc *doc = new PDFDoc(str, NULL, NULL, NULL);
+
+  if (doc-&gt;isOk()) {
+    SplashColor paperColor;
+    paperColor[0] = paperColor[1] = paperColor[2] = 255;
+
+    SplashOutputDev *splashOut = new SplashOutputDev(splashModeRGB8, 4, gFalse, paperColor, gTrue);
+    splashOut-&gt;startDoc(doc-&gt;getXRef());
+    doc-&gt;getPage(1);
+
+    PDFRectangle box;
+    GfxState *state = new GfxState(hDPI, vDPI, &amp;box, 0, gFalse);
+    splashOut-&gt;doUpdateFont(state);
+
+    delete state;
+    delete splashOut;
+    delete doc;
+    delete globalParams;
+  }
+
+   return 0;
+}
+&lt;/code&gt;
+</pre>
+
+
+<h3>Fixer prompt #2</h3>
+<pre>
+
+Given the following C++ fuzz harness and its build error message, fix the code to make it build for fuzzing.
+
+If there is undeclared identifier or unknown type name error, fix it by finding and including the related libraries.
+
+MUST RETURN THE FULL CODE, INCLUDING UNCHANGED PARTS.
+
+Below is the code needs to be built:
+&lt;code&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+#include &lt;stddef.h&gt;
+#include &lt;stdint.h&gt;
+
+#include &#34;PDFDoc.h&#34;
+#include &#34;OutputDev.h&#34;
+#include &#34;/src/xpdf-4.05/xpdf/SplashOutputDev.h&#34;
+#include &#34;GlobalParams.h&#34;
+#include &#34;Stream.h&#34;
+#include &#34;Object.h&#34;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  FuzzedDataProvider fdp(data, size);
+  
+  double hDPI = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  double vDPI = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  bool useMediaBox = fdp.ConsumeBool();
+  bool crop = fdp.ConsumeBool();
+  bool printing = fdp.ConsumeBool();
+  std::vector&lt;char&gt; payload = fdp.ConsumeRemainingBytes&lt;char&gt;();
+  
+  // Initialize libraries
+  globalParams = new GlobalParams(NULL);
+  globalParams-&gt;setupBaseFonts(NULL);
+  
+  // Initialize a document
+  Object obj;
+  obj.initNull();
+  MemStream *str = new MemStream(payload.data(), 0, payload.size(), &amp;obj);
+  PDFDoc *doc = new PDFDoc(str, NULL, NULL, NULL);
+
+  if (doc-&gt;isOk()) {
+    SplashColor paperColor;
+    paperColor[0] = paperColor[1] = paperColor[2] = 255;
+
+    SplashOutputDev *splashOut = new SplashOutputDev(splashModeRGB8, 4, gFalse, paperColor, gTrue);
+    splashOut-&gt;startDoc(doc-&gt;getXRef());
+    doc-&gt;getPage(1);
+
+    PDFRectangle box;
+    GfxState *state = new GfxState(hDPI, vDPI, &amp;box, 0, gFalse);
+    splashOut-&gt;doUpdateFont(state);
+
+    delete state;
+    delete splashOut;
+    delete doc;
+    delete globalParams;
+  }
+
+   return 0;
+}
+&lt;/code&gt;
+
+Below is the error to fix:
+The code has the following build issues:
+&lt;error&gt;
+fuzz_JBIG2.cc:39:10: error: no member named &#39;getPage&#39; in &#39;PDFDoc&#39;
+   39 |     doc-&gt;getPage(1);
+      |     ~~~  ^
+fuzz_JBIG2.cc:43:16: error: &#39;doUpdateFont&#39; is a private member of &#39;SplashOutputDev&#39;
+   43 |     splashOut-&gt;doUpdateFont(state);
+      |                ^
+/src/xpdf-4.05/xpdf/SplashOutputDev.h:260:8: note: declared private here
+  260 |   void doUpdateFont(GfxState *state);
+      |        ^
+&lt;/error&gt;
+
+
+
+
+Fix code:
+1. Consider possible solutions for the issues listed above.
+2. Choose a solution that can maximize fuzzing result, which is utilizing the function under test and feeding it not null input.
+3. Apply the solutions to the original code.
+It&#39;s important to show the complete code, not only the fixed line.
+&lt;solution&gt;
+</pre>
+
+
+
+<h3>Code #2</h3>
+
+<pre>
+&lt;code&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+#include &lt;stddef.h&gt;
+#include &lt;stdint.h&gt;
+
+#include &#34;PDFDoc.h&#34;
+#include &#34;OutputDev.h&#34;
+#include &#34;/src/xpdf-4.05/xpdf/SplashOutputDev.h&#34;
+#include &#34;GlobalParams.h&#34;
+#include &#34;Stream.h&#34;
+#include &#34;Object.h&#34;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  FuzzedDataProvider fdp(data, size);
+  
+  double hDPI = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  double vDPI = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  bool useMediaBox = fdp.ConsumeBool();
+  bool crop = fdp.ConsumeBool();
+  bool printing = fdp.ConsumeBool();
+  std::vector&lt;char&gt; payload = fdp.ConsumeRemainingBytes&lt;char&gt;();
+  
+  // Initialize libraries
+  globalParams = new GlobalParams(NULL);
+  globalParams-&gt;setupBaseFonts(NULL);
+  
+  // Initialize a document
+  Object obj;
+  obj.initNull();
+  MemStream *str = new MemStream(payload.data(), 0, payload.size(), &amp;obj);
+  PDFDoc *doc = new PDFDoc(str, NULL, NULL, NULL);
+
+  if (doc-&gt;isOk()) {
+    SplashColor paperColor;
+    paperColor[0] = paperColor[1] = paperColor[2] = 255;
+
+    SplashOutputDev *splashOut = new SplashOutputDev(splashModeRGB8, 4, gFalse, paperColor, gTrue);
+    splashOut-&gt;startDoc(doc-&gt;getXRef());
+    Page *page = doc-&gt;getCatalog()-&gt;getPage(1); // Fix for &#39;getPage&#39; error
+
+    PDFRectangle box;
+    GfxState *state = new GfxState(hDPI, vDPI, &amp;box, 0, gFalse);
+    splashOut-&gt;updateFont(state); // Fix for &#39;doUpdateFont&#39; error
+
+    delete state;
+    delete splashOut;
+    delete doc;
+    delete globalParams;
+  }
+
+   return 0;
+}
+&lt;/code&gt;
+
+</pre>
+
+
+<h2>Logs</h2>
+<pre>
+Fixing /home/chyun/oss-fuzz-gen/results4/output-xpdf-_zn15splashoutputdev12doupdatefontep8gfxstate/fixed_targets/01.cc with gpt-4, attempt 1.
+Fixing /home/chyun/oss-fuzz-gen/results4/output-xpdf-_zn15splashoutputdev12doupdatefontep8gfxstate/fixed_targets/01.cc with gpt-4, attempt 2.
+Successfully built /home/chyun/oss-fuzz-gen/results4/output-xpdf-_zn15splashoutputdev12doupdatefontep8gfxstate/fixed_targets/01.cc with gpt-4 in 2 iterations of fixing.
+Triaging the crash related to /home/chyun/oss-fuzz-gen/results4/output-xpdf-_zn15splashoutputdev12doupdatefontep8gfxstate/fixed_targets/01.cc with gpt-4.
+Warning: no crash info in xpdf-zn15splashoutputdev12doupdatefontep8gfxstate-01.
+Result for xpdf-zn15splashoutputdev12doupdatefontep8gfxstate-01: crashes=False, coverage=0.005016867053023095 (290/57805), coverage diff=0.00023250034073325797 (29/124731)
+
+</pre>
+
+<h2>Run logs</h2>
+<pre>
+INFO:__main__:Running: docker run --privileged --shm-size=2g --platform linux/amd64 --rm -e FUZZING_ENGINE=libfuzzer -e SANITIZER=address -e RUN_FUZZER_MODE=interactive -e HELPER=True -v /home/chyun/oss-fuzz-gen/results4/output-xpdf-_zn15splashoutputdev12doupdatefontep8gfxstate/corpora/01.cc:/tmp/fuzz_JBIG2_corpus -v /tmp/tmpq9mlsf0g/build/out/xpdf-zn15splashoutputdev12doupdatefontep8gfxstate-01:/out -t gcr.io/oss-fuzz-base/base-runner run_fuzzer fuzz_JBIG2 -print_final_stats=1 -max_total_time=30 -len_control=0 -timeout=30.
+vm.mmap_rnd_bits = 28
+rm: cannot remove &#39;/tmp/fuzz_JBIG2_corpus&#39;: Device or resource busy
+/out/fuzz_JBIG2 -rss_limit_mb=2560 -timeout=25 -print_final_stats=1 -max_total_time=30 -len_control=0 -timeout=30 /tmp/fuzz_JBIG2_corpus -detect_leaks=0 &lt; /dev/null
+INFO: Running with entropic power schedule (0xFF, 100).
+INFO: Seed: 4034204502
+INFO: Loaded 1 modules   (57805 inline 8-bit counters): 57805 [0x55ff9db6ea68, 0x55ff9db7cc35), 
+INFO: Loaded 1 PC tables (57805 PCs): 57805 [0x55ff9db7cc38,0x55ff9dc5e908), 
+INFO:        0 files found in /tmp/fuzz_JBIG2_corpus
+INFO: -max_len is not provided; libFuzzer will not generate inputs larger than 4096 bytes
+Config Error: No display font for &#39;Courier&#39;
+Config Error: No display font for &#39;Courier-Bold&#39;
+Config Error: No display font for &#39;Courier-BoldOblique&#39;
+Config Error: No display font for &#39;Courier-Oblique&#39;
+Config Error: No display font for &#39;Helvetica&#39;
+Config Error: No display font for &#39;Helvetica-Bold&#39;
+Config Error: No display font for &#39;Helvetica-BoldOblique&#39;
+Config Error: No display font for &#39;Helvetica-Oblique&#39;
+Config Error: No display font for &#39;Symbol&#39;
+Config Error: No display font for &#39;Times-Bold&#39;
+Config Error: No display font for &#39;Times-BoldItalic&#39;
+Config Error: No display font for &#39;Times-Italic&#39;
+Config Error: No display font for &#39;Times-Roman&#39;
+Config Error: No display font for &#39;ZapfDingbats&#39;
+Syntax Warning: May not be a PDF file (continuing anyway)
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: PDF file is damaged - attempting to reconstruct xref table...
+Syntax Error: Couldn&#39;t find trailer dictionary
+Syntax Error: Couldn&#39;t read xref table
+INFO: A corpus is not provided, starting from an empty corpus
+Config Error: No display font for &#39;Courier&#39;
+Config Error: No display font for &#39;Courier-Bold&#39;
+Config Error: No display font for &#39;Courier-BoldOblique&#39;
+Config Error: No display font for &#39;Courier-Oblique&#39;
+Config Error: No display font for &#39;Helvetica&#39;
+Config Error: No display font for &#39;Helvetica-Bold&#39;
+Config Error: No display font for &#39;Helvetica-BoldOblique&#39;
+Config Error: No display font for &#39;Helvetica-Oblique&#39;
+Config Error: No display font for &#39;Symbol&#39;
+Config Error: No display font for &#39;Times-Bold&#39;
+Config Error: No display font for &#39;Times-BoldItalic&#39;
+Config Error: No display font for &#39;Times-Italic&#39;
+Config Error: No display font for &#39;Times-Roman&#39;
+Config Error: No display font for &#39;ZapfDingbats&#39;
+Syntax Warning: May not be a PDF file (continuing anyway)
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: PDF file is damaged - attempting to reconstruct xref table...
+Syntax Error: Couldn&#39;t find trailer dictionary
+Syntax Error: Couldn&#39;t read xref table
+#2	INITED cov: 226 ft: 227 corp: 1/1b exec/s: 0 rss: 41Mb
+Config Error: No display font for &#39;Courier&#39;
+Config Error: No display font for &#39;Courier-Bold&#39;
+Config Error: No display font for &#39;Courier-BoldOblique&#39;
+Config Error: No display font for &#39;Courier-Oblique&#39;
+Config Error: No display font for &#39;Helvetica&#39;
+Config Error: No display font for &#39;Helvetica-Bold&#39;
+Config Error: No display font for &#39;Helvetica-BoldOblique&#39;
+Config Error: No display font for &#39;Helvetica-Oblique&#39;
+Config Error: No display font for &#39;Symbol&#39;
+Config Error: No display font for &#39;Times-Bold&#39;
+Config Error: No display font for &#39;Times-BoldItalic&#39;
+Config Error: No display font for &#39;Times-Italic&#39;
+Config Error: No display font for &#39;Times-Roman&#39;
+Config Error: No display font for &#39;ZapfDingbats&#39;
+Syntax Warning: May not be a PDF file (continuing anyway)
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: PDF file is damaged - attempting to reconstruct xref table...
+Syntax Error: Couldn&#39;t find trailer dictionary
+Syntax Error: Couldn&#39;t read xref table
+#3	NEW    cov: 228 ft: 230 corp: 2/3b lim: 4096 exec/s: 0 rss: 43Mb L: 2/2 MS: 1 InsertByte-
+Config Error: No display font for &#39;Courier&#39;
+Config Error: No display font for &#39;Courier-Bold&#39;
+Config Error: No display font for &#39;Courier-BoldOblique&#39;
+Config Error: No display font for &#39;Courier-Oblique&#39;
+Config Error: No display font for &#39;Helvetica&#39;
+Config Error: No display font for &#39;Helvetica-Bold&#39;
+Config Error: No display font for &#39;Helvetica-BoldOblique&#39;
+Config Error: No display font for &#39;Helvetica-Oblique&#39;
+Config Error: No display font for &#39;Symbol&#39;
+Config Error: No display font for &#39;Times-Bold&#39;
+Config Error: No display font for &#39;Times-BoldItalic&#39;
+Config Error: No display font for &#39;Times-Italic&#39;
+Config Error: No display font for &#39;Times-Roman&#39;
+Config Error: No display font for &#39;ZapfDingbats&#39;
+Syntax Warning: May not be a PDF file (continuing anyway)
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: PDF file is damaged - attempting to reconstruct xref table...
+Syntax Error: Couldn&#39;t find trailer dictionary
+Syntax Error: Couldn&#39;t read xref table
+	NEW_FUNC[1/3]: 0x55ff9d441ca0 in std::__1::vector&lt;char, std::__1::allocator&lt;char&gt;&gt;::shrink_to_fit() /usr/local/bin/../include/c++/v1/vector:1590
+	NEW_FUNC[2/3]: 0x55ff9d442130 in std::__1::vector&lt;char, std::__1::allocator&lt;char&gt;&gt;::__construct_at_end(unsigned long) /usr/local/bin/../include/c++/v1/vector:1113
+#4	NEW    cov: 263 ft: 268 corp: 3/51b lim: 4096 exec/s: 0 rss: 44Mb L: 48/48 MS: 1 InsertRepeatedBytes-
+Config Error: No display font for &#39;Courier&#39;
+Config Error: No display font for &#39;Courier-Bold&#39;
+Config Error: No display font for &#39;Courier-BoldOblique&#39;
+Config Error: No display font for &#39;Courier-Oblique&#39;
+Config Error: No display font for &#39;Helvetica&#39;
+Config Error: No display font for &#39;Helvetica-Bold&#39;
+Config Error: No display font for &#39;Helvetica-BoldOblique&#39;
+Config Error: No display font for &#39;Helvetica-Oblique&#39;
+Config Error: No display font for &#39;Symbol&#39;
+Config Error: No display font for &#39;Times-Bold&#39;
+Config Error: No display font for &#39;Times-BoldItalic&#39;
+Config Error: No display font for &#39;Times-Italic&#39;
+Config Error: No display font for &#39;Times-Roman&#39;
+Config Error: No display font for &#39;ZapfDingbats&#39;
+Syntax Warning: May not be a PDF file (continuing anyway)
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: PDF file is damaged - attempting to reconstruct xref table...
+Syntax Error: Couldn&#39;t find trailer dictionary
+Syntax Error: Couldn&#39;t read xref table
+#5	NEW    cov: 264 ft: 270 corp: 4/99b lim: 4096 exec/s: 0 rss: 45Mb L: 48/48 MS: 1 CMP- DE: &#34;\037\000\000\000&#34;-
+Config Error: No display font for &#39;Courier&#39;
+Config Error: No display font for &#39;Courier-Bold&#39;
+Config Error: No display font for &#39;Courier-BoldOblique&#39;
+Config Error: No display font for &#39;Courier-Oblique&#39;
+Config Error: No display font for &#39;Helvetica&#39;
+Config Error: No display font for &#39;Helvetica-Bold&#39;
+Config Error: No display font for &#39;Helvetica-BoldOblique&#39;
+Config Error: No display font for &#39;Helvetica-Oblique&#39;
+Config Error: No display font for &#39;Symbol&#39;
+Config Error: No display font for &#39;Times-Bold&#39;
+Config Error: No display font for &#39;Times-BoldItalic&#39;
+Config Error: No display font for &#39;Times-Italic&#39;
+Config Error: No display font for &#39;Times-Roman&#39;
+Config Error: No display font for &#39;ZapfDingbats&#39;
+Syntax Warning: May not be a PDF file (continuing anyway)
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: PDF file is damaged - attempting to reconstruct xref table...
+Syntax Error: Couldn&#39;t find trailer dictionary
+Syntax Error: Couldn&#39;t read xref table
+#6	NEW    cov: 264 ft: 281 corp: 5/205b lim: 4096 exec/s: 0 rss: 46Mb L: 106/106 MS: 1 InsertRepeatedBytes-
+Config Error: No display font for &#39;Courier&#39;
+Config Error: No display font for &#39;Courier-Bold&#39;
+Config Error: No display font for &#39;Courier-BoldOblique&#39;
+Config Error: No display font for &#39;Courier-Oblique&#39;
+Config Error: No display font for &#39;Helvetica&#39;
+Config Error: No display font for &#39;Helvetica-Bold&#39;
+Config Error: No display font for &#39;Helvetica-BoldOblique&#39;
+Config Error: No display font for &#39;Helvetica-
+...truncated...
+ff9d44123f in LLVMFuzzerTestOneInput /src/xpdf-4.05/build/fuzz_JBIG2.cc:24:22
+    #7 0x55ff9d2f3660 in fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:614:13
+    #8 0x55ff9d2f2e85 in fuzzer::Fuzzer::RunOne(unsigned char const*, unsigned long, bool, fuzzer::InputInfo*, bool, bool*) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:516:7
+    #9 0x55ff9d2f4655 in fuzzer::Fuzzer::MutateAndTestOne() /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:760:19
+    #10 0x55ff9d2f5445 in fuzzer::Fuzzer::Loop(std::__Fuzzer::vector&lt;fuzzer::SizedFile, std::__Fuzzer::allocator&lt;fuzzer::SizedFile&gt;&gt;&amp;) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:905:5
+    #11 0x55ff9d2e3756 in fuzzer::FuzzerDriver(int*, char***, int (*)(unsigned char const*, unsigned long)) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:914:6
+    #12 0x55ff9d30fc82 in main /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMain.cpp:20:10
+    #13 0x7f126fcf7082 in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x24082) (BuildId: 0702430aef5fa3dda43986563e9ffcc47efbd75e)
+
+DEDUP_TOKEN: __interceptor_malloc--gmalloc--gmallocn(int, int)
+12088440 byte(s) (0%) in 4797 allocation(s)
+    #0 0x55ff9d401bfe in malloc /src/llvm-project/compiler-rt/lib/asan/asan_malloc_linux.cpp:69:3
+    #1 0x55ff9d6d8fc7 in gmalloc /src/xpdf-4.05/goo/gmem.cc:148:13
+    #2 0x55ff9d6d8fc7 in gmallocn(int, int) /src/xpdf-4.05/goo/gmem.cc:214:10
+    #3 0x55ff9d541c1c in BuiltinFontWidths::BuiltinFontWidths(BuiltinFontWidth*, int) /src/xpdf-4.05/xpdf/BuiltinFont.cc:24:30
+    #4 0x55ff9d5424ac in initBuiltinFontTables() /src/xpdf-4.05/xpdf/BuiltinFontTables.cc:4275:33
+    #5 0x55ff9d48fdc1 in GlobalParams::GlobalParams(char const*) /src/xpdf-4.05/xpdf/GlobalParams.cc:623:3
+    #6 0x55ff9d44123f in LLVMFuzzerTestOneInput /src/xpdf-4.05/build/fuzz_JBIG2.cc:24:22
+    #7 0x55ff9d2f3660 in fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:614:13
+    #8 0x55ff9d2f2e85 in fuzzer::Fuzzer::RunOne(unsigned char const*, unsigned long, bool, fuzzer::InputInfo*, bool, bool*) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:516:7
+    #9 0x55ff9d2f4655 in fuzzer::Fuzzer::MutateAndTestOne() /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:760:19
+    #10 0x55ff9d2f5445 in fuzzer::Fuzzer::Loop(std::__Fuzzer::vector&lt;fuzzer::SizedFile, std::__Fuzzer::allocator&lt;fuzzer::SizedFile&gt;&gt;&amp;) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:905:5
+    #11 0x55ff9d2e3756 in fuzzer::FuzzerDriver(int*, char***, int (*)(unsigned char const*, unsigned long)) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:914:6
+    #12 0x55ff9d30fc82 in main /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMain.cpp:20:10
+    #13 0x7f126fcf7082 in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x24082) (BuildId: 0702430aef5fa3dda43986563e9ffcc47efbd75e)
+
+DEDUP_TOKEN: __interceptor_malloc--gmalloc--gmallocn(int, int)
+12088440 byte(s) (0%) in 4797 allocation(s)
+Config Error: No display font for &#39;Courier&#39;
+Config Error: No display font for &#39;Courier-Bold&#39;
+Config Error: No display font for &#39;Courier-BoldOblique&#39;
+Config Error: No display font for &#39;Courier-Oblique&#39;
+Config Error: No display font for &#39;Helvetica&#39;
+Config Error: No display font for &#39;Helvetica-Bold&#39;
+Config Error: No display font for &#39;Helvetica-BoldOblique&#39;
+Config Error: No display font for &#39;Helvetica-Oblique&#39;
+Config Error: No display font for &#39;Symbol&#39;
+Config Error: No display font for &#39;Times-Bold&#39;
+Config Error: No display font for &#39;Times-BoldItalic&#39;
+Config Error: No display font for &#39;Times-Italic&#39;
+Config Error: No display font for &#39;Times-Roman&#39;
+Config Error: No display font for &#39;ZapfDingbats&#39;
+Syntax Warning: May not be a PDF file (continuing anyway)
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: PDF file is damaged - attempting to reconstruct xref table...
+    #0 0x55ff9d401bfe in malloc /src/llvm-project/compiler-rt/lib/asan/asan_malloc_linux.cpp:69:3
+    #1 0x55ff9d6d8fc7 in gmalloc /src/xpdf-4.05/goo/gmem.cc:148:13
+    #2 0x55ff9d6d8fc7 in gmallocn(int, int) /src/xpdf-4.05/goo/gmem.cc:214:10
+    #3 0x55ff9d541c1c in BuiltinFontWidths::BuiltinFontWidths(BuiltinFontWidth*, int) /src/xpdf-4.05/xpdf/BuiltinFont.cc:24:30
+    #4 0x55ff9d542344 in initBuiltinFontTables() /src/xpdf-4.05/xpdf/BuiltinFontTables.cc:4266:32
+    #5 0x55ff9d48fdc1 in GlobalParams::GlobalParams(char const*) /src/xpdf-4.05/xpdf/GlobalParams.cc:623:3
+    #6 0x55ff9d44123f in LLVMFuzzerTestOneInput /src/xpdf-4.05/build/fuzz_JBIG2.cc:24:22
+    #7 0x55ff9d2f3660 in fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:614:13
+    #8 0x55ff9d2f2e85 in fuzzer::Fuzzer::RunOne(unsigned char const*, unsigned long, bool, fuzzer::InputInfo*, bool, bool*) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:516:7
+    #9 0x55ff9d2f4655 in fuzzer::Fuzzer::MutateAndTestOne() /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:760:19
+    #10 0x55ff9d2f5445 in fuzzer::Fuzzer::Loop(std::__Fuzzer::vector&lt;fuzzer::SizedFile, std::__Fuzzer::allocator&lt;fuzzer::SizedFile&gt;&gt;&amp;) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:905:5
+    #11 0x55ff9d2e3756 in fuzzer::FuzzerDriver(int*, char***, int (*)(unsigned char const*, unsigned long)) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:914:6
+    #12 0x55ff9d30fc82 in main /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMain.cpp:20:10
+    #13 0x7f126fcf7082 in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x24082) (BuildId: 0702430aef5fa3dda43986563e9ffcc47efbd75e)
+
+DEDUP_TOKEN: __interceptor_malloc--gmalloc--gmallocn(int, int)
+Syntax Error: Couldn&#39;t find trailer dictionary
+Syntax Error: Couldn&#39;t read xref table
+12088440 byte(s) (0%) in 4797 allocation(s)
+    #0 0x55ff9d401bfe in malloc /src/llvm-project/compiler-rt/lib/asan/asan_malloc_linux.cpp:69:3
+    #1 0x55ff9d6d8fc7 in gmalloc /src/xpdf-4.05/goo/gmem.cc:148:13
+    #2 0x55ff9d6d8fc7 in gmallocn(int, int) /src/xpdf-4.05/goo/gmem.cc:214:10
+    #3 0x55ff9d541c1c in BuiltinFontWidths::BuiltinFontWidths(BuiltinFontWidth*, int) /src/xpdf-4.05/xpdf/BuiltinFont.cc:24:30
+    #4 0x55ff9d54245c in initBuiltinFontTables() /src/xpdf-4.05/xpdf/BuiltinFontTables.cc:4273:33
+    #5 0x55ff9d48fdc1 in GlobalParams::GlobalParams(char const*) /src/xpdf-4.05/xpdf/GlobalParams.cc:623:3
+    #6 0x55ff9d44123f in LLVMFuzzerTestOneInput /src/xpdf-4.05/build/fuzz_JBIG2.cc:24:22
+    #7 0x55ff9d2f3660 in fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:614:13
+    #8 0x55ff9d2f2e85 in fuzzer::Fuzzer::RunOne(unsigned char const*, unsigned long, bool, fuzzer::InputInfo*, bool, bool*) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:516:7
+    #9 0x55ff9d2f4655 in fuzzer::Fuzzer::MutateAndTestOne() /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:760:19
+    #10 0x55ff9d2f5445 in fuzzer::Fuzzer::Loop(std::__Fuzzer::vector&lt;fuzzer::SizedFile, std::__Fuzzer::allocator&lt;fuzzer::SizedFile&gt;&gt;&amp;) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:905:5
+    #11 0x55ff9d2e3756 in fuzzer::FuzzerDriver(int*, char***, int (*)(unsigned char const*, unsigned long)) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:914:6
+    #12 0x55ff9d30fc82 in main /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMain.cpp:20:10
+    #13 0x7f126fcf7082 in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x24082) (BuildId: 0702430aef5fa3dda43986563e9ffcc47efbd75e)
+
+DEDUP_TOKEN: __interceptor_malloc--gmalloc--gmallocn(int, int)
+MS: 5 ChangeBinInt-InsertByte-CopyPart-ChangeASCIIInt-ChangeByte-; base unit: 7c2e7adbb1da9a6203e1f2f5d496e15d19877a1c
+artifact_prefix=&#39;./&#39;; Test unit written to ./oom-4a3556d25cd5a8857b713660965264214c38ffe0
+SUMMARY: libFuzzer: out-of-memory
+stat::number_of_executed_units: 4803
+stat::average_exec_per_sec:     240
+stat::new_units_added:          173
+stat::slowest_unit_time_sec:    0
+stat::peak_rss_mb:              2649
+
+</pre>
+
+
+</body>

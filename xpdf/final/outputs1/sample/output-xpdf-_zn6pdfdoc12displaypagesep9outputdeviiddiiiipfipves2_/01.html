@@ -1,0 +1,724 @@
+<!doctype html>
+
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Experiment results</title>
+<style>
+* {
+    box-sizing: border-box;
+}
+
+html {
+    line-height: 1.15;
+}
+
+body {
+    font-family: sans-serif;
+    font-size: 16px;
+}
+
+table {
+    border-collapse: collapse;
+    border-spacing: 0;
+}
+
+td, th {
+    border-right: 1px #dedede solid;
+    border-bottom: 1px #dedede solid;
+    padding: 5px;
+    text-align: left;
+}
+td:first-child, th:first-child {
+    border-left: 1px #dedede solid;
+}
+th {
+    border-top: 1px #dedede solid;
+}
+
+tbody tr:nth-child(odd) {
+    background-color: #f4f5ff;
+}
+</style>
+<body>
+    LLM: 
+    
+<h1>output-xpdf-_zn6pdfdoc12displaypagesep9outputdeviiddiiiipfipves2_ / 01</h1>
+Bug: False
+<br>
+Crash reason: NO_SEMANTIC_ERR
+<br>
+<br>
+
+<h2>Triage</h2>
+<pre>
+
+</pre>
+<br>
+
+
+
+
+
+<h3>Final code</h3>
+
+<pre>
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+#include &lt;stddef.h&gt;
+#include &lt;stdint.h&gt;
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;string.h&gt;
+#include &lt;iostream&gt;
+#include &lt;vector&gt;
+
+#include &#34;GlobalParams.h&#34;
+#include &#34;PDFDoc.h&#34;
+#include &#34;/src/xpdf-4.05/xpdf/OutputDev.h&#34;
+
+class MyOutputDev : public OutputDev {
+public:
+  virtual GBool upsideDown() { return gTrue; }
+  virtual GBool useDrawChar() { return gTrue; }
+  virtual GBool interpretType3Chars() { return gFalse; }
+};
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  FuzzedDataProvider fdp(data, size);
+
+  double hDPI = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  double vDPI = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  int rotate = fdp.ConsumeIntegral&lt;int&gt;();
+  GBool useMediaBox = fdp.ConsumeBool();
+  GBool crop = fdp.ConsumeBool();
+  GBool printing = fdp.ConsumeBool();
+  std::vector&lt;char&gt; buf = fdp.ConsumeRemainingBytes&lt;char&gt;();
+
+  MyOutputDev output_dev;
+
+  globalParams = new GlobalParams(&#34;&#34;);
+  PDFDoc *doc = nullptr;
+  if (buf.size() &gt; 0) {
+    Object obj;
+    obj.initNull();
+    MemStream *str = new MemStream(buf.data(), 0, buf.size(), &amp;obj);
+    doc = new PDFDoc(str, 0, 0, 0);
+  }
+
+  if (doc &amp;&amp; doc-&gt;isOk()) {
+    doc-&gt;displayPages(&amp;output_dev, 1, 1, hDPI, vDPI, rotate, useMediaBox,
+                      crop, printing, NULL, NULL);
+  }
+
+  delete doc;
+  delete globalParams;
+
+  return 0;
+}
+</pre>
+
+
+<h3>Fixer prompt #1</h3>
+<pre>
+
+Given the following C++ fuzz harness and its build error message, fix the code to make it build for fuzzing.
+
+If there is undeclared identifier or unknown type name error, fix it by finding and including the related libraries.
+
+MUST RETURN THE FULL CODE, INCLUDING UNCHANGED PARTS.
+
+Below is the code needs to be built:
+&lt;code&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+#include &lt;stddef.h&gt;
+#include &lt;stdint.h&gt;
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;string.h&gt;
+#include &lt;iostream&gt;
+#include &lt;vector&gt;
+
+#include &#34;GlobalParams.h&#34;
+#include &#34;PDFDoc.h&#34;
+#include &#34;XOutputDev.h&#34;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  FuzzedDataProvider fdp(data, size);
+
+  double hDPI = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  double vDPI = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  int rotate = fdp.ConsumeIntegral&lt;int&gt;();
+  GBool useMediaBox = fdp.ConsumeBool();
+  GBool crop = fdp.ConsumeBool();
+  GBool printing = fdp.ConsumeBool();
+  std::vector&lt;char&gt; buf = fdp.ConsumeRemainingBytes&lt;char&gt;();
+
+  XOutputDev output_dev;
+
+  globalParams = new GlobalParams();
+  PDFDoc *doc = nullptr;
+  if (buf.size() &gt; 0) {
+    Object obj;
+    obj.initNull();
+    MemStream *str = new MemStream(buf.data(), 0, buf.size(), &amp;obj);
+    doc = new PDFDoc(str, 0, 0, 0);
+  }
+
+  if (doc &amp;&amp; doc-&gt;isOk()) {
+    doc-&gt;displayPages(&amp;output_dev, 1, 1, hDPI, vDPI, rotate, useMediaBox,
+                      crop, printing, NULL, NULL);
+  }
+
+  delete doc;
+  delete globalParams;
+
+  return 0;
+}
+&lt;/code&gt;
+
+Below is the error to fix:
+The code has the following build issues:
+&lt;error&gt;
+fuzz_JBIG2.cc:13:10: fatal error: &#39;XOutputDev.h&#39; file not found
+   13 | #include &#34;XOutputDev.h&#34;
+      |          ^~~~~~~~~~~~~~
+&lt;/error&gt;
+
+
+Below are instructions to assist you in fixing the error.
+&lt;instruction&gt;
+IMPORTANT: DO NOT include the header file XOutputDev.h in the generated fuzz target again, the file does not exist in the project-under-test.
+If the non-existent &lt;filepath&gt;XOutputDev.h&lt;/filepath&gt; was included for the declaration of &lt;code&gt;void PDFDoc::displayPages(OutputDev *, int, int, double, double, int, GBool, GBool, GBool, DW_TAG_subroutine_typeInfinite loop *, void *)&lt;/code&gt;, you must replace it with the EXACT path of the actual file &lt;filepath&gt;#include &#34;/src/xpdf-4.05/xpdf/PDFDoc.h&#34;&lt;/filepath&gt;. For example:
+&lt;code&gt;
+#include &#34;#include &#34;/src/xpdf-4.05/xpdf/PDFDoc.h&#34;&#34;
+&lt;/code&gt;
+Otherwise, consider replacing it with some of the following statementsthat may be correct alternatives:
+&lt;code&gt;
+#include &#34;/src/xpdf-4.05/xpdf/OutputDev.h&#34;
+#include &#34;/src/xpdf-4.05/xpdf/SplashOutputDev.h&#34;
+#include &#34;/src/xpdf-4.05/xpdf/Outline.h&#34;
+#include &#34;/src/freetype/src/truetype/ttgxvar.h&#34;
+#include &#34;/src/freetype/src/truetype/ttinterp.h&#34;
+&lt;/code&gt;
+
+&lt;/instruction&gt;
+
+Fix code:
+1. Consider possible solutions for the issues listed above.
+2. Choose a solution that can maximize fuzzing result, which is utilizing the function under test and feeding it not null input.
+3. Apply the solutions to the original code.
+It&#39;s important to show the complete code, not only the fixed line.
+&lt;solution&gt;
+</pre>
+
+
+
+<h3>Code #1</h3>
+
+<pre>
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+#include &lt;stddef.h&gt;
+#include &lt;stdint.h&gt;
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;string.h&gt;
+#include &lt;iostream&gt;
+#include &lt;vector&gt;
+
+#include &#34;GlobalParams.h&#34;
+#include &#34;PDFDoc.h&#34;
+#include &#34;/src/xpdf-4.05/xpdf/OutputDev.h&#34;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  FuzzedDataProvider fdp(data, size);
+
+  double hDPI = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  double vDPI = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  int rotate = fdp.ConsumeIntegral&lt;int&gt;();
+  GBool useMediaBox = fdp.ConsumeBool();
+  GBool crop = fdp.ConsumeBool();
+  GBool printing = fdp.ConsumeBool();
+  std::vector&lt;char&gt; buf = fdp.ConsumeRemainingBytes&lt;char&gt;();
+
+  OutputDev output_dev;
+
+  globalParams = new GlobalParams();
+  PDFDoc *doc = nullptr;
+  if (buf.size() &gt; 0) {
+    Object obj;
+    obj.initNull();
+    MemStream *str = new MemStream(buf.data(), 0, buf.size(), &amp;obj);
+    doc = new PDFDoc(str, 0, 0, 0);
+  }
+
+  if (doc &amp;&amp; doc-&gt;isOk()) {
+    doc-&gt;displayPages(&amp;output_dev, 1, 1, hDPI, vDPI, rotate, useMediaBox,
+                      crop, printing, NULL, NULL);
+  }
+
+  delete doc;
+  delete globalParams;
+
+  return 0;
+}
+</pre>
+
+
+<h3>Fixer prompt #2</h3>
+<pre>
+
+Given the following C++ fuzz harness and its build error message, fix the code to make it build for fuzzing.
+
+If there is undeclared identifier or unknown type name error, fix it by finding and including the related libraries.
+
+MUST RETURN THE FULL CODE, INCLUDING UNCHANGED PARTS.
+
+Below is the code needs to be built:
+&lt;code&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+#include &lt;stddef.h&gt;
+#include &lt;stdint.h&gt;
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;string.h&gt;
+#include &lt;iostream&gt;
+#include &lt;vector&gt;
+
+#include &#34;GlobalParams.h&#34;
+#include &#34;PDFDoc.h&#34;
+#include &#34;/src/xpdf-4.05/xpdf/OutputDev.h&#34;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  FuzzedDataProvider fdp(data, size);
+
+  double hDPI = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  double vDPI = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  int rotate = fdp.ConsumeIntegral&lt;int&gt;();
+  GBool useMediaBox = fdp.ConsumeBool();
+  GBool crop = fdp.ConsumeBool();
+  GBool printing = fdp.ConsumeBool();
+  std::vector&lt;char&gt; buf = fdp.ConsumeRemainingBytes&lt;char&gt;();
+
+  OutputDev output_dev;
+
+  globalParams = new GlobalParams();
+  PDFDoc *doc = nullptr;
+  if (buf.size() &gt; 0) {
+    Object obj;
+    obj.initNull();
+    MemStream *str = new MemStream(buf.data(), 0, buf.size(), &amp;obj);
+    doc = new PDFDoc(str, 0, 0, 0);
+  }
+
+  if (doc &amp;&amp; doc-&gt;isOk()) {
+    doc-&gt;displayPages(&amp;output_dev, 1, 1, hDPI, vDPI, rotate, useMediaBox,
+                      crop, printing, NULL, NULL);
+  }
+
+  delete doc;
+  delete globalParams;
+
+  return 0;
+}
+&lt;/code&gt;
+
+Below is the error to fix:
+The code has the following build issues:
+&lt;error&gt;
+fuzz_JBIG2.cc:26:13: error: variable type &#39;OutputDev&#39; is an abstract class
+   26 |   OutputDev output_dev;
+      |             ^
+/src/xpdf-4.05/xpdf/OutputDev.h:48:17: note: unimplemented pure virtual method &#39;upsideDown&#39; in &#39;OutputDev&#39;
+   48 |   virtual GBool upsideDown() = 0;
+      |                 ^
+/src/xpdf-4.05/xpdf/OutputDev.h:51:17: note: unimplemented pure virtual method &#39;useDrawChar&#39; in &#39;OutputDev&#39;
+   51 |   virtual GBool useDrawChar() = 0;
+      |                 ^
+/src/xpdf-4.05/xpdf/OutputDev.h:64:17: note: unimplemented pure virtual method &#39;interpretType3Chars&#39; in &#39;OutputDev&#39;
+   64 |   virtual GBool interpretType3Chars() = 0;
+      |                 ^
+fuzz_JBIG2.cc:28:22: error: no matching constructor for initialization of &#39;GlobalParams&#39;
+   28 |   globalParams = new GlobalParams();
+      |                      ^
+../xpdf/GlobalParams.h:236:3: note: candidate constructor not viable: requires single argument &#39;cfgFileName&#39;, but no arguments were provided
+  236 |   GlobalParams(const char *cfgFileName);
+      |   ^            ~~~~~~~~~~~~~~~~~~~~~~~
+../xpdf/GlobalParams.h:231:7: note: candidate constructor (the implicit copy constructor) not viable: requires 1 argument, but 0 were provided
+  231 | class GlobalParams {
+      |       ^~~~~~~~~~~~
+&lt;/error&gt;
+
+
+
+
+Fix code:
+1. Consider possible solutions for the issues listed above.
+2. Choose a solution that can maximize fuzzing result, which is utilizing the function under test and feeding it not null input.
+3. Apply the solutions to the original code.
+It&#39;s important to show the complete code, not only the fixed line.
+&lt;solution&gt;
+</pre>
+
+
+
+<h3>Code #2</h3>
+
+<pre>
+&lt;code&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+#include &lt;stddef.h&gt;
+#include &lt;stdint.h&gt;
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;string.h&gt;
+#include &lt;iostream&gt;
+#include &lt;vector&gt;
+
+#include &#34;GlobalParams.h&#34;
+#include &#34;PDFDoc.h&#34;
+#include &#34;/src/xpdf-4.05/xpdf/OutputDev.h&#34;
+
+class MyOutputDev : public OutputDev {
+public:
+  virtual GBool upsideDown() { return gTrue; }
+  virtual GBool useDrawChar() { return gTrue; }
+  virtual GBool interpretType3Chars() { return gFalse; }
+};
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  FuzzedDataProvider fdp(data, size);
+
+  double hDPI = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  double vDPI = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  int rotate = fdp.ConsumeIntegral&lt;int&gt;();
+  GBool useMediaBox = fdp.ConsumeBool();
+  GBool crop = fdp.ConsumeBool();
+  GBool printing = fdp.ConsumeBool();
+  std::vector&lt;char&gt; buf = fdp.ConsumeRemainingBytes&lt;char&gt;();
+
+  MyOutputDev output_dev;
+
+  globalParams = new GlobalParams(&#34;&#34;);
+  PDFDoc *doc = nullptr;
+  if (buf.size() &gt; 0) {
+    Object obj;
+    obj.initNull();
+    MemStream *str = new MemStream(buf.data(), 0, buf.size(), &amp;obj);
+    doc = new PDFDoc(str, 0, 0, 0);
+  }
+
+  if (doc &amp;&amp; doc-&gt;isOk()) {
+    doc-&gt;displayPages(&amp;output_dev, 1, 1, hDPI, vDPI, rotate, useMediaBox,
+                      crop, printing, NULL, NULL);
+  }
+
+  delete doc;
+  delete globalParams;
+
+  return 0;
+}
+&lt;/code&gt;
+&lt;/solution&gt;
+</pre>
+
+
+<h2>Logs</h2>
+<pre>
+Fixing /home/chyun/oss-fuzz-gen/results1/output-xpdf-_zn6pdfdoc12displaypagesep9outputdeviiddiiiipfipves2_/fixed_targets/01.cc with gpt-4, attempt 1.
+Fixing /home/chyun/oss-fuzz-gen/results1/output-xpdf-_zn6pdfdoc12displaypagesep9outputdeviiddiiiipfipves2_/fixed_targets/01.cc with gpt-4, attempt 2.
+Successfully built /home/chyun/oss-fuzz-gen/results1/output-xpdf-_zn6pdfdoc12displaypagesep9outputdeviiddiiiipfipves2_/fixed_targets/01.cc with gpt-4 in 2 iterations of fixing.
+Triaging the crash related to /home/chyun/oss-fuzz-gen/results1/output-xpdf-_zn6pdfdoc12displaypagesep9outputdeviiddiiiipfipves2_/fixed_targets/01.cc with gpt-4.
+Warning: no crash info in xpdf-zn6pdfdoc12displaypagesep9outputdeviiddiiiipfipves2-01.
+Result for xpdf-zn6pdfdoc12displaypagesep9outputdeviiddiiiipfipves2-01: crashes=False, coverage=0.015758517367661748 (426/27033), coverage diff=0.0002806038595056562 (35/124731)
+
+</pre>
+
+<h2>Run logs</h2>
+<pre>
+INFO:__main__:Running: docker run --privileged --shm-size=2g --platform linux/amd64 --rm -e FUZZING_ENGINE=libfuzzer -e SANITIZER=address -e RUN_FUZZER_MODE=interactive -e HELPER=True -v /home/chyun/oss-fuzz-gen/results1/output-xpdf-_zn6pdfdoc12displaypagesep9outputdeviiddiiiipfipves2_/corpora/01.cc:/tmp/fuzz_JBIG2_corpus -v /tmp/tmpiijchsed/build/out/xpdf-zn6pdfdoc12displaypagesep9outputdeviiddiiiipfipves2-01:/out -t gcr.io/oss-fuzz-base/base-runner run_fuzzer fuzz_JBIG2 -print_final_stats=1 -max_total_time=30 -len_control=0 -timeout=30.
+vm.mmap_rnd_bits = 28
+rm: cannot remove &#39;/tmp/fuzz_JBIG2_corpus&#39;: Device or resource busy
+/out/fuzz_JBIG2 -rss_limit_mb=2560 -timeout=25 -print_final_stats=1 -max_total_time=30 -len_control=0 -timeout=30 /tmp/fuzz_JBIG2_corpus -detect_leaks=0 &lt; /dev/null
+INFO: Running with entropic power schedule (0xFF, 100).
+INFO: Seed: 3683315116
+INFO: Loaded 1 modules   (27033 inline 8-bit counters): 27033 [0x558238f6e498, 0x558238f74e31), 
+INFO: Loaded 1 PC tables (27033 PCs): 27033 [0x558238f74e38,0x558238fde7c8), 
+INFO:        0 files found in /tmp/fuzz_JBIG2_corpus
+INFO: -max_len is not provided; libFuzzer will not generate inputs larger than 4096 bytes
+INFO: A corpus is not provided, starting from an empty corpus
+#2	INITED cov: 235 ft: 236 corp: 1/1b exec/s: 0 rss: 39Mb
+#7	NEW    cov: 236 ft: 237 corp: 2/2b lim: 4096 exec/s: 0 rss: 44Mb L: 1/1 MS: 5 ShuffleBytes-CopyPart-ChangeByte-ChangeByte-ChangeByte-
+#8	NEW    cov: 237 ft: 239 corp: 3/4b lim: 4096 exec/s: 0 rss: 45Mb L: 2/2 MS: 1 CopyPart-
+Syntax Warning: May not be a PDF file (continuing anyway)
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: PDF file is damaged - attempting to reconstruct xref table...
+Syntax Error: Couldn&#39;t find trailer dictionary
+Syntax Error: Couldn&#39;t read xref table
+	NEW_FUNC[1/26]: 0x558238b541a0 in std::__1::vector&lt;char, std::__1::allocator&lt;char&gt;&gt;::shrink_to_fit() /usr/local/bin/../include/c++/v1/vector:1590
+	NEW_FUNC[2/26]: 0x558238b54630 in std::__1::vector&lt;char, std::__1::allocator&lt;char&gt;&gt;::__construct_at_end(unsigned long) /usr/local/bin/../include/c++/v1/vector:1113
+#9	NEW    cov: 349 ft: 372 corp: 4/90b lim: 4096 exec/s: 0 rss: 47Mb L: 86/86 MS: 1 InsertRepeatedBytes-
+#11	NEW    cov: 349 ft: 373 corp: 5/98b lim: 4096 exec/s: 0 rss: 48Mb L: 8/86 MS: 2 ChangeBinInt-InsertRepeatedBytes-
+#12	NEW    cov: 349 ft: 375 corp: 6/101b lim: 4096 exec/s: 0 rss: 49Mb L: 3/86 MS: 1 InsertByte-
+Syntax Warning: May not be a PDF file (continuing anyway)
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: PDF file is damaged - attempting to reconstruct xref table...
+Syntax Error: Couldn&#39;t find trailer dictionary
+Syntax Error: Couldn&#39;t read xref table
+#13	NEW    cov: 349 ft: 376 corp: 7/158b lim: 4096 exec/s: 0 rss: 50Mb L: 57/86 MS: 1 InsertRepeatedBytes-
+#15	NEW    cov: 350 ft: 377 corp: 8/168b lim: 4096 exec/s: 0 rss: 52Mb L: 10/86 MS: 2 InsertByte-InsertByte-
+Syntax Warning: May not be a PDF file (continuing anyway)
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: PDF file is damaged - attempting to reconstruct xref table...
+Syntax Error: Couldn&#39;t find trailer dictionary
+Syntax Error: Couldn&#39;t read xref table
+#19	NEW    cov: 355 ft: 384 corp: 9/286b lim: 4096 exec/s: 0 rss: 54Mb L: 118/118 MS: 4 InsertByte-CopyPart-CrossOver-InsertRepeatedBytes-
+Syntax Warning: May not be a PDF file (continuing anyway)
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: PDF file is damaged - attempting to reconstruct xref table...
+Syntax Error: Couldn&#39;t find trailer dictionary
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: May not be a PDF file (continuing anyway)
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: PDF file is damaged - attempting to reconstruct xref table...
+Syntax Error: Couldn&#39;t find trailer dictionary
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: May not be a PDF file (continuing anyway)
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: PDF file is damaged - attempting to reconstruct xref table...
+Syntax Error: Couldn&#39;t find trailer dictionary
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: May not be a PDF file (continuing anyway)
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: PDF file is damaged - attempting to reconstruct xref table...
+Syntax Error: Couldn&#39;t find trailer dictionary
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: May not be a PDF file (continuing anyway)
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: PDF file is damaged - attempting to reconstruct xref table...
+Syntax Error: Couldn&#39;t find trailer dictionary
+Syntax Error: Couldn&#39;t read xref table
+#29	NEW    cov: 355 ft: 385 corp: 10/291b lim: 4096 exec/s: 0 rss: 54Mb L: 5/118 MS: 5 ChangeByte-EraseBytes-CMP-CrossOver-EraseBytes- DE: &#34;\021\000\000\000\000\000\000\000&#34;-
+#31	NEW    cov: 355 ft: 387 corp: 11/307b lim: 4096 exec/s: 0 rss: 54Mb L: 16/118 MS: 2 InsertRepeatedBytes-EraseBytes-
+Syntax Warning: May not be a PDF file (continuing anyway)
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: PDF file is damaged - attempting to reconstruct xref table...
+Syntax Error: Couldn&#39;t find trailer dictionary
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: May not be a PDF file (continuing anyway)
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: PDF file is damaged - attempting to reconstruct xref table...
+Syntax Error: Couldn&#39;t find trailer dictionary
+Syntax Error: Couldn&#39;t read xref table
+#33	NEW    cov: 355 ft: 391 corp: 12/393b lim: 4096 exec/s: 0 rss: 54Mb L: 86/118 MS: 2 ChangeByte-ChangeBinInt-
+#35	NEW    cov: 355 ft: 393 corp: 13/404b lim: 4096 exec/s: 0 rss: 54Mb L: 11/118 MS: 2 ChangeByte-CrossOver-
+Syntax Warning: May not be a PDF file (continuing anyway)
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: PDF file is damaged - attempting to reconstruct xref table...
+Syntax Error: Couldn&#39;t find trailer dictionary
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: May not be a PDF file (continuing anyway)
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: PDF file is damaged - attempting to reconstruct xref table...
+Syntax Error: Couldn&#39;t find trailer dictionary
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: May not be a PDF file (continuing anyway)
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: PDF file is damaged - attempting to reconstruct xref table...
+Syntax Error: Couldn&#39;t find trailer dictionary
+Syntax Error: Couldn&#39;t read xref table
+#38	NEW    cov: 355 ft: 402 corp: 14/441b lim: 4096 exec/s: 0 rss: 54Mb L: 37/118 MS: 3 ShuffleBytes-CopyPart-EraseBytes-
+#39	NEW    cov: 355 ft: 403 corp: 15/445b lim: 4096 exec/s: 0 rss: 54Mb L: 4/118 MS: 1 CopyPart-
+#41	REDUCE cov: 355 ft: 403 corp: 15/444b lim: 4096 exec/s: 0 rss: 54Mb L: 15/118 MS: 2 CMP-EraseBytes- DE: &#34;\377?&#34;-
+Syntax Warning: May not be a PDF file (continuing anyway)
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: PDF file is damaged - attempting to reconstruct xref table...
+Syntax Error: Couldn&#39;t find trailer dictionary
+Syntax Error: Couldn&#39;t read xref table
+#43	NEW    cov: 355 ft: 408 corp: 16/482b lim: 4096 exec/s: 0 rss: 54Mb L: 38/118 MS: 2 EraseBytes-CrossOver-
+Syntax Warning: May not be a PDF file (continuing anyway)
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: PDF file is damaged - attempting to reconstruct xref table...
+Syntax Error: Couldn&#39;t find trailer dictionary
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: May not be a PDF file (continuing anyway)
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: PDF file is damaged - attempting to reconstruct xref table...
+Syntax Error: Couldn&#39;t find trailer dictionary
+Syntax Error: Couldn&#39;t read xref table
+#45	NEW    cov: 355 ft: 409 corp: 17/568b lim: 4096 exec/s: 0 rss: 54Mb L: 86/118 MS: 2 ChangeByte-CMP- DE: &#34;sta&#34;-
+Syntax Warning: May not be a PDF file (continuing anyway)
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: PDF file is damaged - attempting to reconstruct xref table...
+Syntax Error: Couldn&#39;t find trailer dictionary
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: May not be a PDF file (continuing anyway)
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: PDF file is damaged - attemptin
+...truncated...
+ef table
+Syntax Warning: PDF file is damaged - attempting to reconstruct xref table...
+Syntax Error: Couldn&#39;t find trailer dictionary
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: May not be a PDF file (continuing anyway)
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: PDF file is damaged - attempting to reconstruct xref table...
+Syntax Error: Couldn&#39;t find trailer dictionary
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: May not be a PDF file (continuing anyway)
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: PDF file is damaged - attempting to reconstruct xref table...
+Syntax Error: Couldn&#39;t find trailer dictionary
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: May not be a PDF file (continuing anyway)
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: PDF file is damaged - attempting to reconstruct xref table...
+Syntax Error: Couldn&#39;t find trailer dictionary
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: May not be a PDF file (continuing anyway)
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: PDF file is damaged - attempting to reconstruct xref table...
+Syntax Error: Couldn&#39;t find trailer dictionary
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: May not be a PDF file (continuing anyway)
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: PDF file is damaged - attempting to reconstruct xref table...
+Syntax Error: Couldn&#39;t find trailer dictionary
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: May not be a PDF file (continuing anyway)
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: PDF file is damaged - attempting to reconstruct xref table...
+Syntax Error: Couldn&#39;t find trailer dictionary
+Syntax Error: Couldn&#39;t read xref table
+#4423	NEW    cov: 426 ft: 860 corp: 132/24Kb lim: 4096 exec/s: 147 rss: 56Mb L: 1162/2021 MS: 2 CMP-ChangeBit- DE: &#34;star&#34;-
+Syntax Warning: May not be a PDF file (continuing anyway)
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: PDF file is damaged - attempting to reconstruct xref table...
+Syntax Error: Couldn&#39;t find trailer dictionary
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: May not be a PDF file (continuing anyway)
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: PDF file is damaged - attempting to reconstruct xref table...
+Syntax Error: Couldn&#39;t find trailer dictionary
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: May not be a PDF file (continuing anyway)
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: PDF file is damaged - attempting to reconstruct xref table...
+Syntax Error: Couldn&#39;t find trailer dictionary
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: May not be a PDF file (continuing anyway)
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: PDF file is damaged - attempting to reconstruct xref table...
+Syntax Error: Couldn&#39;t find trailer dictionary
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: May not be a PDF file (continuing anyway)
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: PDF file is damaged - attempting to reconstruct xref table...
+Syntax Error: Couldn&#39;t find trailer dictionary
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: May not be a PDF file (continuing anyway)
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: PDF file is damaged - attempting to reconstruct xref table...
+Syntax Error: Couldn&#39;t find trailer dictionary
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: May not be a PDF file (continuing anyway)
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: PDF file is damaged - attempting to reconstruct xref table...
+Syntax Error: Couldn&#39;t find trailer dictionary
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: May not be a PDF file (continuing anyway)
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: PDF file is damaged - attempting to reconstruct xref table...
+Syntax Error: Couldn&#39;t find trailer dictionary
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: May not be a PDF file (continuing anyway)
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: PDF file is damaged - attempting to reconstruct xref table...
+Syntax Error: Couldn&#39;t find trailer dictionary
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: May not be a PDF file (continuing anyway)
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: PDF file is damaged - attempting to reconstruct xref table...
+Syntax Error: Couldn&#39;t find trailer dictionary
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: May not be a PDF file (continuing anyway)
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: PDF file is damaged - attempting to reconstruct xref table...
+Syntax Error: Couldn&#39;t find trailer dictionary
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: May not be a PDF file (continuing anyway)
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: PDF file is damaged - attempting to reconstruct xref table...
+Syntax Error: Couldn&#39;t find trailer dictionary
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: May not be a PDF file (continuing anyway)
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: PDF file is damaged - attempting to reconstruct xref table...
+Syntax Error: Couldn&#39;t find trailer dictionary
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: May not be a PDF file (continuing anyway)
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: PDF file is damaged - attempting to reconstruct xref table...
+Syntax Error: Couldn&#39;t find trailer dictionary
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: PDF version ========AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA -- xpdf supports version 2.0 (continuing anyway)
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: PDF file is damaged - attempting to reconstruct xref table...
+Syntax Error: Couldn&#39;t find trailer dictionary
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: PDF version ========AAAAAAAAAAAAAttttttttttttttttttAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA -- xpdf supports version 2.0 (continuing anyway)
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: PDF file is damaged - attempting to reconstruct xref table...
+Syntax Error: Couldn&#39;t find trailer dictionary
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: PDF version ========AAAAAAAAAAAAAttttttttttttttttttAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA&lt;b5&gt;&lt;be&gt;===-=&lt;91&gt;&lt;91&gt;&#39;=&lt;01&gt;&lt;c8&gt;&lt;c8&gt;&lt;c8&gt;&lt;c8&gt;&lt;c8&gt;=%PDF-========AAAAAAAAAAAAAttttttttttttttttttAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA&lt;b5&gt;&lt;be&gt;===-=&lt;91&gt; -- xpdf supports version 2.0 (continuing anyway)
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: PDF file is damaged - attempting to reconstruct xref table...
+Syntax Error: Couldn&#39;t find trailer dictionary
+Syntax Error: Couldn&#39;t read xref table
+#4441	NEW    cov: 426 ft: 862 corp: 133/25Kb lim: 4096 exec/s: 143 rss: 56Mb L: 214/2021 MS: 3 EraseBytes-InsertRepeatedBytes-CopyPart-
+#4441	DONE   cov: 426 ft: 862 corp: 133/25Kb lim: 4096 exec/s: 143 rss: 56Mb
+###### Recommended dictionary. ######
+&#34;\021\000\000\000\000\000\000\000&#34; # Uses: 23
+&#34;\377?&#34; # Uses: 28
+&#34;sta&#34; # Uses: 26
+&#34;..&#34; # Uses: 29
+&#34;\001\000\000\000\000\000\000\000&#34; # Uses: 27
+&#34;\001\000\000\000\000\000\001\000&#34; # Uses: 26
+&#34;\337\377\377\177&#34; # Uses: 20
+&#34;yoi&#34; # Uses: 31
+&#34;%PDF-&#34; # Uses: 14
+&#34;\001\000\000\000\000\000\000\021&#34; # Uses: 22
+&#34;\001\000\000\000\000\000\000\015&#34; # Uses: 21
+&#34;\007\000\000\000\000\000\000\000&#34; # Uses: 13
+&#34;\020\000\000\000&#34; # Uses: 13
+&#34;\377\377\377\377\377\377\000\000&#34; # Uses: 12
+&#34;\376?&#34; # Uses: 17
+&#34;&gt;\377&#34; # Uses: 13
+&#34;zbopomofo&#34; # Uses: 8
+&#34;\000\000\000\000\000\000\001\000&#34; # Uses: 12
+&#34;\000\026&#34; # Uses: 2
+&#34;\377\021&#34; # Uses: 2
+&#34;\001\000\000\023&#34; # Uses: 6
+&#34;startxref&#34; # Uses: 4
+&#34;\024\000\000\000&#34; # Uses: 0
+&#34;zerobenga&#34; # Uses: 2
+&#34;endstream&#34; # Uses: 1
+&#34;\001\000\000\000\000\000\020\000&#34; # Uses: 1
+&#34;\001\000\000\027&#34; # Uses: 1
+&#34;star&#34; # Uses: 0
+###### End of recommended dictionary. ######
+Done 4441 runs in 31 second(s)
+stat::number_of_executed_units: 4441
+stat::average_exec_per_sec:     143
+stat::new_units_added:          201
+stat::slowest_unit_time_sec:    0
+stat::peak_rss_mb:              56
+
+</pre>
+
+
+</body>

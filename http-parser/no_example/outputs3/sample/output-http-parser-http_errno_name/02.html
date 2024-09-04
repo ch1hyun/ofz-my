@@ -1,0 +1,342 @@
+<!doctype html>
+
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Experiment results</title>
+<style>
+* {
+    box-sizing: border-box;
+}
+
+html {
+    line-height: 1.15;
+}
+
+body {
+    font-family: sans-serif;
+    font-size: 16px;
+}
+
+table {
+    border-collapse: collapse;
+    border-spacing: 0;
+}
+
+td, th {
+    border-right: 1px #dedede solid;
+    border-bottom: 1px #dedede solid;
+    padding: 5px;
+    text-align: left;
+}
+td:first-child, th:first-child {
+    border-left: 1px #dedede solid;
+}
+th {
+    border-top: 1px #dedede solid;
+}
+
+tbody tr:nth-child(odd) {
+    background-color: #f4f5ff;
+}
+</style>
+<body>
+    LLM: 
+    
+<h1>output-http-parser-http_errno_name / 02</h1>
+Bug: True
+<br>
+Crash reason: NO_SEMANTIC_ERR
+<br>
+<br>
+
+<h2>Triage</h2>
+<pre>
+Crash is caused by bug in fuzz driver.
+
+The crash is caused by the fuzz driver because it does not properly handle the input data. The driver should not just cast the input data to an integer and pass it to the http_errno_name function without a proper range check. The http_errno_name function expects an input of type &#39;enum http_errno&#39;, but the fuzz driver passes an integer without checking if it is within the valid range of &#39;enum http_errno&#39;. As a result, when the input is out of the valid range of &#39;enum http_errno&#39;, the assert in http_errno_name will fail, causing the crash.
+</pre>
+<br>
+
+
+
+
+
+<h3>Final code</h3>
+
+<pre>
+#include &lt;stdint.h&gt;
+#include &lt;stdlib.h&gt;
+
+extern const char * http_errno_name(int);
+
+int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  if (size &lt; sizeof(int)) {
+    return 0;
+  }
+
+  int http_error = *(int *)data;
+  if (http_error &gt;= 0 &amp;&amp; http_error &lt;= 63) {
+    http_errno_name(http_error);
+  }
+  
+  return 0;
+}
+</pre>
+
+
+<h3>Fixer prompt #1</h3>
+<pre>
+
+Given the following C fuzz harness and its build error message, fix the code to make it build for fuzzing.
+
+If there is undeclared identifier or unknown type name error, fix it by finding and including the related libraries.
+
+MUST RETURN THE FULL CODE, INCLUDING UNCHANGED PARTS.
+
+Below is the code needs to be built:
+&lt;code&gt;
+#include &lt;stdint.h&gt;
+#include &lt;stdlib.h&gt;
+
+extern const char * http_errno_name(int);
+
+int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  if (size != sizeof(int)) {
+    return 0;
+  }
+  
+  http_errno_name(*(int *)data);
+  
+  return 0;
+}
+&lt;/code&gt;
+
+Below is the error to fix:
+The code can build successfully but has a runtime issue: Fuzzing crashed immediately at runtime (ASAN-ERROR: AddressSanitizer: ABRT on unknown address 0x00000000000c (pc 0x7f2917f9f00b bp 0x7f2918114588 sp 0x7ffd53326510 T0)), indicating fuzz target code for invoking the function under test is incorrect or unrobust.
+&lt;error&gt;
+Crash stacks:
+Stack 0:
+#0 0x7f2917f9f00b in raise (/lib/x86_64-linux-gnu/libc.so.6+0x4300b) (BuildId: 0702430aef5fa3dda43986563e9ffcc47efbd75e)
+#1 0x7f2917f7e858 in abort (/lib/x86_64-linux-gnu/libc.so.6+0x22858) (BuildId: 0702430aef5fa3dda43986563e9ffcc47efbd75e)
+#2 0x7f2917f7e728  (/lib/x86_64-linux-gnu/libc.so.6+0x22728) (BuildId: 0702430aef5fa3dda43986563e9ffcc47efbd75e)
+#3 0x7f2917f8ffd5 in __assert_fail (/lib/x86_64-linux-gnu/libc.so.6+0x33fd5) (BuildId: 0702430aef5fa3dda43986563e9ffcc47efbd75e)
+#4 0x55993a2b4359 in http_errno_name /src/http-parser/http_parser.c:2243:3
+#5 0x55993a2b5b55 in LLVMFuzzerTestOneInput /src/http-parser/fuzzers/fuzz_url.c:11:3
+#6 0x55993a15a470 in fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:614:13
+#7 0x55993a159c95 in fuzzer::Fuzzer::RunOne(unsigned char const*, unsigned long, bool, fuzzer::InputInfo*, bool, bool*) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:516:7
+#8 0x55993a15b465 in fuzzer::Fuzzer::MutateAndTestOne() /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:760:19
+#9 0x55993a15c255 in fuzzer::Fuzzer::Loop(std::__Fuzzer::vector&lt;fuzzer::SizedFile, std::__Fuzzer::allocator&lt;fuzzer::SizedFile&gt;&gt;&amp;) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:905:5
+#10 0x55993a14a566 in fuzzer::FuzzerDriver(int*, char***, int (*)(unsigned char const*, unsigned long)) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:914:6
+#11 0x55993a176a92 in main /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMain.cpp:20:10
+#12 0x7f2917f80082 in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x24082) (BuildId: 0702430aef5fa3dda43986563e9ffcc47efbd75e)
+#13 0x55993a13b6dd in _start (/out/fuzz_url+0x466dd)
+&lt;/error&gt;
+
+
+
+
+Fix code:
+1. Consider possible solutions for the issues listed above.
+2. Choose a solution that can maximize fuzzing result, which is utilizing the function under test and feeding it not null input.
+3. Apply the solutions to the original code.
+It&#39;s important to show the complete code, not only the fixed line.
+&lt;solution&gt;
+</pre>
+
+
+
+<h3>Code #1</h3>
+
+<pre>
+#include &lt;stdint.h&gt;
+#include &lt;stdlib.h&gt;
+
+extern const char * http_errno_name(int);
+
+int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  if (size &lt; sizeof(int)) {
+    return 0;
+  }
+
+  int http_error = *(int *)data;
+  if (http_error &gt;= 0 &amp;&amp; http_error &lt;= 63) {
+    http_errno_name(http_error);
+  }
+  
+  return 0;
+}
+</pre>
+
+
+<h2>Logs</h2>
+<pre>
+Fixing /home/chyun/oss-fuzz-gen/results3/output-http-parser-http_errno_name/fixed_targets/02.c with gpt-4, attempt 1.
+Successfully built /home/chyun/oss-fuzz-gen/results3/output-http-parser-http_errno_name/fixed_targets/02.c with gpt-4 in 1 iterations of fixing.
+Triaging the crash related to /home/chyun/oss-fuzz-gen/results3/output-http-parser-http_errno_name/fixed_targets/02.c with gpt-4.
+Result for http-parser-http_errno_name-02: crashes=True, coverage=0.007717750826901874 (7/907), coverage diff=0.0025157232704402514 (4/1590)
+
+</pre>
+
+<h2>Run logs</h2>
+<pre>
+Unable to find image &#39;gcr.io/oss-fuzz-base/base-runner:latest&#39; locally
+latest: Pulling from oss-fuzz-base/base-runner
+b549f31133a9: Already exists
+139edd167df6: Already exists
+af444f75ae33: Already exists
+14f3915e7420: Pulling fs layer
+a9ff08083a25: Pulling fs layer
+9dc48c872e73: Pulling fs layer
+96346b8c0f36: Pulling fs layer
+bb156b2edaf9: Pulling fs layer
+9e51d1915cc4: Pulling fs layer
+d6a22ed24534: Pulling fs layer
+aa0d26fc0d9f: Pulling fs layer
+f93655e29f16: Pulling fs layer
+1bf9cfa4140a: Pulling fs layer
+572f87638d3c: Pulling fs layer
+dfc0d26bd8f6: Pulling fs layer
+98e19f74b586: Pulling fs layer
+9e51d1915cc4: Waiting
+d6a22ed24534: Waiting
+aa0d26fc0d9f: Waiting
+f93655e29f16: Waiting
+f2d989760d0c: Pulling fs layer
+b32590a08972: Pulling fs layer
+367baa430ffc: Pulling fs layer
+424ab3846cad: Pulling fs layer
+1bf9cfa4140a: Waiting
+572f87638d3c: Waiting
+dfc0d26bd8f6: Waiting
+98e19f74b586: Waiting
+f2d989760d0c: Waiting
+b32590a08972: Waiting
+367baa430ffc: Waiting
+424ab3846cad: Waiting
+96346b8c0f36: Waiting
+bb156b2edaf9: Waiting
+9dc48c872e73: Verifying Checksum
+9dc48c872e73: Download complete
+14f3915e7420: Download complete
+14f3915e7420: Pull complete
+a9ff08083a25: Verifying Checksum
+a9ff08083a25: Download complete
+a9ff08083a25: Pull complete
+9dc48c872e73: Pull complete
+9e51d1915cc4: Verifying Checksum
+9e51d1915cc4: Download complete
+bb156b2edaf9: Verifying Checksum
+bb156b2edaf9: Download complete
+d6a22ed24534: Download complete
+96346b8c0f36: Verifying Checksum
+96346b8c0f36: Download complete
+f93655e29f16: Verifying Checksum
+f93655e29f16: Download complete
+aa0d26fc0d9f: Verifying Checksum
+aa0d26fc0d9f: Download complete
+dfc0d26bd8f6: Download complete
+572f87638d3c: Verifying Checksum
+572f87638d3c: Download complete
+96346b8c0f36: Pull complete
+bb156b2edaf9: Pull complete
+9e51d1915cc4: Pull complete
+d6a22ed24534: Pull complete
+aa0d26fc0d9f: Pull complete
+f93655e29f16: Pull complete
+1bf9cfa4140a: Verifying Checksum
+1bf9cfa4140a: Download complete
+98e19f74b586: Verifying Checksum
+98e19f74b586: Download complete
+367baa430ffc: Download complete
+b32590a08972: Verifying Checksum
+b32590a08972: Download complete
+1bf9cfa4140a: Pull complete
+572f87638d3c: Pull complete
+dfc0d26bd8f6: Pull complete
+424ab3846cad: Verifying Checksum
+424ab3846cad: Download complete
+f2d989760d0c: Verifying Checksum
+f2d989760d0c: Download complete
+98e19f74b586: Pull complete
+f2d989760d0c: Pull complete
+b32590a08972: Pull complete
+367baa430ffc: Pull complete
+424ab3846cad: Pull complete
+Digest: sha256:e1eba5efa394fec01565cc17a38ae61ff209acf11e7ce30f0af8f3e06089a026
+Status: Downloaded newer image for gcr.io/oss-fuzz-base/base-runner:latest
+INFO:__main__:Running: docker run --privileged --shm-size=2g --platform linux/amd64 --rm -e FUZZING_ENGINE=libfuzzer -e SANITIZER=address -e RUN_FUZZER_MODE=interactive -e HELPER=True -v /home/chyun/oss-fuzz-gen/results3/output-http-parser-http_errno_name/corpora/02.c:/tmp/fuzz_url_corpus -v /tmp/tmpivb5k540/build/out/http-parser-http_errno_name-02:/out -t gcr.io/oss-fuzz-base/base-runner run_fuzzer fuzz_url -print_final_stats=1 -max_total_time=30 -len_control=0 -timeout=30.
+vm.mmap_rnd_bits = 28
+rm: cannot remove &#39;/tmp/fuzz_url_corpus&#39;: Device or resource busy
+/out/fuzz_url -rss_limit_mb=2560 -timeout=25 -print_final_stats=1 -max_total_time=30 -len_control=0 -timeout=30 /tmp/fuzz_url_corpus &lt; /dev/null
+INFO: Running with entropic power schedule (0xFF, 100).
+INFO: Seed: 3381347574
+INFO: Loaded 1 modules   (907 inline 8-bit counters): 907 [0x55d846a82ab0, 0x55d846a82e3b), 
+INFO: Loaded 1 PC tables (907 PCs): 907 [0x55d846a82e40,0x55d846a866f0), 
+INFO:        0 files found in /tmp/fuzz_url_corpus
+INFO: -max_len is not provided; libFuzzer will not generate inputs larger than 4096 bytes
+INFO: A corpus is not provided, starting from an empty corpus
+#2	INITED cov: 2 ft: 2 corp: 1/1b exec/s: 0 rss: 30Mb
+#10	NEW    cov: 3 ft: 3 corp: 2/102b lim: 4096 exec/s: 0 rss: 30Mb L: 101/101 MS: 3 ChangeBit-ShuffleBytes-InsertRepeatedBytes-
+#24	NEW    cov: 4 ft: 4 corp: 3/139b lim: 4096 exec/s: 0 rss: 30Mb L: 37/101 MS: 4 CrossOver-ChangeBit-ChangeBinInt-InsertRepeatedBytes-
+#28	REDUCE cov: 4 ft: 4 corp: 3/126b lim: 4096 exec/s: 0 rss: 30Mb L: 24/101 MS: 4 CMP-ShuffleBytes-ChangeByte-EraseBytes- DE: &#34;\003\000\000\000\000\000\000\000&#34;-
+#40	REDUCE cov: 4 ft: 4 corp: 3/82b lim: 4096 exec/s: 0 rss: 30Mb L: 57/57 MS: 2 ChangeBinInt-EraseBytes-
+#43	REDUCE cov: 4 ft: 4 corp: 3/77b lim: 4096 exec/s: 0 rss: 30Mb L: 19/57 MS: 3 ChangeBinInt-ChangeByte-EraseBytes-
+#56	REDUCE cov: 4 ft: 4 corp: 3/62b lim: 4096 exec/s: 0 rss: 30Mb L: 42/42 MS: 3 ChangeByte-InsertByte-EraseBytes-
+	NEW_FUNC[1/1]: 0x55d846a132d0 in http_errno_name /src/http-parser/http_parser.c:2242
+#57	NEW    cov: 7 ft: 8 corp: 4/71b lim: 4096 exec/s: 0 rss: 30Mb L: 9/42 MS: 1 PersAutoDict- DE: &#34;\003\000\000\000\000\000\000\000&#34;-
+#87	REDUCE cov: 7 ft: 8 corp: 4/64b lim: 4096 exec/s: 0 rss: 30Mb L: 35/35 MS: 5 ChangeByte-ChangeByte-ChangeByte-ChangeBit-EraseBytes-
+#93	REDUCE cov: 7 ft: 8 corp: 4/63b lim: 4096 exec/s: 0 rss: 30Mb L: 34/34 MS: 1 EraseBytes-
+#127	REDUCE cov: 7 ft: 8 corp: 4/53b lim: 4096 exec/s: 0 rss: 30Mb L: 24/24 MS: 4 InsertByte-InsertByte-ChangeByte-EraseBytes-
+#148	REDUCE cov: 7 ft: 8 corp: 4/51b lim: 4096 exec/s: 0 rss: 30Mb L: 7/24 MS: 1 EraseBytes-
+#156	REDUCE cov: 7 ft: 8 corp: 4/50b lim: 4096 exec/s: 0 rss: 30Mb L: 6/24 MS: 3 EraseBytes-CopyPart-CopyPart-
+#186	REDUCE cov: 7 ft: 8 corp: 4/42b lim: 4096 exec/s: 0 rss: 30Mb L: 11/24 MS: 5 ChangeByte-ChangeBit-ShuffleBytes-ShuffleBytes-EraseBytes-
+#192	REDUCE cov: 7 ft: 8 corp: 4/38b lim: 4096 exec/s: 0 rss: 30Mb L: 7/24 MS: 1 EraseBytes-
+#248	REDUCE cov: 7 ft: 8 corp: 4/35b lim: 4096 exec/s: 0 rss: 30Mb L: 4/24 MS: 1 EraseBytes-
+#254	REDUCE cov: 7 ft: 8 corp: 4/32b lim: 4096 exec/s: 0 rss: 30Mb L: 21/21 MS: 1 EraseBytes-
+#366	REDUCE cov: 7 ft: 8 corp: 4/31b lim: 4096 exec/s: 0 rss: 30Mb L: 5/21 MS: 2 CopyPart-EraseBytes-
+#393	REDUCE cov: 7 ft: 8 corp: 4/30b lim: 4096 exec/s: 0 rss: 30Mb L: 20/20 MS: 2 InsertByte-EraseBytes-
+#529	REDUCE cov: 7 ft: 8 corp: 4/20b lim: 4096 exec/s: 0 rss: 31Mb L: 10/10 MS: 1 EraseBytes-
+#545	REDUCE cov: 7 ft: 8 corp: 4/19b lim: 4096 exec/s: 0 rss: 31Mb L: 9/9 MS: 1 EraseBytes-
+#582	REDUCE cov: 7 ft: 8 corp: 4/18b lim: 4096 exec/s: 0 rss: 31Mb L: 4/9 MS: 2 ChangeBinInt-EraseBytes-
+#733	REDUCE cov: 7 ft: 8 corp: 4/17b lim: 4096 exec/s: 0 rss: 31Mb L: 8/8 MS: 1 EraseBytes-
+#754	REDUCE cov: 7 ft: 8 corp: 4/16b lim: 4096 exec/s: 0 rss: 31Mb L: 7/7 MS: 1 EraseBytes-
+#775	REDUCE cov: 7 ft: 8 corp: 4/13b lim: 4096 exec/s: 0 rss: 31Mb L: 4/4 MS: 1 EraseBytes-
+fuzz_url: http_parser.c:2243: const char *http_errno_name(enum http_errno): Assertion `((size_t) err) &lt; ARRAY_SIZE(http_strerror_tab)&#39; failed.
+AddressSanitizer:DEADLYSIGNAL
+=================================================================
+[1m[31m==12==ERROR: AddressSanitizer: ABRT on unknown address 0x00000000000c (pc 0x7f3efa82f00b bp 0x7f3efa9a4588 sp 0x7ffd7ffe2910 T0)
+[1m[0mSCARINESS: 10 (signal)
+    #0 0x7f3efa82f00b in raise (/lib/x86_64-linux-gnu/libc.so.6+0x4300b) (BuildId: 0702430aef5fa3dda43986563e9ffcc47efbd75e)
+    #1 0x7f3efa80e858 in abort (/lib/x86_64-linux-gnu/libc.so.6+0x22858) (BuildId: 0702430aef5fa3dda43986563e9ffcc47efbd75e)
+    #2 0x7f3efa80e728  (/lib/x86_64-linux-gnu/libc.so.6+0x22728) (BuildId: 0702430aef5fa3dda43986563e9ffcc47efbd75e)
+    #3 0x7f3efa81ffd5 in __assert_fail (/lib/x86_64-linux-gnu/libc.so.6+0x33fd5) (BuildId: 0702430aef5fa3dda43986563e9ffcc47efbd75e)
+    #4 0x55d846a13359 in http_errno_name /src/http-parser/http_parser.c:2243:3
+    #5 0x55d846a14b80 in LLVMFuzzerTestOneInput /src/http-parser/fuzzers/fuzz_url.c:13:5
+    #6 0x55d8468b9470 in fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:614:13
+    #7 0x55d8468b8c95 in fuzzer::Fuzzer::RunOne(unsigned char const*, unsigned long, bool, fuzzer::InputInfo*, bool, bool*) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:516:7
+    #8 0x55d8468ba465 in fuzzer::Fuzzer::MutateAndTestOne() /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:760:19
+    #9 0x55d8468bb255 in fuzzer::Fuzzer::Loop(std::__Fuzzer::vector&lt;fuzzer::SizedFile, std::__Fuzzer::allocator&lt;fuzzer::SizedFile&gt;&gt;&amp;) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:905:5
+    #10 0x55d8468a9566 in fuzzer::FuzzerDriver(int*, char***, int (*)(unsigned char const*, unsigned long)) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:914:6
+    #11 0x55d8468d5a92 in main /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMain.cpp:20:10
+    #12 0x7f3efa810082 in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x24082) (BuildId: 0702430aef5fa3dda43986563e9ffcc47efbd75e)
+    #13 0x55d84689a6dd in _start (/out/fuzz_url+0x466dd)
+
+DEDUP_TOKEN: raise--abort--
+AddressSanitizer can not provide additional info.
+SUMMARY: AddressSanitizer: ABRT (/lib/x86_64-linux-gnu/libc.so.6+0x4300b) (BuildId: 0702430aef5fa3dda43986563e9ffcc47efbd75e) in raise
+==12==ABORTING
+MS: 3 InsertByte-CopyPart-InsertByte-; base unit: 9069ca78e7450a285173431b3e52c5c25299e473
+0x2e,0x0,0x0,0x0,0x0,0x0,
+.\000\000\000\000\000
+artifact_prefix=&#39;./&#39;; Test unit written to ./crash-1c13f8e8a4cd10aed77543559ed34de7ad381686
+Base64: LgAAAAAA
+stat::number_of_executed_units: 783
+stat::average_exec_per_sec:     0
+stat::new_units_added:          24
+stat::slowest_unit_time_sec:    0
+stat::peak_rss_mb:              31
+
+</pre>
+
+
+</body>

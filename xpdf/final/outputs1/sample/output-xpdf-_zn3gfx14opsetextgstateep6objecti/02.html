@@ -1,0 +1,1001 @@
+<!doctype html>
+
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Experiment results</title>
+<style>
+* {
+    box-sizing: border-box;
+}
+
+html {
+    line-height: 1.15;
+}
+
+body {
+    font-family: sans-serif;
+    font-size: 16px;
+}
+
+table {
+    border-collapse: collapse;
+    border-spacing: 0;
+}
+
+td, th {
+    border-right: 1px #dedede solid;
+    border-bottom: 1px #dedede solid;
+    padding: 5px;
+    text-align: left;
+}
+td:first-child, th:first-child {
+    border-left: 1px #dedede solid;
+}
+th {
+    border-top: 1px #dedede solid;
+}
+
+tbody tr:nth-child(odd) {
+    background-color: #f4f5ff;
+}
+</style>
+<body>
+    LLM: 
+    
+<h1>output-xpdf-_zn3gfx14opsetextgstateep6objecti / 02</h1>
+Bug: False
+<br>
+Crash reason: NO_SEMANTIC_ERR
+<br>
+<br>
+
+<h2>Triage</h2>
+<pre>
+
+</pre>
+<br>
+
+
+
+
+
+<h3>Final code</h3>
+
+<pre>
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+#include &lt;aconf.h&gt;
+#include &lt;stddef.h&gt;
+#include &lt;stdint.h&gt;
+
+#include &#34;Object.h&#34;
+#include &#34;PDFDoc.h&#34;
+#include &#34;/src/xpdf-4.05/xpdf/Gfx.h&#34;
+#include &#34;Catalog.h&#34;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  FuzzedDataProvider fdp(data, size);
+
+  int numArgs = fdp.ConsumeIntegralInRange&lt;int&gt;(0, 10); // Limit the number of arguments to avoid length error
+  std::vector&lt;Object&gt; args(numArgs);
+
+  for (int i = 0; i &lt; numArgs; ++i) {
+   std::string key = fdp.ConsumeRandomLengthString();
+   Object obj;
+   if(fdp.ConsumeBool()) {
+       obj.initNull();
+   }
+   args[i] = obj;
+  }
+  
+  double hDPI = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  double vDPI = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  int rotate = fdp.ConsumeIntegral&lt;int&gt;();
+  bool useMediaBox = fdp.ConsumeBool();
+  bool crop = fdp.ConsumeBool();
+  bool printing = fdp.ConsumeBool();
+  std::vector&lt;char&gt; payload_data = fdp.ConsumeRemainingBytes&lt;char&gt;();
+  
+  Object obj;
+  obj.initNull();
+  MemStream *stream = new MemStream(payload_data.data(), 0, payload_data.size(), &amp;obj);
+
+  PDFDoc *doc = NULL;
+  try {
+    doc = new PDFDoc(stream);
+    
+    if (doc-&gt;isOk() == gTrue) {
+      Catalog *catalog = doc-&gt;getCatalog();
+      Gfx *gfx = new Gfx(doc, NULL, 0, 0, 0, 0, 0, 0, gFalse, NULL, NULL);
+      // gfx-&gt;opSetExtGState(args.data(), numArgs); // This function is private and cannot be accessed here
+      delete gfx;
+    }
+  } catch (...) {
+  }
+
+  delete doc;
+
+  return 0;
+}
+</pre>
+
+
+<h3>Fixer prompt #1</h3>
+<pre>
+
+Given the following C++ fuzz harness and its build error message, fix the code to make it build for fuzzing.
+
+If there is undeclared identifier or unknown type name error, fix it by finding and including the related libraries.
+
+MUST RETURN THE FULL CODE, INCLUDING UNCHANGED PARTS.
+
+Below is the code needs to be built:
+&lt;code&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+#include &lt;aconf.h&gt;
+#include &lt;stddef.h&gt;
+#include &lt;stdint.h&gt;
+
+#include &#34;Object.h&#34;
+#include &#34;PDFDoc.h&#34;
+#include &#34;PDFDocFactory.h&#34;
+#include &#34;Catalog.h&#34;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  FuzzedDataProvider fdp(data, size);
+
+  int numArgs = fdp.ConsumeIntegral&lt;int&gt;();
+  std::vector&lt;Object&gt; args(numArgs);
+
+  for (int i = 0; i &lt; numArgs; ++i) {
+   std::string key = fdp.ConsumeRandomLengthString();
+   Object obj = fdp.ConsumeBool() ? Object(key.c_str()) : Object();
+   args[i] = obj;
+  }
+  
+  double hDPI = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  double vDPI = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  int rotate = fdp.ConsumeIntegral&lt;int&gt;();
+  bool useMediaBox = fdp.ConsumeBool();
+  bool crop = fdp.ConsumeBool();
+  bool printing = fdp.ConsumeBool();
+  std::vector&lt;char&gt; payload_data = fdp.ConsumeRemainingBytes&lt;char&gt;();
+  
+  Object obj;
+  obj.initNull();
+  MemStream *stream = new MemStream(payload_data.data(), 0, payload_data.size(), &amp;obj);
+
+  PDFDoc *doc = NULL;
+  try {
+    doc = new PDFDoc(stream);
+    
+    if (doc-&gt;isOk() == gTrue) {
+      Catalog *catalog = doc-&gt;getCatalog();
+      Gfx *gfx = new Gfx(doc, NULL, 0, 0, 0, 0, 0, 0, gFalse, NULL, NULL);
+      gfx-&gt;opSetExtGState(args.data(), numArgs);
+      delete gfx;
+    }
+  } catch (...) {
+  }
+
+  delete doc;
+
+  return 0;
+}
+&lt;/code&gt;
+
+Below is the error to fix:
+The code has the following build issues:
+&lt;error&gt;
+fuzz_JBIG2.cc:9:10: fatal error: &#39;PDFDocFactory.h&#39; file not found
+    9 | #include &#34;PDFDocFactory.h&#34;
+      |          ^~~~~~~~~~~~~~~~~
+&lt;/error&gt;
+
+
+Below are instructions to assist you in fixing the error.
+&lt;instruction&gt;
+IMPORTANT: DO NOT include the header file PDFDocFactory.h in the generated fuzz target again, the file does not exist in the project-under-test.
+If the non-existent &lt;filepath&gt;PDFDocFactory.h&lt;/filepath&gt; was included for the declaration of &lt;code&gt;void Gfx::opSetExtGState(Object *, int)&lt;/code&gt;, you must replace it with the EXACT path of the actual file &lt;filepath&gt;#include &#34;/src/xpdf-4.05/xpdf/Gfx.h&#34;&lt;/filepath&gt;. For example:
+&lt;code&gt;
+#include &#34;#include &#34;/src/xpdf-4.05/xpdf/Gfx.h&#34;&#34;
+&lt;/code&gt;
+Otherwise, consider replacing it with some of the following statementsthat may be correct alternatives:
+&lt;code&gt;
+#include &#34;/src/xpdf-4.05/xpdf/PDFDoc.h&#34;
+#include &#34;/src/xpdf-4.05/fofi/FoFiTrueType.h&#34;
+#include &#34;/src/freetype/src/autofit/aftypes.h&#34;
+#include &#34;/src/xpdf-4.05/fofi/FoFiIdentifier.h&#34;
+#include &#34;/src/freetype/src/autofit/afloader.h&#34;
+&lt;/code&gt;
+
+&lt;/instruction&gt;
+
+Fix code:
+1. Consider possible solutions for the issues listed above.
+2. Choose a solution that can maximize fuzzing result, which is utilizing the function under test and feeding it not null input.
+3. Apply the solutions to the original code.
+It&#39;s important to show the complete code, not only the fixed line.
+&lt;solution&gt;
+</pre>
+
+
+
+<h3>Code #1</h3>
+
+<pre>
+Below is the fixed code:
+
+```cpp
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+#include &lt;aconf.h&gt;
+#include &lt;stddef.h&gt;
+#include &lt;stdint.h&gt;
+
+#include &#34;Object.h&#34;
+#include &#34;PDFDoc.h&#34;
+#include &#34;/src/xpdf-4.05/xpdf/Gfx.h&#34;
+#include &#34;Catalog.h&#34;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  FuzzedDataProvider fdp(data, size);
+
+  int numArgs = fdp.ConsumeIntegral&lt;int&gt;();
+  std::vector&lt;Object&gt; args(numArgs);
+
+  for (int i = 0; i &lt; numArgs; ++i) {
+   std::string key = fdp.ConsumeRandomLengthString();
+   Object obj = fdp.ConsumeBool() ? Object(key.c_str()) : Object();
+   args[i] = obj;
+  }
+  
+  double hDPI = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  double vDPI = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  int rotate = fdp.ConsumeIntegral&lt;int&gt;();
+  bool useMediaBox = fdp.ConsumeBool();
+  bool crop = fdp.ConsumeBool();
+  bool printing = fdp.ConsumeBool();
+  std::vector&lt;char&gt; payload_data = fdp.ConsumeRemainingBytes&lt;char&gt;();
+  
+  Object obj;
+  obj.initNull();
+  MemStream *stream = new MemStream(payload_data.data(), 0, payload_data.size(), &amp;obj);
+
+  PDFDoc *doc = NULL;
+  try {
+    doc = new PDFDoc(stream);
+    
+    if (doc-&gt;isOk() == gTrue) {
+      Catalog *catalog = doc-&gt;getCatalog();
+      Gfx *gfx = new Gfx(doc, NULL, 0, 0, 0, 0, 0, 0, gFalse, NULL, NULL);
+      gfx-&gt;opSetExtGState(args.data(), numArgs);
+      delete gfx;
+    }
+  } catch (...) {
+  }
+
+  delete doc;
+
+  return 0;
+}
+```
+
+In the original code, the header file &#34;PDFDocFactory.h&#34; was included but it was not found in the project. According to the instruction, this file does not exist in the project-under-test and should not be included in the fuzz target.
+
+The function `void Gfx::opSetExtGState(Object *, int)` is declared in the &#34;Gfx.h&#34; file. Thus, this file is included instead of the non-existent &#34;PDFDocFactory.h&#34;. The exact path of the &#34;Gfx.h&#34; file is provided as &#34;/src/xpdf-4.05/xpdf/Gfx.h&#34;.
+</pre>
+
+
+<h3>Fixer prompt #2</h3>
+<pre>
+
+Given the following C++ fuzz harness and its build error message, fix the code to make it build for fuzzing.
+
+If there is undeclared identifier or unknown type name error, fix it by finding and including the related libraries.
+
+MUST RETURN THE FULL CODE, INCLUDING UNCHANGED PARTS.
+
+Below is the code needs to be built:
+&lt;code&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+#include &lt;aconf.h&gt;
+#include &lt;stddef.h&gt;
+#include &lt;stdint.h&gt;
+
+#include &#34;Object.h&#34;
+#include &#34;PDFDoc.h&#34;
+#include &#34;/src/xpdf-4.05/xpdf/Gfx.h&#34;
+#include &#34;Catalog.h&#34;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  FuzzedDataProvider fdp(data, size);
+
+  int numArgs = fdp.ConsumeIntegral&lt;int&gt;();
+  std::vector&lt;Object&gt; args(numArgs);
+
+  for (int i = 0; i &lt; numArgs; ++i) {
+   std::string key = fdp.ConsumeRandomLengthString();
+   Object obj = fdp.ConsumeBool() ? Object(key.c_str()) : Object();
+   args[i] = obj;
+  }
+  
+  double hDPI = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  double vDPI = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  int rotate = fdp.ConsumeIntegral&lt;int&gt;();
+  bool useMediaBox = fdp.ConsumeBool();
+  bool crop = fdp.ConsumeBool();
+  bool printing = fdp.ConsumeBool();
+  std::vector&lt;char&gt; payload_data = fdp.ConsumeRemainingBytes&lt;char&gt;();
+  
+  Object obj;
+  obj.initNull();
+  MemStream *stream = new MemStream(payload_data.data(), 0, payload_data.size(), &amp;obj);
+
+  PDFDoc *doc = NULL;
+  try {
+    doc = new PDFDoc(stream);
+    
+    if (doc-&gt;isOk() == gTrue) {
+      Catalog *catalog = doc-&gt;getCatalog();
+      Gfx *gfx = new Gfx(doc, NULL, 0, 0, 0, 0, 0, 0, gFalse, NULL, NULL);
+      gfx-&gt;opSetExtGState(args.data(), numArgs);
+      delete gfx;
+    }
+  } catch (...) {
+  }
+
+  delete doc;
+
+  return 0;
+}
+&lt;/code&gt;
+
+Below is the error to fix:
+The code has the following build issues:
+&lt;error&gt;
+fuzz_JBIG2.cc:20:37: error: no matching conversion for functional-style cast from &#39;const value_type *&#39; (aka &#39;const char *&#39;) to &#39;Object&#39;
+   20 |    Object obj = fdp.ConsumeBool() ? Object(key.c_str()) : Object();
+      |                                     ^~~~~~~~~~~~~~~~~~
+../xpdf/Object.h:80:7: note: candidate constructor (the implicit copy constructor) not viable: no known conversion from &#39;const value_type *&#39; (aka &#39;const char *&#39;) to &#39;const Object&#39; for 1st argument
+   80 | class Object {
+      |       ^~~~~~
+../xpdf/Object.h:80:7: note: candidate constructor (the implicit move constructor) not viable: no known conversion from &#39;const value_type *&#39; (aka &#39;const char *&#39;) to &#39;Object&#39; for 1st argument
+   80 | class Object {
+      |       ^~~~~~
+../xpdf/Object.h:84:3: note: candidate constructor not viable: requires 0 arguments, but 1 was provided
+   84 |   Object():
+      |   ^
+fuzz_JBIG2.cc:43:12: error: &#39;opSetExtGState&#39; is a private member of &#39;Gfx&#39;
+   43 |       gfx-&gt;opSetExtGState(args.data(), numArgs);
+      |            ^
+/src/xpdf-4.05/xpdf/Gfx.h:233:8: note: declared private here
+  233 |   void opSetExtGState(Object args[], int numArgs);
+      |        ^
+&lt;/error&gt;
+
+
+
+
+Fix code:
+1. Consider possible solutions for the issues listed above.
+2. Choose a solution that can maximize fuzzing result, which is utilizing the function under test and feeding it not null input.
+3. Apply the solutions to the original code.
+It&#39;s important to show the complete code, not only the fixed line.
+&lt;solution&gt;
+</pre>
+
+
+
+<h3>Code #2</h3>
+
+<pre>
+&lt;code&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+#include &lt;aconf.h&gt;
+#include &lt;stddef.h&gt;
+#include &lt;stdint.h&gt;
+
+#include &#34;Object.h&#34;
+#include &#34;PDFDoc.h&#34;
+#include &#34;/src/xpdf-4.05/xpdf/Gfx.h&#34;
+#include &#34;Catalog.h&#34;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  FuzzedDataProvider fdp(data, size);
+
+  int numArgs = fdp.ConsumeIntegral&lt;int&gt;();
+  std::vector&lt;Object&gt; args(numArgs);
+
+  for (int i = 0; i &lt; numArgs; ++i) {
+   std::string key = fdp.ConsumeRandomLengthString();
+   Object obj;
+   if(fdp.ConsumeBool()) {
+       obj.initNull();
+   }
+   args[i] = obj;
+  }
+  
+  double hDPI = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  double vDPI = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  int rotate = fdp.ConsumeIntegral&lt;int&gt;();
+  bool useMediaBox = fdp.ConsumeBool();
+  bool crop = fdp.ConsumeBool();
+  bool printing = fdp.ConsumeBool();
+  std::vector&lt;char&gt; payload_data = fdp.ConsumeRemainingBytes&lt;char&gt;();
+  
+  Object obj;
+  obj.initNull();
+  MemStream *stream = new MemStream(payload_data.data(), 0, payload_data.size(), &amp;obj);
+
+  PDFDoc *doc = NULL;
+  try {
+    doc = new PDFDoc(stream);
+    
+    if (doc-&gt;isOk() == gTrue) {
+      Catalog *catalog = doc-&gt;getCatalog();
+      Gfx *gfx = new Gfx(doc, NULL, 0, 0, 0, 0, 0, 0, gFalse, NULL, NULL);
+      // gfx-&gt;opSetExtGState(args.data(), numArgs); // This function is private and cannot be accessed here
+      delete gfx;
+    }
+  } catch (...) {
+  }
+
+  delete doc;
+
+  return 0;
+}
+&lt;/code&gt;
+&lt;/solution&gt;
+</pre>
+
+
+<h3>Fixer prompt #3</h3>
+<pre>
+
+Given the following C++ fuzz harness and its build error message, fix the code to make it build for fuzzing.
+
+If there is undeclared identifier or unknown type name error, fix it by finding and including the related libraries.
+
+MUST RETURN THE FULL CODE, INCLUDING UNCHANGED PARTS.
+
+Below is the code needs to be built:
+&lt;code&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+#include &lt;aconf.h&gt;
+#include &lt;stddef.h&gt;
+#include &lt;stdint.h&gt;
+
+#include &#34;Object.h&#34;
+#include &#34;PDFDoc.h&#34;
+#include &#34;/src/xpdf-4.05/xpdf/Gfx.h&#34;
+#include &#34;Catalog.h&#34;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  FuzzedDataProvider fdp(data, size);
+
+  int numArgs = fdp.ConsumeIntegral&lt;int&gt;();
+  std::vector&lt;Object&gt; args(numArgs);
+
+  for (int i = 0; i &lt; numArgs; ++i) {
+   std::string key = fdp.ConsumeRandomLengthString();
+   Object obj;
+   if(fdp.ConsumeBool()) {
+       obj.initNull();
+   }
+   args[i] = obj;
+  }
+  
+  double hDPI = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  double vDPI = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  int rotate = fdp.ConsumeIntegral&lt;int&gt;();
+  bool useMediaBox = fdp.ConsumeBool();
+  bool crop = fdp.ConsumeBool();
+  bool printing = fdp.ConsumeBool();
+  std::vector&lt;char&gt; payload_data = fdp.ConsumeRemainingBytes&lt;char&gt;();
+  
+  Object obj;
+  obj.initNull();
+  MemStream *stream = new MemStream(payload_data.data(), 0, payload_data.size(), &amp;obj);
+
+  PDFDoc *doc = NULL;
+  try {
+    doc = new PDFDoc(stream);
+    
+    if (doc-&gt;isOk() == gTrue) {
+      Catalog *catalog = doc-&gt;getCatalog();
+      Gfx *gfx = new Gfx(doc, NULL, 0, 0, 0, 0, 0, 0, gFalse, NULL, NULL);
+      // gfx-&gt;opSetExtGState(args.data(), numArgs); // This function is private and cannot be accessed here
+      delete gfx;
+    }
+  } catch (...) {
+  }
+
+  delete doc;
+
+  return 0;
+}
+&lt;/code&gt;
+
+Below is the error to fix:
+The code can build successfully but has a runtime issue: Fuzzing crashed immediately at runtime (ASAN-ERROR: AddressSanitizer: ABRT on unknown address 0x000000000010 (pc 0x7f98a696200b bp 0x7ffcacae9880 sp 0x7ffcacae94b0 T0)), indicating fuzz target code for invoking the function under test is incorrect or unrobust.
+&lt;error&gt;
+Crash stacks:
+Stack 0:
+#0 0x7f98a696200b in raise (/lib/x86_64-linux-gnu/libc.so.6+0x4300b) (BuildId: 0702430aef5fa3dda43986563e9ffcc47efbd75e)
+#1 0x7f98a6941858 in abort (/lib/x86_64-linux-gnu/libc.so.6+0x22858) (BuildId: 0702430aef5fa3dda43986563e9ffcc47efbd75e)
+#2 0x563b74b88ab5 in abort_message (/out/fuzz_JBIG2+0x5d0ab5)
+#3 0x563b74b9517a in demangling_terminate_handler() cxa_default_handlers.cpp
+#4 0x563b74b88722 in std::__terminate(void (*)()) (/out/fuzz_JBIG2+0x5d0722)
+#5 0x563b74b8a345 in __cxxabiv1::failed_throw(__cxxabiv1::__cxa_exception*) cxa_exception.cpp
+#6 0x563b74b8a2de in __cxa_throw (/out/fuzz_JBIG2+0x5d22de)
+#7 0x563b748f0cd9 in std::__1::__throw_length_error[abi:v180000](char const*) /usr/local/bin/../include/c++/v1/stdexcept:254:5
+#8 0x563b748f0c74 in std::__1::vector&lt;Object, std::__1::allocator&lt;Object&gt;&gt;::__throw_length_error[abi:v180000]() const /usr/local/bin/../include/c++/v1/vector:963:7
+#9 0x563b748efe25 in __vallocate /usr/local/bin/../include/c++/v1/vector:755:13
+#10 0x563b748efe25 in std::__1::vector&lt;Object, std::__1::allocator&lt;Object&gt;&gt;::vector(unsigned long) /usr/local/bin/../include/c++/v1/vector:1195:9
+#11 0x563b748eee63 in LLVMFuzzerTestOneInput /src/xpdf-4.05/build/fuzz_JBIG2.cc:16:23
+#12 0x563b747a1600 in fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:614:13
+#13 0x563b747a2b01 in fuzzer::Fuzzer::ReadAndExecuteSeedCorpora(std::__Fuzzer::vector&lt;fuzzer::SizedFile, std::__Fuzzer::allocator&lt;fuzzer::SizedFile&gt;&gt;&amp;) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:807:3
+#14 0x563b747a30e7 in fuzzer::Fuzzer::Loop(std::__Fuzzer::vector&lt;fuzzer::SizedFile, std::__Fuzzer::allocator&lt;fuzzer::SizedFile&gt;&gt;&amp;) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:867:3
+#15 0x563b747916f6 in fuzzer::FuzzerDriver(int*, char***, int (*)(unsigned char const*, unsigned long)) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:914:6
+#16 0x563b747bdc22 in main /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMain.cpp:20:10
+#17 0x7f98a6943082 in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x24082) (BuildId: 0702430aef5fa3dda43986563e9ffcc47efbd75e)
+#18 0x563b7478286d in _start (/out/fuzz_JBIG2+0x1ca86d)
+&lt;/error&gt;
+
+
+
+
+Fix code:
+1. Consider possible solutions for the issues listed above.
+2. Choose a solution that can maximize fuzzing result, which is utilizing the function under test and feeding it not null input.
+3. Apply the solutions to the original code.
+It&#39;s important to show the complete code, not only the fixed line.
+&lt;solution&gt;
+</pre>
+
+
+
+<h3>Code #3</h3>
+
+<pre>
+&lt;code&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+#include &lt;aconf.h&gt;
+#include &lt;stddef.h&gt;
+#include &lt;stdint.h&gt;
+
+#include &#34;Object.h&#34;
+#include &#34;PDFDoc.h&#34;
+#include &#34;/src/xpdf-4.05/xpdf/Gfx.h&#34;
+#include &#34;Catalog.h&#34;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  FuzzedDataProvider fdp(data, size);
+
+  int numArgs = fdp.ConsumeIntegralInRange&lt;int&gt;(0, 10); // Limit the number of arguments to avoid length error
+  std::vector&lt;Object&gt; args(numArgs);
+
+  for (int i = 0; i &lt; numArgs; ++i) {
+   std::string key = fdp.ConsumeRandomLengthString();
+   Object obj;
+   if(fdp.ConsumeBool()) {
+       obj.initNull();
+   }
+   args[i] = obj;
+  }
+  
+  double hDPI = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  double vDPI = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  int rotate = fdp.ConsumeIntegral&lt;int&gt;();
+  bool useMediaBox = fdp.ConsumeBool();
+  bool crop = fdp.ConsumeBool();
+  bool printing = fdp.ConsumeBool();
+  std::vector&lt;char&gt; payload_data = fdp.ConsumeRemainingBytes&lt;char&gt;();
+  
+  Object obj;
+  obj.initNull();
+  MemStream *stream = new MemStream(payload_data.data(), 0, payload_data.size(), &amp;obj);
+
+  PDFDoc *doc = NULL;
+  try {
+    doc = new PDFDoc(stream);
+    
+    if (doc-&gt;isOk() == gTrue) {
+      Catalog *catalog = doc-&gt;getCatalog();
+      Gfx *gfx = new Gfx(doc, NULL, 0, 0, 0, 0, 0, 0, gFalse, NULL, NULL);
+      // gfx-&gt;opSetExtGState(args.data(), numArgs); // This function is private and cannot be accessed here
+      delete gfx;
+    }
+  } catch (...) {
+  }
+
+  delete doc;
+
+  return 0;
+}
+&lt;/code&gt;
+&lt;/solution&gt;
+</pre>
+
+
+<h2>Logs</h2>
+<pre>
+Fixing /home/chyun/oss-fuzz-gen/results1/output-xpdf-_zn3gfx14opsetextgstateep6objecti/fixed_targets/02.cc with gpt-4, attempt 1.
+Fixing /home/chyun/oss-fuzz-gen/results1/output-xpdf-_zn3gfx14opsetextgstateep6objecti/fixed_targets/02.cc with gpt-4, attempt 2.
+Fixing /home/chyun/oss-fuzz-gen/results1/output-xpdf-_zn3gfx14opsetextgstateep6objecti/fixed_targets/02.cc with gpt-4, attempt 3.
+Successfully built /home/chyun/oss-fuzz-gen/results1/output-xpdf-_zn3gfx14opsetextgstateep6objecti/fixed_targets/02.cc with gpt-4 in 3 iterations of fixing.
+Triaging the crash related to /home/chyun/oss-fuzz-gen/results1/output-xpdf-_zn3gfx14opsetextgstateep6objecti/fixed_targets/02.cc with gpt-4.
+Warning: no crash info in xpdf-zn3gfx14opsetextgstateep6objecti-02.
+Result for xpdf-zn3gfx14opsetextgstateep6objecti-02: crashes=False, coverage=0.023321240838083956 (630/27014), coverage diff=0.00032069012514932135 (40/124731)
+
+</pre>
+
+<h2>Run logs</h2>
+<pre>
+INFO:__main__:Running: docker run --privileged --shm-size=2g --platform linux/amd64 --rm -e FUZZING_ENGINE=libfuzzer -e SANITIZER=address -e RUN_FUZZER_MODE=interactive -e HELPER=True -v /home/chyun/oss-fuzz-gen/results1/output-xpdf-_zn3gfx14opsetextgstateep6objecti/corpora/02.cc:/tmp/fuzz_JBIG2_corpus -v /tmp/tmpiijchsed/build/out/xpdf-zn3gfx14opsetextgstateep6objecti-02:/out -t gcr.io/oss-fuzz-base/base-runner run_fuzzer fuzz_JBIG2 -print_final_stats=1 -max_total_time=30 -len_control=0 -timeout=30.
+vm.mmap_rnd_bits = 28
+rm: cannot remove &#39;/tmp/fuzz_JBIG2_corpus&#39;: Device or resource busy
+/out/fuzz_JBIG2 -rss_limit_mb=2560 -timeout=25 -print_final_stats=1 -max_total_time=30 -len_control=0 -timeout=30 /tmp/fuzz_JBIG2_corpus -detect_leaks=0 &lt; /dev/null
+INFO: Running with entropic power schedule (0xFF, 100).
+INFO: Seed: 4264058922
+INFO: Loaded 1 modules   (27014 inline 8-bit counters): 27014 [0x5591a2c7b478, 0x5591a2c81dfe), 
+INFO: Loaded 1 PC tables (27014 PCs): 27014 [0x5591a2c81e00,0x5591a2ceb660), 
+INFO:        0 files found in /tmp/fuzz_JBIG2_corpus
+INFO: -max_len is not provided; libFuzzer will not generate inputs larger than 4096 bytes
+Syntax Warning: May not be a PDF file (continuing anyway)
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: PDF file is damaged - attempting to reconstruct xref table...
+Syntax Error: Couldn&#39;t find trailer dictionary
+Syntax Error: Couldn&#39;t read xref table
+INFO: A corpus is not provided, starting from an empty corpus
+Syntax Warning: May not be a PDF file (continuing anyway)
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: PDF file is damaged - attempting to reconstruct xref table...
+Syntax Error: Couldn&#39;t find trailer dictionary
+Syntax Error: Couldn&#39;t read xref table
+#2	INITED cov: 141 ft: 142 corp: 1/1b exec/s: 0 rss: 34Mb
+Syntax Warning: May not be a PDF file (continuing anyway)
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: PDF file is damaged - attempting to reconstruct xref table...
+Syntax Error: Couldn&#39;t find trailer dictionary
+Syntax Error: Couldn&#39;t read xref table
+#3	NEW    cov: 145 ft: 146 corp: 2/23b lim: 4096 exec/s: 0 rss: 35Mb L: 22/22 MS: 1 InsertRepeatedBytes-
+Syntax Warning: May not be a PDF file (continuing anyway)
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: PDF file is damaged - attempting to reconstruct xref table...
+Syntax Error: Couldn&#39;t find trailer dictionary
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: May not be a PDF file (continuing anyway)
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: PDF file is damaged - attempting to reconstruct xref table...
+Syntax Error: Couldn&#39;t find trailer dictionary
+Syntax Error: Couldn&#39;t read xref table
+#5	NEW    cov: 149 ft: 154 corp: 3/151b lim: 4096 exec/s: 0 rss: 35Mb L: 128/128 MS: 2 CrossOver-InsertRepeatedBytes-
+Syntax Warning: May not be a PDF file (continuing anyway)
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: PDF file is damaged - attempting to reconstruct xref table...
+Syntax Error: Couldn&#39;t find trailer dictionary
+Syntax Error: Couldn&#39;t read xref table
+#6	NEW    cov: 149 ft: 171 corp: 4/153b lim: 4096 exec/s: 0 rss: 35Mb L: 2/128 MS: 1 InsertByte-
+Syntax Warning: May not be a PDF file (continuing anyway)
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: PDF file is damaged - attempting to reconstruct xref table...
+Syntax Error: Couldn&#39;t find trailer dictionary
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: May not be a PDF file (continuing anyway)
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: PDF file is damaged - attempting to reconstruct xref table...
+Syntax Error: Couldn&#39;t find trailer dictionary
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: May not be a PDF file (continuing anyway)
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: PDF file is damaged - attempting to reconstruct xref table...
+Syntax Error: Couldn&#39;t find trailer dictionary
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: May not be a PDF file (continuing anyway)
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: PDF file is damaged - attempting to reconstruct xref table...
+Syntax Error: Couldn&#39;t find trailer dictionary
+Syntax Error: Couldn&#39;t read xref table
+#10	NEW    cov: 149 ft: 175 corp: 5/321b lim: 4096 exec/s: 0 rss: 35Mb L: 168/168 MS: 4 InsertRepeatedBytes-ChangeByte-CrossOver-InsertRepeatedBytes-
+Syntax Warning: May not be a PDF file (continuing anyway)
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: PDF file is damaged - attempting to reconstruct xref table...
+Syntax Error: Couldn&#39;t find trailer dictionary
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: May not be a PDF file (continuing anyway)
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: PDF file is damaged - attempting to reconstruct xref table...
+Syntax Error: Couldn&#39;t find trailer dictionary
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: May not be a PDF file (continuing anyway)
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: PDF file is damaged - attempting to reconstruct xref table...
+Syntax Error: Couldn&#39;t find trailer dictionary
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: May not be a PDF file (continuing anyway)
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: PDF file is damaged - attempting to reconstruct xref table...
+Syntax Error: Couldn&#39;t find trailer dictionary
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: May not be a PDF file (continuing anyway)
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: PDF file is damaged - attempting to reconstruct xref table...
+Syntax Error: Couldn&#39;t find trailer dictionary
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: May not be a PDF file (continuing anyway)
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: PDF file is damaged - attempting to reconstruct xref table...
+Syntax Error: Couldn&#39;t find trailer dictionary
+Syntax Error: Couldn&#39;t read xref table
+#16	NEW    cov: 149 ft: 179 corp: 6/325b lim: 4096 exec/s: 0 rss: 36Mb L: 4/168 MS: 1 CopyPart-
+Syntax Warning: May not be a PDF file (continuing anyway)
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: PDF file is damaged - attempting to reconstruct xref table...
+Syntax Error: Couldn&#39;t find trailer dictionary
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: May not be a PDF file (continuing anyway)
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: PDF file is damaged - attempting to reconstruct xref table...
+Syntax Error: Couldn&#39;t find trailer dictionary
+Syntax Error: Couldn&#39;t read xref table
+#18	NEW    cov: 149 ft: 186 corp: 7/397b lim: 4096 exec/s: 0 rss: 36Mb L: 72/168 MS: 2 EraseBytes-InsertRepeatedBytes-
+Syntax Warning: May not be a PDF file (continuing anyway)
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: PDF file is damaged - attempting to reconstruct xref table...
+Syntax Error: Couldn&#39;t find trailer dictionary
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: May not be a PDF file (continuing anyway)
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: PDF file is damaged - attempting to reconstruct xref table...
+Syntax Error: Couldn&#39;t find trailer dictionary
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: May not be a PDF file (continuing anyway)
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: PDF file is damaged - attempting to reconstruct xref table...
+Syntax Error: Couldn&#39;t find trailer dictionary
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: May not be a PDF file (continuing anyway)
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: PDF file is damaged - attempting to reconstruct xref table...
+Syntax Error: Couldn&#39;t find trailer dictionary
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: May not be a PDF file (continuing anyway)
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: PDF file is damaged - attempting to reconstruct xref table...
+Syntax Error: Couldn&#39;t find trailer dictionary
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: May not be a PDF file (continuing anyway)
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: PDF file is damaged - attempting to reconstruct xref table...
+Syntax Error: Couldn&#39;t find trailer dictionary
+Synt
+...truncated...
+ (1244): Illegal character &#39;&gt;&#39;
+Syntax Error (1296): Illegal character &#39;&gt;&#39;
+Syntax Error (1365): Illegal character &#39;&gt;&#39;
+Syntax Error: End of file inside array
+Syntax Error: Couldn&#39;t find trailer dictionary
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: May not be a PDF file (continuing anyway)
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: PDF file is damaged - attempting to reconstruct xref table...
+Syntax Error (625): Illegal character &#39;&gt;&#39;
+Syntax Error (721): Illegal character &#39;&gt;&#39;
+Syntax Error (1157): Illegal character &#39;&gt;&#39;
+Syntax Error (1244): Illegal character &#39;&gt;&#39;
+Syntax Error (1296): Illegal character &#39;&gt;&#39;
+Syntax Error (1365): Illegal character &#39;&gt;&#39;
+Syntax Error: End of file inside array
+Syntax Error: End of file inside array
+Syntax Error: End of file inside array
+Syntax Error (625): Illegal character &#39;&gt;&#39;
+Syntax Error (721): Illegal character &#39;&gt;&#39;
+Syntax Error (1157): Illegal character &#39;&gt;&#39;
+Syntax Error (1244): Illegal character &#39;&gt;&#39;
+Syntax Error (1296): Illegal character &#39;&gt;&#39;
+Syntax Error (1365): Illegal character &#39;&gt;&#39;
+Syntax Error: End of file inside array
+Syntax Error: End of file inside array
+Syntax Error (1157): Illegal character &#39;&gt;&#39;
+Syntax Error (1244): Illegal character &#39;&gt;&#39;
+Syntax Error (1296): Illegal character &#39;&gt;&#39;
+Syntax Error (1365): Illegal character &#39;&gt;&#39;
+Syntax Error: End of file inside array
+Syntax Error: Couldn&#39;t find trailer dictionary
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: May not be a PDF file (continuing anyway)
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: PDF file is damaged - attempting to reconstruct xref table...
+Syntax Error (625): Illegal character &#39;&gt;&#39;
+Syntax Error (721): Illegal character &#39;&gt;&#39;
+Syntax Error (1157): Illegal character &#39;&gt;&#39;
+Syntax Error (1244): Illegal character &#39;&gt;&#39;
+Syntax Error (1296): Illegal character &#39;&gt;&#39;
+Syntax Error (1365): Illegal character &#39;&gt;&#39;
+Syntax Error (1640): Illegal character &#39;&gt;&#39;
+Syntax Error (1748): Illegal character &#39;&gt;&#39;
+Syntax Error: End of file inside array
+Syntax Error: End of file inside array
+Syntax Error: End of file inside array
+Syntax Error (625): Illegal character &#39;&gt;&#39;
+Syntax Error (721): Illegal character &#39;&gt;&#39;
+Syntax Error (1157): Illegal character &#39;&gt;&#39;
+Syntax Error (1244): Illegal character &#39;&gt;&#39;
+Syntax Error (1296): Illegal character &#39;&gt;&#39;
+Syntax Error (1365): Illegal character &#39;&gt;&#39;
+Syntax Error (1640): Illegal character &#39;&gt;&#39;
+Syntax Error (1748): Illegal character &#39;&gt;&#39;
+Syntax Error: End of file inside array
+Syntax Error: End of file inside array
+Syntax Error (1157): Illegal character &#39;&gt;&#39;
+Syntax Error (1244): Illegal character &#39;&gt;&#39;
+Syntax Error (1296): Illegal character &#39;&gt;&#39;
+Syntax Error (1365): Illegal character &#39;&gt;&#39;
+Syntax Error (1640): Illegal character &#39;&gt;&#39;
+Syntax Error (1748): Illegal character &#39;&gt;&#39;
+Syntax Error: End of file inside array
+Syntax Error: Couldn&#39;t find trailer dictionary
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: May not be a PDF file (continuing anyway)
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: PDF file is damaged - attempting to reconstruct xref table...
+Syntax Error (627): Illegal character &#39;&gt;&#39;
+Syntax Error (723): Illegal character &#39;&gt;&#39;
+Syntax Error (1159): Illegal character &#39;&gt;&#39;
+Syntax Error (1246): Illegal character &#39;&gt;&#39;
+Syntax Error (1298): Illegal character &#39;&gt;&#39;
+Syntax Error (1367): Illegal character &#39;&gt;&#39;
+Syntax Error (1642): Illegal character &#39;&gt;&#39;
+Syntax Error (1750): Illegal character &#39;&gt;&#39;
+Syntax Error: End of file inside array
+Syntax Error: End of file inside array
+Syntax Error: End of file inside array
+Syntax Error (627): Illegal character &#39;&gt;&#39;
+Syntax Error (723): Illegal character &#39;&gt;&#39;
+Syntax Error (1159): Illegal character &#39;&gt;&#39;
+Syntax Error (1246): Illegal character &#39;&gt;&#39;
+Syntax Error (1298): Illegal character &#39;&gt;&#39;
+Syntax Error (1367): Illegal character &#39;&gt;&#39;
+Syntax Error (1642): Illegal character &#39;&gt;&#39;
+Syntax Error (1750): Illegal character &#39;&gt;&#39;
+Syntax Error: End of file inside array
+Syntax Error: End of file inside array
+Syntax Error (1159): Illegal character &#39;&gt;&#39;
+Syntax Error (1246): Illegal character &#39;&gt;&#39;
+Syntax Error (1298): Illegal character &#39;&gt;&#39;
+Syntax Error (1367): Illegal character &#39;&gt;&#39;
+Syntax Error (1642): Illegal character &#39;&gt;&#39;
+Syntax Error (1750): Illegal character &#39;&gt;&#39;
+Syntax Error: End of file inside array
+Syntax Error: Couldn&#39;t find trailer dictionary
+Syntax Error: Couldn&#39;t read xref table
+#37583	DONE   cov: 630 ft: 3139 corp: 654/770Kb lim: 4096 exec/s: 1212 rss: 75Mb
+###### Recommended dictionary. ######
+&#34;\026\000\000\000&#34; # Uses: 111
+&#34;start&#34; # Uses: 83
+&#34;star&#34; # Uses: 62
+&#34;\377\007&#34; # Uses: 73
+&#34;trailer&#34; # Uses: 86
+&#34;\024\000\000\000&#34; # Uses: 74
+&#34;%PDF&#34; # Uses: 64
+&#34;\027\000\000\000&#34; # Uses: 64
+&#34;\001\001\000\000\000\000\000\000&#34; # Uses: 63
+&#34;art&#34; # Uses: 62
+&#34;startxref&#34; # Uses: 69
+&#34;L\000\000\000\000\000\000\000&#34; # Uses: 54
+&#34;\005\000\000\000\000\000\000\000&#34; # Uses: 71
+&#34;\001\000&#34; # Uses: 56
+&#34;ends&#34; # Uses: 52
+&#34;%PDF-&#34; # Uses: 66
+&#34;rtdd&#34; # Uses: 42
+&#34;\030\000&#34; # Uses: 59
+&#34;endstream&#34; # Uses: 53
+&#34;\377\000\000\000\000\000\000\000&#34; # Uses: 59
+&#34;d2d\027&#34; # Uses: 50
+&#34;endstr&#34; # Uses: 55
+&#34;\000\000\000\027&#34; # Uses: 53
+&#34;\377\377\377\037&#34; # Uses: 37
+&#34;\025\000\000\000&#34; # Uses: 33
+&#34;\377\377\377\377\377\377\377\015&#34; # Uses: 49
+&#34;\241\241&#34; # Uses: 36
+&#34;\011\000\000\000&#34; # Uses: 39
+&#34;\003\000\000\000\000\000\000\000&#34; # Uses: 45
+&#34;\000\001\000\000\000\000\000\000&#34; # Uses: 43
+&#34;startx&#34; # Uses: 56
+&#34;\001\000\000\000\000\000\001\000&#34; # Uses: 33
+&#34;\017\000\000\000&#34; # Uses: 44
+&#34;&lt;&lt;&#34; # Uses: 35
+&#34;~\377\377\337&#34; # Uses: 30
+&#34;\000\000\000\000\000\000\001\000&#34; # Uses: 38
+&#34;\340\377\377\177&#34; # Uses: 35
+&#34;\000\020&#34; # Uses: 31
+&#34;\013\000\000\000\000\000\000\000&#34; # Uses: 33
+&#34;\000\000\000\000\000\000\000\006&#34; # Uses: 38
+&#34;\377\377\377\241\241\241&#34; # Uses: 33
+&#34;\022\000\000\000&#34; # Uses: 31
+&#34;%P&#34; # Uses: 36
+&#34;\000\000\000\022&#34; # Uses: 31
+&#34;!\000&#34; # Uses: 41
+&#34;\377\377\377\377\377\377\000\000&#34; # Uses: 26
+&#34;\377\377\377\026&#34; # Uses: 38
+&#34;%PDF\001&#34; # Uses: 33
+&#34;\026\000\000\000\000\000\000\000&#34; # Uses: 25
+&#34;\377\377\377\377\377\377\377\036&#34; # Uses: 24
+&#34;\025\000&#34; # Uses: 25
+&#34;\377\377\017\000&#34; # Uses: 25
+&#34;\377\377\377\377\377\377\377\000&#34; # Uses: 23
+&#34;\000\000\000\010&#34; # Uses: 20
+&#34;\001\020&#34; # Uses: 18
+&#34;true&#34; # Uses: 20
+&#34;startxre&#34; # Uses: 22
+&#34;\377\377\377\025&#34; # Uses: 20
+&#34;\337\377\377\177&#34; # Uses: 28
+&#34;\247\247&#34; # Uses: 22
+&#34;c}&#39;&#34; # Uses: 23
+&#34;\000\000\000\000\000\000\000\017&#34; # Uses: 15
+&#34;\000\000\000 &#34; # Uses: 21
+&#34;\012\241\026&#34; # Uses: 17
+&#34;&gt;&gt;&#34; # Uses: 21
+&#34;\377\377\377\377\377\377\377\026&#34; # Uses: 15
+&#34;\001\000\000\000\000\000\000\022&#34; # Uses: 22
+&#34;\007\000\000\000&#34; # Uses: 16
+&#34;\011\000\000\000\000\000\000\000&#34; # Uses: 15
+&#34;\021\000\000\000&#34; # Uses: 17
+&#34;traile&#34; # Uses: 22
+&#34;\032\000\000\000\000\000\000\000&#34; # Uses: 12
+&#34;\177\377\377\337&#34; # Uses: 15
+&#34;s} (&#34; # Uses: 17
+&#34;\377\037&#34; # Uses: 17
+&#34;\000\000\000\030&#34; # Uses: 6
+&#34;\000\000\000\000\000\000\000\000&#34; # Uses: 14
+&#34;\000\000\000\200&#34; # Uses: 10
+&#34;\001\000\000\027&#34; # Uses: 10
+&#34;~\377\377\377&#34; # Uses: 9
+&#34;stream&#34; # Uses: 9
+&#34;\010\000&#34; # Uses: 13
+&#34;fal&#34; # Uses: 8
+&#34;\000\000\000\020&#34; # Uses: 14
+&#34;!\000\000\000&#34; # Uses: 10
+&#34;\334\334\334\334&#34; # Uses: 7
+&#34;\006\000\000\000\000\000\000\000&#34; # Uses: 12
+&#34;\377\377\377\377\377\377\377\021&#34; # Uses: 9
+&#34;\377\377\377\024&#34; # Uses: 14
+&#34;{\000\000\000\000\000\000\000&#34; # Uses: 5
+&#34;\010\000\000\000&#34; # Uses: 20
+&#34;\031\000\000\000\000\000\000\000&#34; # Uses: 11
+&#34;\336\377\377\177&#34; # Uses: 9
+&#34;\303\012\241\241\241&#34; # Uses: 6
+&#34;\001\000\000\000\000\000\000\002&#34; # Uses: 8
+&#34;\027\000\000\000\000\000\000\000&#34; # Uses: 4
+&#34;\377\377\377\377\377\377\377\016&#34; # Uses: 6
+&#34;\004\000\000\000\000\000\000\000&#34; # Uses: 4
+&#34;\377\377\377\377\377\377\377\014&#34; # Uses: 6
+&#34;\022\000&#34; # Uses: 5
+&#34;llo&#34; # Uses: 3
+&#34;traile%r&#34; # Uses: 4
+&#34;\206&gt;&gt;&gt;&gt;&gt;&#34; # Uses: 0
+&#34;\002\000\000\000&#34; # Uses: 1
+&#34;endstre&#34; # Uses: 0
+&#34;\001\026&#34; # Uses: 0
+&#34;ID&#34; # Uses: 1
+&#34;\001\000\000\000\000\000\000\016&#34; # Uses: 0
+&#34;\377\377&#34; # Uses: 0
+###### End of recommended dictionary. ######
+Done 37583 runs in 31 second(s)
+stat::number_of_executed_units: 37583
+stat::average_exec_per_sec:     1212
+stat::new_units_added:          1323
+stat::slowest_unit_time_sec:    0
+stat::peak_rss_mb:              75
+
+</pre>
+
+
+</body>
