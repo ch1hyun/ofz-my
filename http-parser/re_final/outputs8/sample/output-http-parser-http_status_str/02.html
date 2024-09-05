@@ -1,0 +1,224 @@
+<!doctype html>
+
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Experiment results</title>
+<style>
+* {
+    box-sizing: border-box;
+}
+
+html {
+    line-height: 1.15;
+}
+
+body {
+    font-family: sans-serif;
+    font-size: 16px;
+}
+
+table {
+    border-collapse: collapse;
+    border-spacing: 0;
+}
+
+td, th {
+    border-right: 1px #dedede solid;
+    border-bottom: 1px #dedede solid;
+    padding: 5px;
+    text-align: left;
+}
+td:first-child, th:first-child {
+    border-left: 1px #dedede solid;
+}
+th {
+    border-top: 1px #dedede solid;
+}
+
+tbody tr:nth-child(odd) {
+    background-color: #f4f5ff;
+}
+</style>
+<body>
+    LLM: 
+    
+<h1>output-http-parser-http_status_str / 02</h1>
+Bug: False
+<br>
+Crash reason: NO_SEMANTIC_ERR
+<br>
+<br>
+
+<h2>Triage</h2>
+<pre>
+
+</pre>
+<br>
+
+
+
+
+
+<h3>Final code</h3>
+
+<pre>
+#include &#34;http_parser.h&#34;
+#include &lt;stdint.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;string.h&gt; // added for memcpy
+
+// Fuzzing function
+int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  if (size &lt; 2)
+    return 0;
+
+  size_t str_len = size - 1;
+  char* test_str = malloc(str_len + 1);
+  memcpy(test_str, data, str_len);
+  test_str[str_len] = &#39;\0&#39;;
+  
+  enum http_status status;
+  for(status = HTTP_STATUS_CONTINUE; status &lt;= HTTP_STATUS_UPGRADE_REQUIRED; ++status) { // corrected the enum value
+    const char *status_str = http_status_str(status);
+    // You can do something with the return value here.
+  }
+  
+  free(test_str);
+  return 0;
+}
+</pre>
+
+
+<h3>Fixer prompt #1</h3>
+<pre>
+
+Given the following C fuzz harness and its build error message, fix the code to make it build for fuzzing.
+
+If there is undeclared identifier or unknown type name error, fix it by finding and including the related libraries.
+
+MUST RETURN THE FULL CODE, INCLUDING UNCHANGED PARTS.
+
+Below is the code needs to be built:
+&lt;code&gt;
+#include &#34;http_parser.h&#34;
+#include &lt;stdint.h&gt;
+#include &lt;stdlib.h&gt;
+
+// Fuzzing function
+int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  if (size &lt; 2)
+    return 0;
+
+  size_t str_len = size - 1;
+  char* test_str = malloc(str_len + 1);
+  memcpy(test_str, data, str_len);
+  test_str[str_len] = &#39;\0&#39;;
+  
+  enum http_status status;
+  for(status = HTTP_STATUS_CONTINUE; status &lt;= _HTTP_STATUS_UPGRADE_REQUIRED; ++status) {
+    const char *status_str = http_status_str(status);
+    // You can do something with the return value here.
+  }
+  
+  free(test_str);
+  return 0;
+}
+&lt;/code&gt;
+
+Below is the error to fix:
+The code has the following build issues:
+&lt;error&gt;
+fuzzers/fuzz_url.c:16:48: error: use of undeclared identifier &#39;_HTTP_STATUS_UPGRADE_REQUIRED&#39;; did you mean &#39;HTTP_STATUS_UPGRADE_REQUIRED&#39;?
+   16 |   for(status = HTTP_STATUS_CONTINUE; status &lt;= _HTTP_STATUS_UPGRADE_REQUIRED; ++status) {
+      |                                                ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      |                                                HTTP_STATUS_UPGRADE_REQUIRED
+./http_parser.h:159:19: note: &#39;HTTP_STATUS_UPGRADE_REQUIRED&#39; declared here
+  159 |   HTTP_STATUS_MAP(XX)
+      |                   ^
+&lt;/error&gt;
+
+
+
+
+Fix code:
+1. Consider possible solutions for the issues listed above.
+2. Choose a solution that can maximize fuzzing result, which is utilizing the function under test and feeding it not null input.
+3. Apply the solutions to the original code.
+It&#39;s important to show the complete code, not only the fixed line.
+&lt;solution&gt;
+</pre>
+
+
+
+<h3>Code #1</h3>
+
+<pre>
+#include &#34;http_parser.h&#34;
+#include &lt;stdint.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;string.h&gt; // added for memcpy
+
+// Fuzzing function
+int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  if (size &lt; 2)
+    return 0;
+
+  size_t str_len = size - 1;
+  char* test_str = malloc(str_len + 1);
+  memcpy(test_str, data, str_len);
+  test_str[str_len] = &#39;\0&#39;;
+  
+  enum http_status status;
+  for(status = HTTP_STATUS_CONTINUE; status &lt;= HTTP_STATUS_UPGRADE_REQUIRED; ++status) { // corrected the enum value
+    const char *status_str = http_status_str(status);
+    // You can do something with the return value here.
+  }
+  
+  free(test_str);
+  return 0;
+}
+</pre>
+
+
+<h2>Logs</h2>
+<pre>
+Fixing /home/chyun/oss-fuzz-gen2/results8/output-http-parser-http_status_str/fixed_targets/02.c with gpt-4, attempt 1.
+Successfully built /home/chyun/oss-fuzz-gen2/results8/output-http-parser-http_status_str/fixed_targets/02.c with gpt-4 in 1 iterations of fixing.
+Triaging the crash related to /home/chyun/oss-fuzz-gen2/results8/output-http-parser-http_status_str/fixed_targets/02.c with gpt-4.
+Warning: no crash info in http-parser-http_status_str-02.
+Result for http-parser-http_status_str-02: crashes=False, coverage=0.05518763796909492 (50/906), coverage diff=0.0025157232704402514 (4/1590)
+
+</pre>
+
+<h2>Run logs</h2>
+<pre>
+INFO:__main__:Running: docker run --privileged --shm-size=2g --platform linux/amd64 --rm -e FUZZING_ENGINE=libfuzzer -e SANITIZER=address -e RUN_FUZZER_MODE=interactive -e HELPER=True -v /home/chyun/oss-fuzz-gen2/results8/output-http-parser-http_status_str/corpora/02.c:/tmp/fuzz_url_corpus -v /tmp/tmp8e6m0mnp/build/out/http-parser-http_status_str-02:/out -t gcr.io/oss-fuzz-base/base-runner run_fuzzer fuzz_url -print_final_stats=1 -max_total_time=30 -len_control=0 -timeout=30.
+vm.mmap_rnd_bits = 28
+rm: cannot remove &#39;/tmp/fuzz_url_corpus&#39;: Device or resource busy
+/out/fuzz_url -rss_limit_mb=2560 -timeout=25 -print_final_stats=1 -max_total_time=30 -len_control=0 -timeout=30 /tmp/fuzz_url_corpus &lt; /dev/null
+INFO: Running with entropic power schedule (0xFF, 100).
+INFO: Seed: 2068339177
+INFO: Loaded 1 modules   (906 inline 8-bit counters): 906 [0x557b130d9ab0, 0x557b130d9e3a), 
+INFO: Loaded 1 PC tables (906 PCs): 906 [0x557b130d9e40,0x557b130dd6e0), 
+INFO:        0 files found in /tmp/fuzz_url_corpus
+INFO: -max_len is not provided; libFuzzer will not generate inputs larger than 4096 bytes
+INFO: A corpus is not provided, starting from an empty corpus
+#2	INITED cov: 2 ft: 2 corp: 1/1b exec/s: 0 rss: 30Mb
+	NEW_FUNC[1/1]: 0x557b13069cc0 in http_status_str /src/http-parser/http_parser.c:2215
+#4	NEW    cov: 50 ft: 50 corp: 2/40b lim: 4096 exec/s: 0 rss: 30Mb L: 39/39 MS: 2 ChangeByte-InsertRepeatedBytes-
+#66	REDUCE cov: 50 ft: 50 corp: 2/25b lim: 4096 exec/s: 0 rss: 30Mb L: 24/24 MS: 2 ChangeBinInt-EraseBytes-
+#89	REDUCE cov: 50 ft: 50 corp: 2/22b lim: 4096 exec/s: 0 rss: 30Mb L: 21/21 MS: 3 InsertByte-ChangeBit-EraseBytes-
+#101	REDUCE cov: 50 ft: 50 corp: 2/12b lim: 4096 exec/s: 0 rss: 30Mb L: 11/11 MS: 2 CrossOver-EraseBytes-
+#222	REDUCE cov: 50 ft: 50 corp: 2/10b lim: 4096 exec/s: 0 rss: 30Mb L: 9/9 MS: 1 EraseBytes-
+#266	REDUCE cov: 50 ft: 50 corp: 2/8b lim: 4096 exec/s: 0 rss: 30Mb L: 7/7 MS: 4 ChangeBinInt-ChangeBinInt-ChangeByte-EraseBytes-
+#293	REDUCE cov: 50 ft: 50 corp: 2/6b lim: 4096 exec/s: 0 rss: 30Mb L: 5/5 MS: 2 ChangeBinInt-EraseBytes-
+#384	REDUCE cov: 50 ft: 50 corp: 2/5b lim: 4096 exec/s: 0 rss: 30Mb L: 4/4 MS: 1 EraseBytes-
+#423	REDUCE cov: 50 ft: 50 corp: 2/3b lim: 4096 exec/s: 0 rss: 30Mb L: 2/2 MS: 4 CopyPart-CMP-ChangeBinInt-EraseBytes- DE: &#34;3\001\000\000&#34;-
+#524288	pulse  cov: 50 ft: 50 corp: 2/3b lim: 4096 exec/s: 174762 rss: 56Mb
+#1048576	pulse  cov: 50 ft: 50 corp: 2/3b lim: 4096 exec/s: 174762 rss: 56Mb
+#2097152	pulse  cov: 50 ft: 50 corp: 2/3b lim: 4096 exec/s: 174762 rss: 56Mb
+
+</pre>
+
+
+</body>

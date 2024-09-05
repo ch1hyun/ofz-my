@@ -1,0 +1,149 @@
+<!doctype html>
+
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Experiment results</title>
+<style>
+* {
+    box-sizing: border-box;
+}
+
+html {
+    line-height: 1.15;
+}
+
+body {
+    font-family: sans-serif;
+    font-size: 16px;
+}
+
+table {
+    border-collapse: collapse;
+    border-spacing: 0;
+}
+
+td, th {
+    border-right: 1px #dedede solid;
+    border-bottom: 1px #dedede solid;
+    padding: 5px;
+    text-align: left;
+}
+td:first-child, th:first-child {
+    border-left: 1px #dedede solid;
+}
+th {
+    border-top: 1px #dedede solid;
+}
+
+tbody tr:nth-child(odd) {
+    background-color: #f4f5ff;
+}
+</style>
+<body>
+    LLM: 
+    
+<h1>output-http-parser-http_errno_name / 02</h1>
+Bug: True
+<br>
+Crash reason: NO_SEMANTIC_ERR
+<br>
+<br>
+
+<h2>Triage</h2>
+<pre>
+The crash is caused by a bug in the fuzz driver.
+
+The crash happens at the assertion in the http_errno_name function. The driver code doesn&#39;t ensure that the value of error_no is within a valid range for the http_errno enum. The driver code just takes the first sizeof(int) bytes of the input data, casts it to an int and then takes modulus with (MAX_ERRORNO + 1). However, if the input data starts with bytes that form a large negative int when cast, the modulus operation can result in a negative number, which is not a valid value for the http_errno enum. This leads to the assertion failure in the http_errno_name function.
+</pre>
+<br>
+
+
+
+
+
+<h3>Final code</h3>
+
+<pre>
+#include &#34;http_parser.h&#34;
+#include &lt;stdint.h&gt;
+#include &lt;string.h&gt;
+
+#define MAX_ERRORNO HPE_PAUSED /**&lt; Equals to the maximum http_errno */
+
+int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+    if(size &lt; sizeof(int)) {
+        return 0;
+    }
+    int error_no = ((int *)data)[0] % (MAX_ERRORNO + 1);
+    enum http_errno error_type = (enum http_errno) error_no;
+    const char * errno_name = http_errno_name(error_type);
+
+    return 0;
+}
+</pre>
+
+
+<h2>Logs</h2>
+<pre>
+Successfully built /home/chyun/oss-fuzz-gen2/results9/output-http-parser-http_errno_name/fixed_targets/02.c with gpt-4 in 0 iterations of fixing.
+Triaging the crash related to /home/chyun/oss-fuzz-gen2/results9/output-http-parser-http_errno_name/fixed_targets/02.c with gpt-4.
+Result for http-parser-http_errno_name-02: crashes=True, coverage=0.0055248618784530384 (5/905), coverage diff=0.00440251572327044 (7/1590)
+
+</pre>
+
+<h2>Run logs</h2>
+<pre>
+INFO:__main__:Running: docker run --privileged --shm-size=2g --platform linux/amd64 --rm -e FUZZING_ENGINE=libfuzzer -e SANITIZER=address -e RUN_FUZZER_MODE=interactive -e HELPER=True -v /home/chyun/oss-fuzz-gen2/results9/output-http-parser-http_errno_name/corpora/02.c:/tmp/fuzz_url_corpus -v /tmp/tmpw2wkcazu/build/out/http-parser-http_errno_name-02:/out -t gcr.io/oss-fuzz-base/base-runner run_fuzzer fuzz_url -print_final_stats=1 -max_total_time=30 -len_control=0 -timeout=30.
+vm.mmap_rnd_bits = 28
+rm: cannot remove &#39;/tmp/fuzz_url_corpus&#39;: Device or resource busy
+/out/fuzz_url -rss_limit_mb=2560 -timeout=25 -print_final_stats=1 -max_total_time=30 -len_control=0 -timeout=30 /tmp/fuzz_url_corpus &lt; /dev/null
+INFO: Running with entropic power schedule (0xFF, 100).
+INFO: Seed: 2219471996
+INFO: Loaded 1 modules   (905 inline 8-bit counters): 905 [0x5640090a5ab0, 0x5640090a5e39), 
+INFO: Loaded 1 PC tables (905 PCs): 905 [0x5640090a5e40,0x5640090a96d0), 
+INFO:        0 files found in /tmp/fuzz_url_corpus
+INFO: -max_len is not provided; libFuzzer will not generate inputs larger than 4096 bytes
+INFO: A corpus is not provided, starting from an empty corpus
+#2	INITED cov: 2 ft: 2 corp: 1/1b exec/s: 0 rss: 29Mb
+	NEW_FUNC[1/1]: 0x5640090362d0 in http_errno_name /src/http-parser/http_parser.c:2242
+#5	NEW    cov: 5 ft: 6 corp: 2/10b lim: 4096 exec/s: 0 rss: 30Mb L: 9/9 MS: 3 ChangeBinInt-ChangeBit-CMP- DE: &#34;\000\000\000\000\000\000\000\000&#34;-
+#21	REDUCE cov: 5 ft: 6 corp: 2/9b lim: 4096 exec/s: 0 rss: 30Mb L: 8/8 MS: 1 EraseBytes-
+fuzz_url: http_parser.c:2243: const char *http_errno_name(enum http_errno): Assertion `((size_t) err) &lt; ARRAY_SIZE(http_strerror_tab)&#39; failed.
+AddressSanitizer:DEADLYSIGNAL
+=================================================================
+[1m[31m==12==ERROR: AddressSanitizer: ABRT on unknown address 0x00000000000c (pc 0x7f6f04c4100b bp 0x7f6f04db6588 sp 0x7ffe2d6ea880 T0)
+[1m[0mSCARINESS: 10 (signal)
+    #0 0x7f6f04c4100b in raise (/lib/x86_64-linux-gnu/libc.so.6+0x4300b) (BuildId: 0702430aef5fa3dda43986563e9ffcc47efbd75e)
+    #1 0x7f6f04c20858 in abort (/lib/x86_64-linux-gnu/libc.so.6+0x22858) (BuildId: 0702430aef5fa3dda43986563e9ffcc47efbd75e)
+    #2 0x7f6f04c20728  (/lib/x86_64-linux-gnu/libc.so.6+0x22728) (BuildId: 0702430aef5fa3dda43986563e9ffcc47efbd75e)
+    #3 0x7f6f04c31fd5 in __assert_fail (/lib/x86_64-linux-gnu/libc.so.6+0x33fd5) (BuildId: 0702430aef5fa3dda43986563e9ffcc47efbd75e)
+    #4 0x564009036359 in http_errno_name /src/http-parser/http_parser.c:2243:3
+    #5 0x564009037b6a in LLVMFuzzerTestOneInput /src/http-parser/fuzzers/fuzz_url.c:13:31
+    #6 0x564008edc470 in fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:614:13
+    #7 0x564008edbc95 in fuzzer::Fuzzer::RunOne(unsigned char const*, unsigned long, bool, fuzzer::InputInfo*, bool, bool*) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:516:7
+    #8 0x564008edd465 in fuzzer::Fuzzer::MutateAndTestOne() /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:760:19
+    #9 0x564008ede255 in fuzzer::Fuzzer::Loop(std::__Fuzzer::vector&lt;fuzzer::SizedFile, std::__Fuzzer::allocator&lt;fuzzer::SizedFile&gt;&gt;&amp;) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:905:5
+    #10 0x564008ecc566 in fuzzer::FuzzerDriver(int*, char***, int (*)(unsigned char const*, unsigned long)) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:914:6
+    #11 0x564008ef8a92 in main /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMain.cpp:20:10
+    #12 0x7f6f04c22082 in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x24082) (BuildId: 0702430aef5fa3dda43986563e9ffcc47efbd75e)
+    #13 0x564008ebd6dd in _start (/out/fuzz_url+0x466dd)
+
+DEDUP_TOKEN: raise--abort--
+AddressSanitizer can not provide additional info.
+SUMMARY: AddressSanitizer: ABRT (/lib/x86_64-linux-gnu/libc.so.6+0x4300b) (BuildId: 0702430aef5fa3dda43986563e9ffcc47efbd75e) in raise
+==12==ABORTING
+MS: 3 PersAutoDict-ChangeBinInt-ChangeBinInt- DE: &#34;\000\000\000\000\000\000\000\000&#34;-; base unit: 77b808c439f1e35ee4510749eeafed0d89d8368b
+0x4,0xff,0xff,0xff,0xff,0xff,0xff,0xff,
+\004\377\377\377\377\377\377\377
+artifact_prefix=&#39;./&#39;; Test unit written to ./crash-ad20b896382e16cdd838839e4dee80bf1516e2e2
+Base64: BP////////8=
+stat::number_of_executed_units: 49
+stat::average_exec_per_sec:     0
+stat::new_units_added:          2
+stat::slowest_unit_time_sec:    0
+stat::peak_rss_mb:              31
+
+</pre>
+
+
+</body>
