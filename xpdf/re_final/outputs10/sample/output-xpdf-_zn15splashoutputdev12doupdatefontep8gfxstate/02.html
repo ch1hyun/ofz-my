@@ -1,0 +1,923 @@
+<!doctype html>
+
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Experiment results</title>
+<style>
+* {
+    box-sizing: border-box;
+}
+
+html {
+    line-height: 1.15;
+}
+
+body {
+    font-family: sans-serif;
+    font-size: 16px;
+}
+
+table {
+    border-collapse: collapse;
+    border-spacing: 0;
+}
+
+td, th {
+    border-right: 1px #dedede solid;
+    border-bottom: 1px #dedede solid;
+    padding: 5px;
+    text-align: left;
+}
+td:first-child, th:first-child {
+    border-left: 1px #dedede solid;
+}
+th {
+    border-top: 1px #dedede solid;
+}
+
+tbody tr:nth-child(odd) {
+    background-color: #f4f5ff;
+}
+</style>
+<body>
+    LLM: 
+    
+<h1>output-xpdf-_zn15splashoutputdev12doupdatefontep8gfxstate / 02</h1>
+Bug: False
+<br>
+Crash reason: -
+<br>
+<br>
+
+<h2>Triage</h2>
+<pre>
+
+</pre>
+<br>
+
+
+
+
+
+<h3>Final code</h3>
+
+<pre>
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+#include &lt;stddef.h&gt;
+#include &lt;stdint.h&gt;
+
+#include &#34;GfxState.h&#34;
+#include &#34;GlobalParams.h&#34;
+#include &#34;Object.h&#34;
+#include &#34;PDFDoc.h&#34;
+#include &#34;Splash.h&#34;
+#include &#34;SplashBitmap.h&#34;
+#include &#34;SplashOutputDev.h&#34;
+#include &#34;GString.h&#34;
+#include &#34;/src/xpdf-4.05/xpdf/SplashOutputDev.h&#34;
+#include &#34;/src/xpdf-4.05/fofi/FoFiTrueType.h&#34;
+#include &#34;/src/xpdf-4.05/xpdf/FoFiType1C.h&#34;
+#include &#34;/src/xpdf-4.05/xpdf/FoFiType1.h&#34;
+#include &#34;/src/xpdf-4.05/xpdf/FoFiIdentifier.h&#34;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+    if (size == 0) {
+        return 0;
+    }
+    
+    FuzzedDataProvider fuzzed_data(data, size);
+    
+    double hDPIA = fuzzed_data.ConsumeFloatingPoint&lt;double&gt;();
+    double vDPIA = fuzzed_data.ConsumeFloatingPoint&lt;double&gt;();
+    PDFRectangle pageBox;
+    int rotateA = fuzzed_data.ConsumeIntegral&lt;int&gt;();
+    GBool upsideDown = fuzzed_data.ConsumeBool();
+    GfxState state(hDPIA, vDPIA, &amp;pageBox, rotateA, upsideDown);
+
+    SplashColorMode colorModeA = static_cast&lt;SplashColorMode&gt;(fuzzed_data.ConsumeIntegral&lt;int&gt;());
+    int bitmapRowPadA = fuzzed_data.ConsumeIntegral&lt;int&gt;();
+    GBool reverseVideoA = fuzzed_data.ConsumeBool();
+    SplashColorPtr paperColorA = nullptr; // assuming paperColorA can be nullptr, otherwise it needs to be initialized properly
+    GBool bitmapTopDownA = fuzzed_data.ConsumeBool();
+    GBool allowAntialiasA = fuzzed_data.ConsumeBool();
+    SplashOutputDev splash_output_dev(colorModeA, bitmapRowPadA, reverseVideoA, paperColorA, bitmapTopDownA, allowAntialiasA);
+
+    // doUpdateFont is private, so we can&#39;t call it directly. 
+    // We need to find a public method that calls doUpdateFont internally and use that instead.
+    // Assuming updateAll is a public method that calls doUpdateFont
+    while(fuzzed_data.remaining_bytes() &gt; 0) {
+        splash_output_dev.updateAll(&amp;state);
+    }
+    
+    return 0;
+}
+</pre>
+
+
+<h3>Fixer prompt #1</h3>
+<pre>
+
+Given the following C++ fuzz harness and its build error message, fix the code to make it build for fuzzing.
+
+If there is undeclared identifier or unknown type name error, fix it by finding and including the related libraries.
+
+MUST RETURN THE FULL CODE, INCLUDING UNCHANGED PARTS.
+
+Below is the code needs to be built:
+&lt;code&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+#include &lt;stddef.h&gt;
+#include &lt;stdint.h&gt;
+
+#include &#34;GfxState.h&#34;
+#include &#34;GlobalParams.h&#34;
+#include &#34;Object.h&#34;
+#include &#34;PDFDoc.h&#34;
+#include &#34;Splash.h&#34;
+#include &#34;SplashBitmap.h&#34;
+#include &#34;SplashOutputDev.h&#34;
+#include &#34;GString.h&#34;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)
+&lt;/code&gt;
+
+Below is the error to fix:
+The code has the following build issues:
+&lt;error&gt;
+The target function `void SplashOutputDev::doUpdateFont(GfxState *)` was not called by the fuzz target `LLVMFuzzerTestOneInput`.YOU MUST CALL FUNCTION `void SplashOutputDev::doUpdateFont(GfxState *)` INSIDE FUNCTION `LLVMFuzzerTestOneInput`.
+&lt;/error&gt;
+
+
+
+
+Fix code:
+1. Consider possible solutions for the issues listed above.
+2. Choose a solution that can maximize fuzzing result, which is utilizing the function under test and feeding it not null input.
+3. Apply the solutions to the original code.
+It&#39;s important to show the complete code, not only the fixed line.
+&lt;solution&gt;
+</pre>
+
+
+
+<h3>Code #1</h3>
+
+<pre>
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+#include &lt;stddef.h&gt;
+#include &lt;stdint.h&gt;
+
+#include &#34;GfxState.h&#34;
+#include &#34;GlobalParams.h&#34;
+#include &#34;Object.h&#34;
+#include &#34;PDFDoc.h&#34;
+#include &#34;Splash.h&#34;
+#include &#34;SplashBitmap.h&#34;
+#include &#34;SplashOutputDev.h&#34;
+#include &#34;GString.h&#34;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+    if (size == 0) {
+        return 0;
+    }
+    
+    FuzzedDataProvider fuzzed_data(data, size);
+    GfxState state;
+    SplashOutputDev splash_output_dev;
+
+    while(fuzzed_data.remaining_bytes() &gt; 0) {
+        splash_output_dev.doUpdateFont(&amp;state);
+    }
+    
+    return 0;
+}
+</pre>
+
+
+<h3>Fixer prompt #2</h3>
+<pre>
+
+Given the following C++ fuzz harness and its build error message, fix the code to make it build for fuzzing.
+
+If there is undeclared identifier or unknown type name error, fix it by finding and including the related libraries.
+
+MUST RETURN THE FULL CODE, INCLUDING UNCHANGED PARTS.
+
+Below is the code needs to be built:
+&lt;code&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+#include &lt;stddef.h&gt;
+#include &lt;stdint.h&gt;
+
+#include &#34;GfxState.h&#34;
+#include &#34;GlobalParams.h&#34;
+#include &#34;Object.h&#34;
+#include &#34;PDFDoc.h&#34;
+#include &#34;Splash.h&#34;
+#include &#34;SplashBitmap.h&#34;
+#include &#34;SplashOutputDev.h&#34;
+#include &#34;GString.h&#34;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+    if (size == 0) {
+        return 0;
+    }
+    
+    FuzzedDataProvider fuzzed_data(data, size);
+    GfxState state;
+    SplashOutputDev splash_output_dev;
+
+    while(fuzzed_data.remaining_bytes() &gt; 0) {
+        splash_output_dev.doUpdateFont(&amp;state);
+    }
+    
+    return 0;
+}
+&lt;/code&gt;
+
+Below is the error to fix:
+The code has the following build issues:
+&lt;error&gt;
+fuzz_JBIG2.cc:21:14: error: no matching constructor for initialization of &#39;GfxState&#39;
+   21 |     GfxState state;
+      |              ^
+../xpdf/GfxState.h:1125:7: note: candidate constructor (the implicit copy constructor) not viable: requires 1 argument, but 0 were provided
+ 1125 | class GfxState {
+      |       ^~~~~~~~
+../xpdf/GfxState.h:1373:3: note: candidate constructor not viable: requires 2 arguments, but 0 were provided
+ 1373 |   GfxState(GfxState *state, GBool copyPath);
+      |   ^        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+../xpdf/GfxState.h:1131:3: note: candidate constructor not viable: requires 5 arguments, but 0 were provided
+ 1131 |   GfxState(double hDPIA, double vDPIA, PDFRectangle *pageBox,
+      |   ^        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+ 1132 |            int rotateA, GBool upsideDown
+      |            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+fuzz_JBIG2.cc:22:21: error: no matching constructor for initialization of &#39;SplashOutputDev&#39;
+   22 |     SplashOutputDev splash_output_dev;
+      |                     ^
+../xpdf/SplashOutputDev.h:41:7: note: candidate constructor (the implicit copy constructor) not viable: requires 1 argument, but 0 were provided
+   41 | class SplashOutputDev: public OutputDev {
+      |       ^~~~~~~~~~~~~~~
+../xpdf/SplashOutputDev.h:45:3: note: candidate constructor not viable: requires at least 4 arguments, but 0 were provided
+   45 |   SplashOutputDev(SplashColorMode colorModeA, int bitmapRowPadA,
+      |   ^               ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+   46 |                   GBool reverseVideoA, SplashColorPtr paperColorA,
+      |                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+   47 |                   GBool bitmapTopDownA = gTrue,
+      |                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+   48 |                   GBool allowAntialiasA = gTrue);
+      |                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+fuzz_JBIG2.cc:25:27: error: &#39;doUpdateFont&#39; is a private member of &#39;SplashOutputDev&#39;
+   25 |         splash_output_dev.doUpdateFont(&amp;state);
+      |                           ^
+../xpdf/SplashOutputDev.h:260:8: note: declared private here
+  260 |   void doUpdateFont(GfxState *state);
+      |        ^
+&lt;/error&gt;
+
+
+
+
+Fix code:
+1. Consider possible solutions for the issues listed above.
+2. Choose a solution that can maximize fuzzing result, which is utilizing the function under test and feeding it not null input.
+3. Apply the solutions to the original code.
+It&#39;s important to show the complete code, not only the fixed line.
+&lt;solution&gt;
+</pre>
+
+
+
+<h3>Code #2</h3>
+
+<pre>
+&lt;code&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+#include &lt;stddef.h&gt;
+#include &lt;stdint.h&gt;
+
+#include &#34;GfxState.h&#34;
+#include &#34;GlobalParams.h&#34;
+#include &#34;Object.h&#34;
+#include &#34;PDFDoc.h&#34;
+#include &#34;Splash.h&#34;
+#include &#34;SplashBitmap.h&#34;
+#include &#34;SplashOutputDev.h&#34;
+#include &#34;GString.h&#34;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+    if (size == 0) {
+        return 0;
+    }
+    
+    FuzzedDataProvider fuzzed_data(data, size);
+    
+    double hDPIA = fuzzed_data.ConsumeFloatingPoint&lt;double&gt;();
+    double vDPIA = fuzzed_data.ConsumeFloatingPoint&lt;double&gt;();
+    PDFRectangle pageBox;
+    int rotateA = fuzzed_data.ConsumeIntegral&lt;int&gt;();
+    GBool upsideDown = fuzzed_data.ConsumeBool();
+    GfxState state(hDPIA, vDPIA, &amp;pageBox, rotateA, upsideDown);
+
+    SplashColorMode colorModeA = static_cast&lt;SplashColorMode&gt;(fuzzed_data.ConsumeIntegral&lt;int&gt;());
+    int bitmapRowPadA = fuzzed_data.ConsumeIntegral&lt;int&gt;();
+    GBool reverseVideoA = fuzzed_data.ConsumeBool();
+    SplashColorPtr paperColorA = nullptr; // assuming paperColorA can be nullptr, otherwise it needs to be initialized properly
+    GBool bitmapTopDownA = fuzzed_data.ConsumeBool();
+    GBool allowAntialiasA = fuzzed_data.ConsumeBool();
+    SplashOutputDev splash_output_dev(colorModeA, bitmapRowPadA, reverseVideoA, paperColorA, bitmapTopDownA, allowAntialiasA);
+
+    // doUpdateFont is private, so we can&#39;t call it directly. 
+    // We need to find a public method that calls doUpdateFont internally and use that instead.
+    // Assuming updateAll is a public method that calls doUpdateFont
+    while(fuzzed_data.remaining_bytes() &gt; 0) {
+        splash_output_dev.updateAll(&amp;state);
+    }
+    
+    return 0;
+}
+&lt;/code&gt;
+</pre>
+
+
+<h3>Fixer prompt #3</h3>
+<pre>
+
+Given the following C++ fuzz harness and its build error message, fix the code to make it build for fuzzing.
+
+If there is undeclared identifier or unknown type name error, fix it by finding and including the related libraries.
+
+MUST RETURN THE FULL CODE, INCLUDING UNCHANGED PARTS.
+
+Below is the code needs to be built:
+&lt;code&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+#include &lt;stddef.h&gt;
+#include &lt;stdint.h&gt;
+
+#include &#34;GfxState.h&#34;
+#include &#34;GlobalParams.h&#34;
+#include &#34;Object.h&#34;
+#include &#34;PDFDoc.h&#34;
+#include &#34;Splash.h&#34;
+#include &#34;SplashBitmap.h&#34;
+#include &#34;SplashOutputDev.h&#34;
+#include &#34;GString.h&#34;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+    if (size == 0) {
+        return 0;
+    }
+    
+    FuzzedDataProvider fuzzed_data(data, size);
+    
+    double hDPIA = fuzzed_data.ConsumeFloatingPoint&lt;double&gt;();
+    double vDPIA = fuzzed_data.ConsumeFloatingPoint&lt;double&gt;();
+    PDFRectangle pageBox;
+    int rotateA = fuzzed_data.ConsumeIntegral&lt;int&gt;();
+    GBool upsideDown = fuzzed_data.ConsumeBool();
+    GfxState state(hDPIA, vDPIA, &amp;pageBox, rotateA, upsideDown);
+
+    SplashColorMode colorModeA = static_cast&lt;SplashColorMode&gt;(fuzzed_data.ConsumeIntegral&lt;int&gt;());
+    int bitmapRowPadA = fuzzed_data.ConsumeIntegral&lt;int&gt;();
+    GBool reverseVideoA = fuzzed_data.ConsumeBool();
+    SplashColorPtr paperColorA = nullptr; // assuming paperColorA can be nullptr, otherwise it needs to be initialized properly
+    GBool bitmapTopDownA = fuzzed_data.ConsumeBool();
+    GBool allowAntialiasA = fuzzed_data.ConsumeBool();
+    SplashOutputDev splash_output_dev(colorModeA, bitmapRowPadA, reverseVideoA, paperColorA, bitmapTopDownA, allowAntialiasA);
+
+    // doUpdateFont is private, so we can&#39;t call it directly. 
+    // We need to find a public method that calls doUpdateFont internally and use that instead.
+    // Assuming updateAll is a public method that calls doUpdateFont
+    while(fuzzed_data.remaining_bytes() &gt; 0) {
+        splash_output_dev.updateAll(&amp;state);
+    }
+    
+    return 0;
+}
+&lt;/code&gt;
+
+Below is the error to fix:
+The code has the following build issues:
+&lt;error&gt;
+SplashOutputDev.cc:(.text._ZN15SplashOutputDev12doUpdateFontEP8GfxState[_ZN15SplashOutputDev12doUpdateFontEP8GfxState]+0x15ae): undefined reference to `FoFiTrueType::load(char*, int, int)&#39;
+/usr/bin/ld: SplashOutputDev.cc:(.text._ZN15SplashOutputDev12doUpdateFontEP8GfxState[_ZN15SplashOutputDev12doUpdateFontEP8GfxState]+0x15e2): undefined reference to `FoFiTrueType::getCFFBlock(char**, int*)&#39;
+/usr/bin/ld: SplashOutputDev.cc:(.text._ZN15SplashOutputDev12doUpdateFontEP8GfxState[_ZN15SplashOutputDev12doUpdateFontEP8GfxState]+0x162d): undefined reference to `FoFiType1C::make(char*, int)&#39;
+/usr/bin/ld: SplashOutputDev.cc:(.text._ZN15SplashOutputDev12doUpdateFontEP8GfxState[_ZN15SplashOutputDev12doUpdateFontEP8GfxState]+0x16c9): undefined reference to `FoFiType1C::load(char*)&#39;
+/usr/bin/ld: SplashOutputDev.cc:(.text._ZN15SplashOutputDev12doUpdateFontEP8GfxState[_ZN15SplashOutputDev12doUpdateFontEP8GfxState]+0x1896): undefined reference to `FoFiTrueType::getNumCmaps()&#39;
+/usr/bin/ld: SplashOutputDev.cc:(.text._ZN15SplashOutputDev12doUpdateFontEP8GfxState[_ZN15SplashOutputDev12doUpdateFontEP8GfxState]+0x18c4): undefined reference to `FoFiTrueType::getCmapPlatform(int)&#39;
+/usr/bin/ld: SplashOutputDev.cc:(.text._ZN15SplashOutputDev12doUpdateFontEP8GfxState[_ZN15SplashOutputDev12doUpdateFontEP8GfxState]+0x18d6): undefined reference to `FoFiTrueType::getCmapEncoding(int)&#39;
+/usr/bin/ld: SplashOutputDev.cc:(.text._ZN15SplashOutputDev12doUpdateFontEP8GfxState[_ZN15SplashOutputDev12doUpdateFontEP8GfxState]+0x269e): undefined reference to `FoFiTrueType::mapCodeToGID(int, int)&#39;
+GfxFont.cc:(.text._ZN7GfxFont11getFontTypeEP4XRefP4DictP3Ref[_ZN7GfxFont11getFontTypeEP4XRefP4DictP3Ref]+0xf37): undefined reference to `FoFiIdentifier::identifyStream(int (*)(void*), void*)&#39;
+GfxFont.cc:(.text._ZN7GfxFont10locateFontEP4XRefi[_ZN7GfxFont10locateFontEP4XRefi]+0x1121): undefined reference to `FoFiIdentifier::identifyFile(char*)&#39;
+GfxFont.cc:(.text._ZN11Gfx8BitFontC2EP4XRefPKc3RefP7GString11GfxFontTypeS4_P4Dict[_ZN11Gfx8BitFontC2EP4XRefPKc3RefP7GString11GfxFontTypeS4_P4Dict]+0x1a82): undefined reference to `FoFiType1::make(char*, int)&#39;
+/usr/bin/ld: GfxFont.cc:(.text._ZN11Gfx8BitFontC2EP4XRefPKc3RefP7GString11GfxFontTypeS4_P4Dict[_ZN11Gfx8BitFontC2EP4XRefPKc3RefP7GString11GfxFontTypeS4_P4Dict]+0x1a9e): undefined reference to `FoFiType1::getName()&#39;
+/usr/bin/ld: GfxFont.cc:(.text._ZN11Gfx8BitFontC2EP4XRefPKc3RefP7GString11GfxFontTypeS4_P4Dict[_ZN11Gfx8BitFontC2EP4XRefPKc3RefP7GString11GfxFontTypeS4_P4Dict]+0x1bbb): undefined reference to `FoFiType1C::getName()&#39;
+/usr/bin/ld: GfxFont.cc:(.text._ZN11Gfx8BitFontC2EP4XRefPKc3RefP7GString11GfxFontTypeS4_P4Dict[_ZN11Gfx8BitFontC2EP4XRefPKc3RefP7GString11GfxFontTypeS4_P4Dict]+0x1c77): undefined reference to `FoFiType1::getEncoding()&#39;
+/usr/bin/ld: GfxFont.cc:(.text._ZN11Gfx8BitFontC2EP4XRefPKc3RefP7GString11GfxFontTypeS4_P4Dict[_ZN11Gfx8BitFontC2EP4XRefPKc3RefP7GString11GfxFontTypeS4_P4Dict]+0x1cc6): undefined reference to `FoFiType1C::getEncoding()&#39;
+GfxFont.cc:(.text._ZN11Gfx8BitFont15getCodeToGIDMapEP12FoFiTrueType[_ZN11Gfx8BitFont15getCodeToGIDMapEP12FoFiTrueType]+0xa85): undefined reference to `FoFiTrueType::mapNameToGID(char*)&#39;
+GfxFont.cc:(.text._ZN11Gfx8BitFont15getCodeToGIDMapEP10FoFiType1C[_ZN11Gfx8BitFont15getCodeToGIDMapEP10FoFiType1C]+0x57): undefined reference to `FoFiType1C::getNameToGIDMap()&#39;
+GfxFont.cc:(.text._ZN10GfxCIDFont26readTrueTypeUnicodeMappingEP4XRef[_ZN10GfxCIDFont26readTrueTypeUnicodeMappingEP4XRef]+0x1ca): undefined reference to `FoFiTrueType::make(char*, int, int, int)&#39;
+/usr/bin/ld: SplashFTFontEngine.cc:(.text._ZN18SplashFTFontEngine19loadOpenTypeT1CFontEP16SplashFontFileIDPciPPKc[_ZN18SplashFTFontEngine19loadOpenTypeT1CFontEP16SplashFontFileIDPciPPKc]+0x1a9): undefined reference to `FoFiTrueType::convertToType1(char*, char const**, int, void (*)(void*, char const*, int), void*)&#39;
+/usr/bin/ld: SplashFTFontEngine.cc:(.text._ZN18SplashFTFontEngine11loadCIDFontEP16SplashFontFileIDPciPii[_ZN18SplashFTFontEngine11loadCIDFontEP16SplashFontFileIDPciPii]+0x19c): undefined reference to `FoFiType1C::getCIDToGIDMap(int*)&#39;
+/usr/bin/ld: SplashFTFontEngine.cc:(.text._ZN18SplashFTFontEngine19loadOpenTypeCFFFontEP16SplashFontFileIDPciPii[_ZN18SplashFTFontEngine19loadOpenTypeCFFFontEP16SplashFontFileIDPciPii]+0x395): undefined reference to `FoFiTrueType::getCIDToGIDMap(int*)&#39;
+/usr/bin/ld: SplashFTFontEngine.cc:(.text._ZN18SplashFTFontEngine16loadTrueTypeFontEP16SplashFontFileIDPciiPii[_ZN18SplashFTFontEngine16loadTrueTypeFontEP16SplashFontFileIDPciiPii]+0x17e): undefined reference to `FoFiTrueType::writeTTF(void (*)(void*, char const*, int), void*, char*, int*, unsigned char*, int)&#39;
+&lt;/error&gt;
+
+
+Below are instructions to assist you in fixing the error.
+&lt;instruction&gt;
+You must add the following #include statement to fix the error of &lt;error&gt;undefined reference to FoFiTrueType::load(char*, int, int)&lt;/error&gt;:
+&lt;code&gt;
+#include &#34;/src/xpdf-4.05/xpdf/SplashOutputDev.h&#34;
+&lt;/code&gt;.
+You must add the following #include statement to fix the error of &lt;error&gt;undefined reference to FoFiTrueType::getCFFBlock(char**, int*)&lt;/error&gt;:
+&lt;code&gt;
+#include &#34;/src/xpdf-4.05/xpdf/SplashOutputDev.h&#34;
+&lt;/code&gt;.
+You must add the following #include statement to fix the error of &lt;error&gt;undefined reference to FoFiType1C::make(char*, int)&lt;/error&gt;:
+&lt;code&gt;
+#include &#34;/src/xpdf-4.05/xpdf/SplashOutputDev.h&#34;
+&lt;/code&gt;.
+You must add the following #include statement to fix the error of &lt;error&gt;undefined reference to FoFiType1C::load(char*)&lt;/error&gt;:
+&lt;code&gt;
+#include &#34;/src/xpdf-4.05/xpdf/SplashOutputDev.h&#34;
+&lt;/code&gt;.
+You must add the following #include statement to fix the error of &lt;error&gt;undefined reference to FoFiTrueType::getNumCmaps()&lt;/error&gt;:
+&lt;code&gt;
+#include &#34;/src/xpdf-4.05/xpdf/SplashOutputDev.h&#34;
+&lt;/code&gt;.
+You must add the following #include statement to fix the error of &lt;error&gt;undefined reference to FoFiTrueType::getCmapPlatform(int)&lt;/error&gt;:
+&lt;code&gt;
+#include &#34;/src/xpdf-4.05/xpdf/SplashOutputDev.h&#34;
+&lt;/code&gt;.
+You must add the following #include statement to fix the error of &lt;error&gt;undefined reference to FoFiTrueType::getCmapEncoding(int)&lt;/error&gt;:
+&lt;code&gt;
+#include &#34;/src/xpdf-4.05/xpdf/SplashOutputDev.h&#34;
+&lt;/code&gt;.
+You must add the following #include statement to fix the error of &lt;error&gt;undefined reference to FoFiTrueType::mapCodeToGID(int, int)&lt;/error&gt;:
+&lt;code&gt;
+#include &#34;/src/xpdf-4.05/xpdf/SplashOutputDev.h&#34;
+&lt;/code&gt;.
+You must add the following #include statement to fix the error of &lt;error&gt;undefined reference to FoFiIdentifier::identifyStream(int (*)(void*), void*)&lt;/error&gt;:
+&lt;code&gt;
+#include &#34;/src/xpdf-4.05/xpdf/SplashOutputDev.h&#34;
+&lt;/code&gt;.
+You must add the following #include statement to fix the error of &lt;error&gt;undefined reference to FoFiIdentifier::identifyFile(char*)&lt;/error&gt;:
+&lt;code&gt;
+#include &#34;/src/xpdf-4.05/xpdf/SplashOutputDev.h&#34;
+&lt;/code&gt;.
+You must add the following #include statement to fix the error of &lt;error&gt;undefined reference to FoFiType1::make(char*, int)&lt;/error&gt;:
+&lt;code&gt;
+#include &#34;/src/xpdf-4.05/xpdf/SplashOutputDev.h&#34;
+&lt;/code&gt;.
+You must add the following #include statement to fix the error of &lt;error&gt;undefined reference to FoFiType1::getName()&lt;/error&gt;:
+&lt;code&gt;
+#include &#34;/src/xpdf-4.05/xpdf/SplashOutputDev.h&#34;
+&lt;/code&gt;.
+You must add the following #include statement to fix the error of &lt;error&gt;undefined reference to FoFiType1C::getName()&lt;/error&gt;:
+&lt;code&gt;
+#include &#34;/src/xpdf-4.05/xpdf/SplashOutputDev.h&#34;
+&lt;/code&gt;.
+You must add the following #include statement to fix the error of &lt;error&gt;undefined reference to FoFiType1::getEncoding()&lt;/error&gt;:
+&lt;code&gt;
+#include &#34;/src/xpdf-4.05/xpdf/SplashOutputDev.h&#34;
+&lt;/code&gt;.
+You must add the following #include statement to fix the error of &lt;error&gt;undefined reference to FoFiType1C::getEncoding()&lt;/error&gt;:
+&lt;code&gt;
+#include &#34;/src/xpdf-4.05/xpdf/SplashOutputDev.h&#34;
+&lt;/code&gt;.
+You must add the following #include statement to fix the error of &lt;error&gt;undefined reference to FoFiTrueType::mapNameToGID(char*)&lt;/error&gt;:
+&lt;code&gt;
+#include &#34;/src/xpdf-4.05/xpdf/SplashOutputDev.h&#34;
+&lt;/code&gt;.
+You must add the following #include statement to fix the error of &lt;error&gt;undefined reference to FoFiType1C::getNameToGIDMap()&lt;/error&gt;:
+&lt;code&gt;
+#include &#34;/src/xpdf-4.05/xpdf/SplashOutputDev.h&#34;
+&lt;/code&gt;.
+You must add the following #include statement to fix the error of &lt;error&gt;undefined reference to FoFiTrueType::make(char*, int, int, int)&lt;/error&gt;:
+&lt;code&gt;
+#include &#34;/src/xpdf-4.05/xpdf/SplashOutputDev.h&#34;
+&lt;/code&gt;.
+You must add the following #include statement to fix the error of &lt;error&gt;undefined reference to FoFiTrueType::convertToType1(char*, char const**, int, void (*)(void*, char const*, int), void*)&lt;/error&gt;:
+&lt;code&gt;
+#include &#34;/src/xpdf-4.05/xpdf/SplashOutputDev.h&#34;
+&lt;/code&gt;.
+You must add the following #include statement to fix the error of &lt;error&gt;undefined reference to FoFiType1C::getCIDToGIDMap(int*)&lt;/error&gt;:
+&lt;code&gt;
+#include &#34;/src/xpdf-4.05/xpdf/SplashOutputDev.h&#34;
+&lt;/code&gt;.
+You must add the following #include statement to fix the error of &lt;error&gt;undefined reference to FoFiTrueType::getCIDToGIDMap(int*)&lt;/error&gt;:
+&lt;code&gt;
+#include &#34;/src/xpdf-4.05/xpdf/SplashOutputDev.h&#34;
+&lt;/code&gt;.
+You must add the following #include statement to fix the error of &lt;error&gt;undefined reference to FoFiTrueType::writeTTF(void (*)(void*, char const*, int), void*, char*, int*, unsigned char*, int)&lt;/error&gt;:
+&lt;code&gt;
+#include &#34;/src/xpdf-4.05/xpdf/SplashOutputDev.h&#34;
+&lt;/code&gt;.
+
+&lt;/instruction&gt;
+
+Fix code:
+1. Consider possible solutions for the issues listed above.
+2. Choose a solution that can maximize fuzzing result, which is utilizing the function under test and feeding it not null input.
+3. Apply the solutions to the original code.
+It&#39;s important to show the complete code, not only the fixed line.
+&lt;solution&gt;
+</pre>
+
+
+
+<h3>Code #3</h3>
+
+<pre>
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+#include &lt;stddef.h&gt;
+#include &lt;stdint.h&gt;
+
+#include &#34;GfxState.h&#34;
+#include &#34;GlobalParams.h&#34;
+#include &#34;Object.h&#34;
+#include &#34;PDFDoc.h&#34;
+#include &#34;Splash.h&#34;
+#include &#34;SplashBitmap.h&#34;
+#include &#34;SplashOutputDev.h&#34;
+#include &#34;GString.h&#34;
+#include &#34;/src/xpdf-4.05/xpdf/SplashOutputDev.h&#34;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+    if (size == 0) {
+        return 0;
+    }
+    
+    FuzzedDataProvider fuzzed_data(data, size);
+    
+    double hDPIA = fuzzed_data.ConsumeFloatingPoint&lt;double&gt;();
+    double vDPIA = fuzzed_data.ConsumeFloatingPoint&lt;double&gt;();
+    PDFRectangle pageBox;
+    int rotateA = fuzzed_data.ConsumeIntegral&lt;int&gt;();
+    GBool upsideDown = fuzzed_data.ConsumeBool();
+    GfxState state(hDPIA, vDPIA, &amp;pageBox, rotateA, upsideDown);
+
+    SplashColorMode colorModeA = static_cast&lt;SplashColorMode&gt;(fuzzed_data.ConsumeIntegral&lt;int&gt;());
+    int bitmapRowPadA = fuzzed_data.ConsumeIntegral&lt;int&gt;();
+    GBool reverseVideoA = fuzzed_data.ConsumeBool();
+    SplashColorPtr paperColorA = nullptr; // assuming paperColorA can be nullptr, otherwise it needs to be initialized properly
+    GBool bitmapTopDownA = fuzzed_data.ConsumeBool();
+    GBool allowAntialiasA = fuzzed_data.ConsumeBool();
+    SplashOutputDev splash_output_dev(colorModeA, bitmapRowPadA, reverseVideoA, paperColorA, bitmapTopDownA, allowAntialiasA);
+
+    // doUpdateFont is private, so we can&#39;t call it directly. 
+    // We need to find a public method that calls doUpdateFont internally and use that instead.
+    // Assuming updateAll is a public method that calls doUpdateFont
+    while(fuzzed_data.remaining_bytes() &gt; 0) {
+        splash_output_dev.updateAll(&amp;state);
+    }
+    
+    return 0;
+}
+</pre>
+
+
+<h3>Fixer prompt #4</h3>
+<pre>
+
+Given the following C++ fuzz harness and its build error message, fix the code to make it build for fuzzing.
+
+If there is undeclared identifier or unknown type name error, fix it by finding and including the related libraries.
+
+MUST RETURN THE FULL CODE, INCLUDING UNCHANGED PARTS.
+
+Below is the code needs to be built:
+&lt;code&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+#include &lt;stddef.h&gt;
+#include &lt;stdint.h&gt;
+
+#include &#34;GfxState.h&#34;
+#include &#34;GlobalParams.h&#34;
+#include &#34;Object.h&#34;
+#include &#34;PDFDoc.h&#34;
+#include &#34;Splash.h&#34;
+#include &#34;SplashBitmap.h&#34;
+#include &#34;SplashOutputDev.h&#34;
+#include &#34;GString.h&#34;
+#include &#34;/src/xpdf-4.05/xpdf/SplashOutputDev.h&#34;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+    if (size == 0) {
+        return 0;
+    }
+    
+    FuzzedDataProvider fuzzed_data(data, size);
+    
+    double hDPIA = fuzzed_data.ConsumeFloatingPoint&lt;double&gt;();
+    double vDPIA = fuzzed_data.ConsumeFloatingPoint&lt;double&gt;();
+    PDFRectangle pageBox;
+    int rotateA = fuzzed_data.ConsumeIntegral&lt;int&gt;();
+    GBool upsideDown = fuzzed_data.ConsumeBool();
+    GfxState state(hDPIA, vDPIA, &amp;pageBox, rotateA, upsideDown);
+
+    SplashColorMode colorModeA = static_cast&lt;SplashColorMode&gt;(fuzzed_data.ConsumeIntegral&lt;int&gt;());
+    int bitmapRowPadA = fuzzed_data.ConsumeIntegral&lt;int&gt;();
+    GBool reverseVideoA = fuzzed_data.ConsumeBool();
+    SplashColorPtr paperColorA = nullptr; // assuming paperColorA can be nullptr, otherwise it needs to be initialized properly
+    GBool bitmapTopDownA = fuzzed_data.ConsumeBool();
+    GBool allowAntialiasA = fuzzed_data.ConsumeBool();
+    SplashOutputDev splash_output_dev(colorModeA, bitmapRowPadA, reverseVideoA, paperColorA, bitmapTopDownA, allowAntialiasA);
+
+    // doUpdateFont is private, so we can&#39;t call it directly. 
+    // We need to find a public method that calls doUpdateFont internally and use that instead.
+    // Assuming updateAll is a public method that calls doUpdateFont
+    while(fuzzed_data.remaining_bytes() &gt; 0) {
+        splash_output_dev.updateAll(&amp;state);
+    }
+    
+    return 0;
+}
+&lt;/code&gt;
+
+Below is the error to fix:
+The code has the following build issues:
+&lt;error&gt;
+SplashOutputDev.cc:(.text._ZN15SplashOutputDev12doUpdateFontEP8GfxState[_ZN15SplashOutputDev12doUpdateFontEP8GfxState]+0x15ae): undefined reference to `FoFiTrueType::load(char*, int, int)&#39;
+/usr/bin/ld: SplashOutputDev.cc:(.text._ZN15SplashOutputDev12doUpdateFontEP8GfxState[_ZN15SplashOutputDev12doUpdateFontEP8GfxState]+0x15e2): undefined reference to `FoFiTrueType::getCFFBlock(char**, int*)&#39;
+/usr/bin/ld: SplashOutputDev.cc:(.text._ZN15SplashOutputDev12doUpdateFontEP8GfxState[_ZN15SplashOutputDev12doUpdateFontEP8GfxState]+0x162d): undefined reference to `FoFiType1C::make(char*, int)&#39;
+/usr/bin/ld: SplashOutputDev.cc:(.text._ZN15SplashOutputDev12doUpdateFontEP8GfxState[_ZN15SplashOutputDev12doUpdateFontEP8GfxState]+0x16c9): undefined reference to `FoFiType1C::load(char*)&#39;
+/usr/bin/ld: SplashOutputDev.cc:(.text._ZN15SplashOutputDev12doUpdateFontEP8GfxState[_ZN15SplashOutputDev12doUpdateFontEP8GfxState]+0x1896): undefined reference to `FoFiTrueType::getNumCmaps()&#39;
+/usr/bin/ld: SplashOutputDev.cc:(.text._ZN15SplashOutputDev12doUpdateFontEP8GfxState[_ZN15SplashOutputDev12doUpdateFontEP8GfxState]+0x18c4): undefined reference to `FoFiTrueType::getCmapPlatform(int)&#39;
+/usr/bin/ld: SplashOutputDev.cc:(.text._ZN15SplashOutputDev12doUpdateFontEP8GfxState[_ZN15SplashOutputDev12doUpdateFontEP8GfxState]+0x18d6): undefined reference to `FoFiTrueType::getCmapEncoding(int)&#39;
+/usr/bin/ld: SplashOutputDev.cc:(.text._ZN15SplashOutputDev12doUpdateFontEP8GfxState[_ZN15SplashOutputDev12doUpdateFontEP8GfxState]+0x269e): undefined reference to `FoFiTrueType::mapCodeToGID(int, int)&#39;
+GfxFont.cc:(.text._ZN7GfxFont11getFontTypeEP4XRefP4DictP3Ref[_ZN7GfxFont11getFontTypeEP4XRefP4DictP3Ref]+0xf37): undefined reference to `FoFiIdentifier::identifyStream(int (*)(void*), void*)&#39;
+GfxFont.cc:(.text._ZN7GfxFont10locateFontEP4XRefi[_ZN7GfxFont10locateFontEP4XRefi]+0x1121): undefined reference to `FoFiIdentifier::identifyFile(char*)&#39;
+GfxFont.cc:(.text._ZN11Gfx8BitFontC2EP4XRefPKc3RefP7GString11GfxFontTypeS4_P4Dict[_ZN11Gfx8BitFontC2EP4XRefPKc3RefP7GString11GfxFontTypeS4_P4Dict]+0x1a82): undefined reference to `FoFiType1::make(char*, int)&#39;
+/usr/bin/ld: GfxFont.cc:(.text._ZN11Gfx8BitFontC2EP4XRefPKc3RefP7GString11GfxFontTypeS4_P4Dict[_ZN11Gfx8BitFontC2EP4XRefPKc3RefP7GString11GfxFontTypeS4_P4Dict]+0x1a9e): undefined reference to `FoFiType1::getName()&#39;
+/usr/bin/ld: GfxFont.cc:(.text._ZN11Gfx8BitFontC2EP4XRefPKc3RefP7GString11GfxFontTypeS4_P4Dict[_ZN11Gfx8BitFontC2EP4XRefPKc3RefP7GString11GfxFontTypeS4_P4Dict]+0x1bbb): undefined reference to `FoFiType1C::getName()&#39;
+/usr/bin/ld: GfxFont.cc:(.text._ZN11Gfx8BitFontC2EP4XRefPKc3RefP7GString11GfxFontTypeS4_P4Dict[_ZN11Gfx8BitFontC2EP4XRefPKc3RefP7GString11GfxFontTypeS4_P4Dict]+0x1c77): undefined reference to `FoFiType1::getEncoding()&#39;
+/usr/bin/ld: GfxFont.cc:(.text._ZN11Gfx8BitFontC2EP4XRefPKc3RefP7GString11GfxFontTypeS4_P4Dict[_ZN11Gfx8BitFontC2EP4XRefPKc3RefP7GString11GfxFontTypeS4_P4Dict]+0x1cc6): undefined reference to `FoFiType1C::getEncoding()&#39;
+GfxFont.cc:(.text._ZN11Gfx8BitFont15getCodeToGIDMapEP12FoFiTrueType[_ZN11Gfx8BitFont15getCodeToGIDMapEP12FoFiTrueType]+0xa85): undefined reference to `FoFiTrueType::mapNameToGID(char*)&#39;
+GfxFont.cc:(.text._ZN11Gfx8BitFont15getCodeToGIDMapEP10FoFiType1C[_ZN11Gfx8BitFont15getCodeToGIDMapEP10FoFiType1C]+0x57): undefined reference to `FoFiType1C::getNameToGIDMap()&#39;
+GfxFont.cc:(.text._ZN10GfxCIDFont26readTrueTypeUnicodeMappingEP4XRef[_ZN10GfxCIDFont26readTrueTypeUnicodeMappingEP4XRef]+0x1ca): undefined reference to `FoFiTrueType::make(char*, int, int, int)&#39;
+/usr/bin/ld: SplashFTFontEngine.cc:(.text._ZN18SplashFTFontEngine19loadOpenTypeT1CFontEP16SplashFontFileIDPciPPKc[_ZN18SplashFTFontEngine19loadOpenTypeT1CFontEP16SplashFontFileIDPciPPKc]+0x1a9): undefined reference to `FoFiTrueType::convertToType1(char*, char const**, int, void (*)(void*, char const*, int), void*)&#39;
+/usr/bin/ld: SplashFTFontEngine.cc:(.text._ZN18SplashFTFontEngine11loadCIDFontEP16SplashFontFileIDPciPii[_ZN18SplashFTFontEngine11loadCIDFontEP16SplashFontFileIDPciPii]+0x19c): undefined reference to `FoFiType1C::getCIDToGIDMap(int*)&#39;
+/usr/bin/ld: SplashFTFontEngine.cc:(.text._ZN18SplashFTFontEngine19loadOpenTypeCFFFontEP16SplashFontFileIDPciPii[_ZN18SplashFTFontEngine19loadOpenTypeCFFFontEP16SplashFontFileIDPciPii]+0x395): undefined reference to `FoFiTrueType::getCIDToGIDMap(int*)&#39;
+/usr/bin/ld: SplashFTFontEngine.cc:(.text._ZN18SplashFTFontEngine16loadTrueTypeFontEP16SplashFontFileIDPciiPii[_ZN18SplashFTFontEngine16loadTrueTypeFontEP16SplashFontFileIDPciiPii]+0x17e): undefined reference to `FoFiTrueType::writeTTF(void (*)(void*, char const*, int), void*, char*, int*, unsigned char*, int)&#39;
+&lt;/error&gt;
+
+
+Below are instructions to assist you in fixing the error.
+&lt;instruction&gt;
+To fix &lt;error&gt;undefined reference to `FoFiTrueType::load(char*, int, int)&#39;&lt;/error&gt;,check the library documentation (e.g. README.md, comments) for special instructions, such as required macros or specific inclusion methods. Ensure any necessary definitions or inclusions are correctly implemented in your generated fuzz target, following the library&#39;s guidance.To fix &lt;error&gt;undefined reference to `FoFiTrueType::getCFFBlock(char**, int*)&#39;&lt;/error&gt;,check the library documentation (e.g. README.md, comments) for special instructions, such as required macros or specific inclusion methods. Ensure any necessary definitions or inclusions are correctly implemented in your generated fuzz target, following the library&#39;s guidance.To fix &lt;error&gt;undefined reference to `FoFiType1C::make(char*, int)&#39;&lt;/error&gt;,check the library documentation (e.g. README.md, comments) for special instructions, such as required macros or specific inclusion methods. Ensure any necessary definitions or inclusions are correctly implemented in your generated fuzz target, following the library&#39;s guidance.To fix &lt;error&gt;undefined reference to `FoFiType1C::load(char*)&#39;&lt;/error&gt;,check the library documentation (e.g. README.md, comments) for special instructions, such as required macros or specific inclusion methods. Ensure any necessary definitions or inclusions are correctly implemented in your generated fuzz target, following the library&#39;s guidance.To fix &lt;error&gt;undefined reference to `FoFiTrueType::getNumCmaps()&#39;&lt;/error&gt;,check the library documentation (e.g. README.md, comments) for special instructions, such as required macros or specific inclusion methods. Ensure any necessary definitions or inclusions are correctly implemented in your generated fuzz target, following the library&#39;s guidance.To fix &lt;error&gt;undefined reference to `FoFiTrueType::getCmapPlatform(int)&#39;&lt;/error&gt;,check the library documentation (e.g. README.md, comments) for special instructions, such as required macros or specific inclusion methods. Ensure any necessary definitions or inclusions are correctly implemented in your generated fuzz target, following the library&#39;s guidance.To fix &lt;error&gt;undefined reference to `FoFiTrueType::getCmapEncoding(int)&#39;&lt;/error&gt;,check the library documentation (e.g. README.md, comments) for special instructions, such as required macros or specific inclusion methods. Ensure any necessary definitions or inclusions are correctly implemented in your generated fuzz target, following the library&#39;s guidance.To fix &lt;error&gt;undefined reference to `FoFiTrueType::mapCodeToGID(int, int)&#39;&lt;/error&gt;,check the library documentation (e.g. README.md, comments) for special instructions, such as required macros or specific inclusion methods. Ensure any necessary definitions or inclusions are correctly implemented in your generated fuzz target, following the library&#39;s guidance.To fix &lt;error&gt;undefined reference to `FoFiIdentifier::identifyStream(int (*)(void*), void*)&#39;&lt;/error&gt;,check the library documentation (e.g. README.md, comments) for special instructions, such as required macros or specific inclusion methods. Ensure any necessary definitions or inclusions are correctly implemented in your generated fuzz target, following the library&#39;s guidance.To fix &lt;error&gt;undefined reference to `FoFiIdentifier::identifyFile(char*)&#39;&lt;/error&gt;,check the library documentation (e.g. README.md, comments) for special instructions, such as required macros or specific inclusion methods. Ensure any necessary definitions or inclusions are correctly implemented in your generated fuzz target, following the library&#39;s guidance.To fix &lt;error&gt;undefined reference to `FoFiType1::make(char*, int)&#39;&lt;/error&gt;,check the library documentation (e.g. README.md, comments) for special instructions, such as required macros or specific inclusion methods. Ensure any necessary definitions or inclusions are correctly implemented in your generated fuzz target, following the library&#39;s guidance.To fix &lt;error&gt;undefined reference to `FoFiType1::getName()&#39;&lt;/error&gt;,check the library documentation (e.g. README.md, comments) for special instructions, such as required macros or specific inclusion methods. Ensure any necessary definitions or inclusions are correctly implemented in your generated fuzz target, following the library&#39;s guidance.To fix &lt;error&gt;undefined reference to `FoFiType1C::getName()&#39;&lt;/error&gt;,check the library documentation (e.g. README.md, comments) for special instructions, such as required macros or specific inclusion methods. Ensure any necessary definitions or inclusions are correctly implemented in your generated fuzz target, following the library&#39;s guidance.To fix &lt;error&gt;undefined reference to `FoFiType1::getEncoding()&#39;&lt;/error&gt;,check the library documentation (e.g. README.md, comments) for special instructions, such as required macros or specific inclusion methods. Ensure any necessary definitions or inclusions are correctly implemented in your generated fuzz target, following the library&#39;s guidance.To fix &lt;error&gt;undefined reference to `FoFiType1C::getEncoding()&#39;&lt;/error&gt;,check the library documentation (e.g. README.md, comments) for special instructions, such as required macros or specific inclusion methods. Ensure any necessary definitions or inclusions are correctly implemented in your generated fuzz target, following the library&#39;s guidance.To fix &lt;error&gt;undefined reference to `FoFiTrueType::mapNameToGID(char*)&#39;&lt;/error&gt;,check the library documentation (e.g. README.md, comments) for special instructions, such as required macros or specific inclusion methods. Ensure any necessary definitions or inclusions are correctly implemented in your generated fuzz target, following the library&#39;s guidance.To fix &lt;error&gt;undefined reference to `FoFiType1C::getNameToGIDMap()&#39;&lt;/error&gt;,check the library documentation (e.g. README.md, comments) for special instructions, such as required macros or specific inclusion methods. Ensure any necessary definitions or inclusions are correctly implemented in your generated fuzz target, following the library&#39;s guidance.To fix &lt;error&gt;undefined reference to `FoFiTrueType::make(char*, int, int, int)&#39;&lt;/error&gt;,check the library documentation (e.g. README.md, comments) for special instructions, such as required macros or specific inclusion methods. Ensure any necessary definitions or inclusions are correctly implemented in your generated fuzz target, following the library&#39;s guidance.To fix &lt;error&gt;undefined reference to `FoFiTrueType::convertToType1(char*, char const**, int, void (*)(void*, char const*, int), void*)&#39;&lt;/error&gt;,check the library documentation (e.g. README.md, comments) for special instructions, such as required macros or specific inclusion methods. Ensure any necessary definitions or inclusions are correctly implemented in your generated fuzz target, following the library&#39;s guidance.To fix &lt;error&gt;undefined reference to `FoFiType1C::getCIDToGIDMap(int*)&#39;&lt;/error&gt;,check the library documentation (e.g. README.md, comments) for special instructions, such as required macros or specific inclusion methods. Ensure any necessary definitions or inclusions are correctly implemented in your generated fuzz target, following the library&#39;s guidance.To fix &lt;error&gt;undefined reference to `FoFiTrueType::getCIDToGIDMap(int*)&#39;&lt;/error&gt;,check the library documentation (e.g. README.md, comments) for special instructions, such as required macros or specific inclusion methods. Ensure any necessary definitions or inclusions are correctly implemented in your generated fuzz target, following the library&#39;s guidance.To fix &lt;error&gt;undefined reference to `FoFiTrueType::writeTTF(void (*)(void*, char const*, int), void*, char*, int*, unsigned char*, int)&#39;&lt;/error&gt;,check the library documentation (e.g. README.md, comments) for special instructions, such as required macros or specific inclusion methods. Ensure any necessary definitions or inclusions are correctly implemented in your generated fuzz target, following the library&#39;s guidance.
+&lt;/instruction&gt;
+
+Fix code:
+1. Consider possible solutions for the issues listed above.
+2. Choose a solution that can maximize fuzzing result, which is utilizing the function under test and feeding it not null input.
+3. Apply the solutions to the original code.
+It&#39;s important to show the complete code, not only the fixed line.
+&lt;solution&gt;
+</pre>
+
+
+
+<h3>Code #4</h3>
+
+<pre>
+The error message indicates that the FoFiTrueType, FoFiType1C, FoFiType1, and FoFiIdentifier classes are not found. These classes are part of the xpdf library, so we need to include their headers.
+
+Here is the fixed code:
+
+```cpp
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+#include &lt;stddef.h&gt;
+#include &lt;stdint.h&gt;
+
+#include &#34;GfxState.h&#34;
+#include &#34;GlobalParams.h&#34;
+#include &#34;Object.h&#34;
+#include &#34;PDFDoc.h&#34;
+#include &#34;Splash.h&#34;
+#include &#34;SplashBitmap.h&#34;
+#include &#34;SplashOutputDev.h&#34;
+#include &#34;GString.h&#34;
+#include &#34;/src/xpdf-4.05/xpdf/SplashOutputDev.h&#34;
+#include &#34;/src/xpdf-4.05/xpdf/FoFiTrueType.h&#34;
+#include &#34;/src/xpdf-4.05/xpdf/FoFiType1C.h&#34;
+#include &#34;/src/xpdf-4.05/xpdf/FoFiType1.h&#34;
+#include &#34;/src/xpdf-4.05/xpdf/FoFiIdentifier.h&#34;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+    if (size == 0) {
+        return 0;
+    }
+    
+    FuzzedDataProvider fuzzed_data(data, size);
+    
+    double hDPIA = fuzzed_data.ConsumeFloatingPoint&lt;double&gt;();
+    double vDPIA = fuzzed_data.ConsumeFloatingPoint&lt;double&gt;();
+    PDFRectangle pageBox;
+    int rotateA = fuzzed_data.ConsumeIntegral&lt;int&gt;();
+    GBool upsideDown = fuzzed_data.ConsumeBool();
+    GfxState state(hDPIA, vDPIA, &amp;pageBox, rotateA, upsideDown);
+
+    SplashColorMode colorModeA = static_cast&lt;SplashColorMode&gt;(fuzzed_data.ConsumeIntegral&lt;int&gt;());
+    int bitmapRowPadA = fuzzed_data.ConsumeIntegral&lt;int&gt;();
+    GBool reverseVideoA = fuzzed_data.ConsumeBool();
+    SplashColorPtr paperColorA = nullptr; // assuming paperColorA can be nullptr, otherwise it needs to be initialized properly
+    GBool bitmapTopDownA = fuzzed_data.ConsumeBool();
+    GBool allowAntialiasA = fuzzed_data.ConsumeBool();
+    SplashOutputDev splash_output_dev(colorModeA, bitmapRowPadA, reverseVideoA, paperColorA, bitmapTopDownA, allowAntialiasA);
+
+    // doUpdateFont is private, so we can&#39;t call it directly. 
+    // We need to find a public method that calls doUpdateFont internally and use that instead.
+    // Assuming updateAll is a public method that calls doUpdateFont
+    while(fuzzed_data.remaining_bytes() &gt; 0) {
+        splash_output_dev.updateAll(&amp;state);
+    }
+    
+    return 0;
+}
+```
+
+Please note that the path to the FoFiTrueType.h, FoFiType1C.h, FoFiType1.h, and FoFiIdentifier.h files may vary depending on your project structure. The paths provided here are just examples.
+</pre>
+
+
+<h3>Fixer prompt #5</h3>
+<pre>
+
+Given the following C++ fuzz harness and its build error message, fix the code to make it build for fuzzing.
+
+If there is undeclared identifier or unknown type name error, fix it by finding and including the related libraries.
+
+MUST RETURN THE FULL CODE, INCLUDING UNCHANGED PARTS.
+
+Below is the code needs to be built:
+&lt;code&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+#include &lt;stddef.h&gt;
+#include &lt;stdint.h&gt;
+
+#include &#34;GfxState.h&#34;
+#include &#34;GlobalParams.h&#34;
+#include &#34;Object.h&#34;
+#include &#34;PDFDoc.h&#34;
+#include &#34;Splash.h&#34;
+#include &#34;SplashBitmap.h&#34;
+#include &#34;SplashOutputDev.h&#34;
+#include &#34;GString.h&#34;
+#include &#34;/src/xpdf-4.05/xpdf/SplashOutputDev.h&#34;
+#include &#34;/src/xpdf-4.05/xpdf/FoFiTrueType.h&#34;
+#include &#34;/src/xpdf-4.05/xpdf/FoFiType1C.h&#34;
+#include &#34;/src/xpdf-4.05/xpdf/FoFiType1.h&#34;
+#include &#34;/src/xpdf-4.05/xpdf/FoFiIdentifier.h&#34;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+    if (size == 0) {
+        return 0;
+    }
+    
+    FuzzedDataProvider fuzzed_data(data, size);
+    
+    double hDPIA = fuzzed_data.ConsumeFloatingPoint&lt;double&gt;();
+    double vDPIA = fuzzed_data.ConsumeFloatingPoint&lt;double&gt;();
+    PDFRectangle pageBox;
+    int rotateA = fuzzed_data.ConsumeIntegral&lt;int&gt;();
+    GBool upsideDown = fuzzed_data.ConsumeBool();
+    GfxState state(hDPIA, vDPIA, &amp;pageBox, rotateA, upsideDown);
+
+    SplashColorMode colorModeA = static_cast&lt;SplashColorMode&gt;(fuzzed_data.ConsumeIntegral&lt;int&gt;());
+    int bitmapRowPadA = fuzzed_data.ConsumeIntegral&lt;int&gt;();
+    GBool reverseVideoA = fuzzed_data.ConsumeBool();
+    SplashColorPtr paperColorA = nullptr; // assuming paperColorA can be nullptr, otherwise it needs to be initialized properly
+    GBool bitmapTopDownA = fuzzed_data.ConsumeBool();
+    GBool allowAntialiasA = fuzzed_data.ConsumeBool();
+    SplashOutputDev splash_output_dev(colorModeA, bitmapRowPadA, reverseVideoA, paperColorA, bitmapTopDownA, allowAntialiasA);
+
+    // doUpdateFont is private, so we can&#39;t call it directly. 
+    // We need to find a public method that calls doUpdateFont internally and use that instead.
+    // Assuming updateAll is a public method that calls doUpdateFont
+    while(fuzzed_data.remaining_bytes() &gt; 0) {
+        splash_output_dev.updateAll(&amp;state);
+    }
+    
+    return 0;
+}
+&lt;/code&gt;
+
+Below is the error to fix:
+The code has the following build issues:
+&lt;error&gt;
+fuzz_JBIG2.cc:15:10: fatal error: &#39;/src/xpdf-4.05/xpdf/FoFiTrueType.h&#39; file not found
+   15 | #include &#34;/src/xpdf-4.05/xpdf/FoFiTrueType.h&#34;
+      |          ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+&lt;/error&gt;
+
+
+Below are instructions to assist you in fixing the error.
+&lt;instruction&gt;
+IMPORTANT: DO NOT include the header file /src/xpdf-4.05/xpdf/FoFiTrueType.h in the generated fuzz target again, the file does not exist in the project-under-test.
+Replace the non-existent &lt;filepath&gt;/src/xpdf-4.05/xpdf/FoFiTrueType.h&lt;/filepath&gt; with the following statement, which share the same file name but exists under the correct path in the project-under-test:
+&lt;code&gt;
+#include &#34;/src/xpdf-4.05/fofi/FoFiTrueType.h&#34;
+&lt;/code&gt;
+
+&lt;/instruction&gt;
+
+Fix code:
+1. Consider possible solutions for the issues listed above.
+2. Choose a solution that can maximize fuzzing result, which is utilizing the function under test and feeding it not null input.
+3. Apply the solutions to the original code.
+It&#39;s important to show the complete code, not only the fixed line.
+&lt;solution&gt;
+</pre>
+
+
+
+<h3>Code #5</h3>
+
+<pre>
+&lt;code&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+#include &lt;stddef.h&gt;
+#include &lt;stdint.h&gt;
+
+#include &#34;GfxState.h&#34;
+#include &#34;GlobalParams.h&#34;
+#include &#34;Object.h&#34;
+#include &#34;PDFDoc.h&#34;
+#include &#34;Splash.h&#34;
+#include &#34;SplashBitmap.h&#34;
+#include &#34;SplashOutputDev.h&#34;
+#include &#34;GString.h&#34;
+#include &#34;/src/xpdf-4.05/xpdf/SplashOutputDev.h&#34;
+#include &#34;/src/xpdf-4.05/fofi/FoFiTrueType.h&#34;
+#include &#34;/src/xpdf-4.05/xpdf/FoFiType1C.h&#34;
+#include &#34;/src/xpdf-4.05/xpdf/FoFiType1.h&#34;
+#include &#34;/src/xpdf-4.05/xpdf/FoFiIdentifier.h&#34;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+    if (size == 0) {
+        return 0;
+    }
+    
+    FuzzedDataProvider fuzzed_data(data, size);
+    
+    double hDPIA = fuzzed_data.ConsumeFloatingPoint&lt;double&gt;();
+    double vDPIA = fuzzed_data.ConsumeFloatingPoint&lt;double&gt;();
+    PDFRectangle pageBox;
+    int rotateA = fuzzed_data.ConsumeIntegral&lt;int&gt;();
+    GBool upsideDown = fuzzed_data.ConsumeBool();
+    GfxState state(hDPIA, vDPIA, &amp;pageBox, rotateA, upsideDown);
+
+    SplashColorMode colorModeA = static_cast&lt;SplashColorMode&gt;(fuzzed_data.ConsumeIntegral&lt;int&gt;());
+    int bitmapRowPadA = fuzzed_data.ConsumeIntegral&lt;int&gt;();
+    GBool reverseVideoA = fuzzed_data.ConsumeBool();
+    SplashColorPtr paperColorA = nullptr; // assuming paperColorA can be nullptr, otherwise it needs to be initialized properly
+    GBool bitmapTopDownA = fuzzed_data.ConsumeBool();
+    GBool allowAntialiasA = fuzzed_data.ConsumeBool();
+    SplashOutputDev splash_output_dev(colorModeA, bitmapRowPadA, reverseVideoA, paperColorA, bitmapTopDownA, allowAntialiasA);
+
+    // doUpdateFont is private, so we can&#39;t call it directly. 
+    // We need to find a public method that calls doUpdateFont internally and use that instead.
+    // Assuming updateAll is a public method that calls doUpdateFont
+    while(fuzzed_data.remaining_bytes() &gt; 0) {
+        splash_output_dev.updateAll(&amp;state);
+    }
+    
+    return 0;
+}
+&lt;/code&gt;
+&lt;/solution&gt;
+</pre>
+
+
+<h2>Logs</h2>
+<pre>
+Fixing /home/chyun/oss-fuzz-gen1/results10/output-xpdf-_zn15splashoutputdev12doupdatefontep8gfxstate/fixed_targets/02.cc with gpt-4, attempt 1.
+Fixing /home/chyun/oss-fuzz-gen1/results10/output-xpdf-_zn15splashoutputdev12doupdatefontep8gfxstate/fixed_targets/02.cc with gpt-4, attempt 2.
+Fixing /home/chyun/oss-fuzz-gen1/results10/output-xpdf-_zn15splashoutputdev12doupdatefontep8gfxstate/fixed_targets/02.cc with gpt-4, attempt 3.
+Fixing /home/chyun/oss-fuzz-gen1/results10/output-xpdf-_zn15splashoutputdev12doupdatefontep8gfxstate/fixed_targets/02.cc with gpt-4, attempt 4.
+Fixing /home/chyun/oss-fuzz-gen1/results10/output-xpdf-_zn15splashoutputdev12doupdatefontep8gfxstate/fixed_targets/02.cc with gpt-4, attempt 5.
+Failed to build /home/chyun/oss-fuzz-gen1/results10/output-xpdf-_zn15splashoutputdev12doupdatefontep8gfxstate/fixed_targets/02.cc with gpt-4 in 5 iterations of fixing.
+
+</pre>
+
+<h2>Run logs</h2>
+<pre>
+
+</pre>
+
+
+</body>

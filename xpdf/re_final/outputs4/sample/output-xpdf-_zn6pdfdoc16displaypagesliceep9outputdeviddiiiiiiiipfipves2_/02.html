@@ -1,0 +1,860 @@
+<!doctype html>
+
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Experiment results</title>
+<style>
+* {
+    box-sizing: border-box;
+}
+
+html {
+    line-height: 1.15;
+}
+
+body {
+    font-family: sans-serif;
+    font-size: 16px;
+}
+
+table {
+    border-collapse: collapse;
+    border-spacing: 0;
+}
+
+td, th {
+    border-right: 1px #dedede solid;
+    border-bottom: 1px #dedede solid;
+    padding: 5px;
+    text-align: left;
+}
+td:first-child, th:first-child {
+    border-left: 1px #dedede solid;
+}
+th {
+    border-top: 1px #dedede solid;
+}
+
+tbody tr:nth-child(odd) {
+    background-color: #f4f5ff;
+}
+</style>
+<body>
+    LLM: 
+    
+<h1>output-xpdf-_zn6pdfdoc16displaypagesliceep9outputdeviddiiiiiiiipfipves2_ / 02</h1>
+Bug: False
+<br>
+Crash reason: FP_NEAR_INIT_CRASH
+<br>
+<br>
+
+<h2>Triage</h2>
+<pre>
+Crash is caused by bug in project.
+
+The crash is caused by a null pointer dereference in the getNumPages method of the PDFDoc class. The crash log indicates that the crash occurred when the fuzz driver attempted to call the getNumPages method on the PDFDoc object, suggesting that the object was not properly initialized or the file &#34;dummy.pdf&#34; was not correctly written or read. The bug lies in the project code, as the fuzz driver is correctly using the API provided by the project. It is the responsibility of the project to ensure that its methods can handle all types of input safely.
+</pre>
+<br>
+
+
+
+
+
+<h3>Final code</h3>
+
+<pre>
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;stdint.h&gt;
+#include &lt;fstream&gt;
+#include &#34;GString.h&#34;
+#include &#34;PDFDoc.h&#34;
+#include &#34;OutputDev.h&#34;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  if (size &lt; 1) {
+    return 0;
+  }
+
+  FuzzedDataProvider fuzzed_data_provider(data, size);
+  int num1 = fuzzed_data_provider.ConsumeIntegral&lt;int&gt;();
+  double num2 = fuzzed_data_provider.ConsumeFloatingPoint&lt;double&gt;();
+  double num3 = fuzzed_data_provider.ConsumeFloatingPoint&lt;double&gt;();
+  int num4 = fuzzed_data_provider.ConsumeIntegral&lt;int&gt;();
+  GBool bool1 = fuzzed_data_provider.ConsumeBool();
+  GBool bool2 = fuzzed_data_provider.ConsumeBool();
+  GBool bool3 = fuzzed_data_provider.ConsumeBool();
+  int num5 = fuzzed_data_provider.ConsumeIntegral&lt;int&gt;();
+  int num6 = fuzzed_data_provider.ConsumeIntegral&lt;int&gt;();
+  int num7 = fuzzed_data_provider.ConsumeIntegral&lt;int&gt;();
+  int num8 = fuzzed_data_provider.ConsumeIntegral&lt;int&gt;();
+  
+  std::ofstream out(&#34;dummy.pdf&#34;);
+  out.write(reinterpret_cast&lt;const char*&gt;(data), size);
+  out.close();
+  
+  GString fileName(&#34;dummy.pdf&#34;);
+  PDFDoc doc(&amp;fileName);
+  
+  class MyOutputDev: public OutputDev {
+    public:
+      GBool upsideDown() { return gTrue; }
+      GBool useDrawChar() { return gTrue; }
+      GBool interpretType3Chars() { return gTrue; }
+  };
+  
+  MyOutputDev output;
+  if(doc.getNumPages() &gt; 0){
+    num1 = num1 % doc.getNumPages() + 1; // Ensure num1 is a valid page number
+    doc.displayPageSlice(&amp;output, num1, num2, num3, num4, bool1, bool2, bool3, num5, num6, num7, num8, nullptr, nullptr);
+  }
+
+  return 0;
+}
+</pre>
+
+
+<h3>Fixer prompt #1</h3>
+<pre>
+
+Given the following C++ fuzz harness and its build error message, fix the code to make it build for fuzzing.
+
+If there is undeclared identifier or unknown type name error, fix it by finding and including the related libraries.
+
+MUST RETURN THE FULL CODE, INCLUDING UNCHANGED PARTS.
+
+Below is the code needs to be built:
+&lt;code&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+#include &lt;stdlib.h&gt;
+
+#include &#34;GString.h&#34;
+#include
+&lt;/code&gt;
+
+Below is the error to fix:
+The code has the following build issues:
+&lt;error&gt;
+The target function `void PDFDoc::displayPageSlice(OutputDev *, int, double, double, int, GBool, GBool, GBool, int, int, int, int, DW_TAG_subroutine_typeInfinite loop *, void *)` was not called by the fuzz target `LLVMFuzzerTestOneInput`.YOU MUST CALL FUNCTION `void PDFDoc::displayPageSlice(OutputDev *, int, double, double, int, GBool, GBool, GBool, int, int, int, int, DW_TAG_subroutine_typeInfinite loop *, void *)` INSIDE FUNCTION `LLVMFuzzerTestOneInput`.
+&lt;/error&gt;
+
+
+
+
+Fix code:
+1. Consider possible solutions for the issues listed above.
+2. Choose a solution that can maximize fuzzing result, which is utilizing the function under test and feeding it not null input.
+3. Apply the solutions to the original code.
+It&#39;s important to show the complete code, not only the fixed line.
+&lt;solution&gt;
+</pre>
+
+
+
+<h3>Code #1</h3>
+
+<pre>
+&lt;code&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+#include &lt;stdlib.h&gt;
+#include &#34;GString.h&#34;
+#include &#34;PDFDoc.h&#34;
+#include &#34;OutputDev.h&#34;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  if (size &lt; 1) {
+    return 0;
+  }
+
+  FuzzedDataProvider fuzzed_data_provider(data, size);
+  int num1 = fuzzed_data_provider.ConsumeIntegral&lt;int&gt;();
+  double num2 = fuzzed_data_provider.ConsumeFloatingPoint&lt;double&gt;();
+  double num3 = fuzzed_data_provider.ConsumeFloatingPoint&lt;double&gt;();
+  int num4 = fuzzed_data_provider.ConsumeIntegral&lt;int&gt;();
+  GBool bool1 = fuzzed_data_provider.ConsumeBool();
+  GBool bool2 = fuzzed_data_provider.ConsumeBool();
+  GBool bool3 = fuzzed_data_provider.ConsumeBool();
+  int num5 = fuzzed_data_provider.ConsumeIntegral&lt;int&gt;();
+  int num6 = fuzzed_data_provider.ConsumeIntegral&lt;int&gt;();
+  int num7 = fuzzed_data_provider.ConsumeIntegral&lt;int&gt;();
+  int num8 = fuzzed_data_provider.ConsumeIntegral&lt;int&gt;();
+  DW_TAG_subroutine_typeInfinite loop* loop = nullptr;
+
+  PDFDoc doc;
+  OutputDev output;
+  doc.displayPageSlice(&amp;output, num1, num2, num3, num4, bool1, bool2, bool3, num5, num6, num7, num8, loop, nullptr);
+
+  return 0;
+}
+&lt;/code&gt;
+&lt;/solution&gt;
+</pre>
+
+
+<h3>Fixer prompt #2</h3>
+<pre>
+
+Given the following C++ fuzz harness and its build error message, fix the code to make it build for fuzzing.
+
+If there is undeclared identifier or unknown type name error, fix it by finding and including the related libraries.
+
+MUST RETURN THE FULL CODE, INCLUDING UNCHANGED PARTS.
+
+Below is the code needs to be built:
+&lt;code&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+#include &lt;stdlib.h&gt;
+#include &#34;GString.h&#34;
+#include &#34;PDFDoc.h&#34;
+#include &#34;OutputDev.h&#34;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  if (size &lt; 1) {
+    return 0;
+  }
+
+  FuzzedDataProvider fuzzed_data_provider(data, size);
+  int num1 = fuzzed_data_provider.ConsumeIntegral&lt;int&gt;();
+  double num2 = fuzzed_data_provider.ConsumeFloatingPoint&lt;double&gt;();
+  double num3 = fuzzed_data_provider.ConsumeFloatingPoint&lt;double&gt;();
+  int num4 = fuzzed_data_provider.ConsumeIntegral&lt;int&gt;();
+  GBool bool1 = fuzzed_data_provider.ConsumeBool();
+  GBool bool2 = fuzzed_data_provider.ConsumeBool();
+  GBool bool3 = fuzzed_data_provider.ConsumeBool();
+  int num5 = fuzzed_data_provider.ConsumeIntegral&lt;int&gt;();
+  int num6 = fuzzed_data_provider.ConsumeIntegral&lt;int&gt;();
+  int num7 = fuzzed_data_provider.ConsumeIntegral&lt;int&gt;();
+  int num8 = fuzzed_data_provider.ConsumeIntegral&lt;int&gt;();
+  DW_TAG_subroutine_typeInfinite loop* loop = nullptr;
+
+  PDFDoc doc;
+  OutputDev output;
+  doc.displayPageSlice(&amp;output, num1, num2, num3, num4, bool1, bool2, bool3, num5, num6, num7, num8, loop, nullptr);
+
+  return 0;
+}
+&lt;/code&gt;
+
+Below is the error to fix:
+The code has the following build issues:
+&lt;error&gt;
+fuzz_JBIG2.cc:24:3: error: unknown type name &#39;DW_TAG_subroutine_typeInfinite&#39;
+   24 |   DW_TAG_subroutine_typeInfinite loop* loop = nullptr;
+      |   ^
+fuzz_JBIG2.cc:24:38: error: expected &#39;;&#39; at end of declaration
+   24 |   DW_TAG_subroutine_typeInfinite loop* loop = nullptr;
+      |                                      ^
+      |                                      ;
+fuzz_JBIG2.cc:26:10: error: no matching constructor for initialization of &#39;PDFDoc&#39;
+   26 |   PDFDoc doc;
+      |          ^
+../xpdf/PDFDoc.h:35:7: note: candidate constructor (the implicit copy constructor) not viable: requires 1 argument, but 0 were provided
+   35 | class PDFDoc {
+      |       ^~~~~~
+../xpdf/PDFDoc.h:38:3: note: candidate constructor not viable: requires at least argument &#39;fileNameA&#39;, but no arguments were provided
+   38 |   PDFDoc(GString *fileNameA, GString *ownerPassword = NULL,
+      |   ^      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+   39 |          GString *userPassword = NULL, PDFCore *coreA = NULL);
+      |          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+../xpdf/PDFDoc.h:48:3: note: candidate constructor not viable: requires at least argument &#39;fileNameA&#39;, but no arguments were provided
+   48 |   PDFDoc(char *fileNameA, GString *ownerPassword = NULL,
+      |   ^      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+   49 |          GString *userPassword = NULL, PDFCore *coreA = NULL);
+      |          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+../xpdf/PDFDoc.h:51:3: note: candidate constructor not viable: requires at least argument &#39;strA&#39;, but no arguments were provided
+   51 |   PDFDoc(BaseStream *strA, GString *ownerPassword = NULL,
+      |   ^      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+   52 |          GString *userPassword = NULL, PDFCore *coreA = NULL);
+      |          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+fuzz_JBIG2.cc:27:13: error: variable type &#39;OutputDev&#39; is an abstract class
+   27 |   OutputDev output;
+      |             ^
+../xpdf/OutputDev.h:48:17: note: unimplemented pure virtual method &#39;upsideDown&#39; in &#39;OutputDev&#39;
+   48 |   virtual GBool upsideDown() = 0;
+      |                 ^
+../xpdf/OutputDev.h:51:17: note: unimplemented pure virtual method &#39;useDrawChar&#39; in &#39;OutputDev&#39;
+   51 |   virtual GBool useDrawChar() = 0;
+      |                 ^
+../xpdf/OutputDev.h:64:17: note: unimplemented pure virtual method &#39;interpretType3Chars&#39; in &#39;OutputDev&#39;
+   64 |   virtual GBool interpretType3Chars() = 0;
+      |                 ^
+&lt;/error&gt;
+
+
+Below are instructions to assist you in fixing the error.
+&lt;instruction&gt;
+IMPORTANT: ALWAYS INCLUDE STANDARD LIBRARIES BEFORE PROJECT-SPECIFIC (xpdf) LIBRARIES. This order prevents errors like &#34;unknown type name&#34; for basic types. Additionally, include project-specific libraries that contain declarations before those thatuse these declared symbols.
+&lt;/instruction&gt;
+
+Fix code:
+1. Consider possible solutions for the issues listed above.
+2. Choose a solution that can maximize fuzzing result, which is utilizing the function under test and feeding it not null input.
+3. Apply the solutions to the original code.
+It&#39;s important to show the complete code, not only the fixed line.
+&lt;solution&gt;
+</pre>
+
+
+
+<h3>Code #2</h3>
+
+<pre>
+Below is the fixed code:
+
+```cpp
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;stdint.h&gt;
+#include &#34;GString.h&#34;
+#include &#34;PDFDoc.h&#34;
+#include &#34;OutputDev.h&#34;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  if (size &lt; 1) {
+    return 0;
+  }
+
+  FuzzedDataProvider fuzzed_data_provider(data, size);
+  int num1 = fuzzed_data_provider.ConsumeIntegral&lt;int&gt;();
+  double num2 = fuzzed_data_provider.ConsumeFloatingPoint&lt;double&gt;();
+  double num3 = fuzzed_data_provider.ConsumeFloatingPoint&lt;double&gt;();
+  int num4 = fuzzed_data_provider.ConsumeIntegral&lt;int&gt;();
+  GBool bool1 = fuzzed_data_provider.ConsumeBool();
+  GBool bool2 = fuzzed_data_provider.ConsumeBool();
+  GBool bool3 = fuzzed_data_provider.ConsumeBool();
+  int num5 = fuzzed_data_provider.ConsumeIntegral&lt;int&gt;();
+  int num6 = fuzzed_data_provider.ConsumeIntegral&lt;int&gt;();
+  int num7 = fuzzed_data_provider.ConsumeIntegral&lt;int&gt;();
+  int num8 = fuzzed_data_provider.ConsumeIntegral&lt;int&gt;();
+  
+  GString fileName(&#34;dummy.pdf&#34;);
+  PDFDoc doc(&amp;fileName);
+  
+  class MyOutputDev: public OutputDev {
+    public:
+      GBool upsideDown() { return gTrue; }
+      GBool useDrawChar() { return gTrue; }
+      GBool interpretType3Chars() { return gTrue; }
+  };
+  
+  MyOutputDev output;
+  doc.displayPageSlice(&amp;output, num1, num2, num3, num4, bool1, bool2, bool3, num5, num6, num7, num8, nullptr, nullptr);
+
+  return 0;
+}
+```
+
+In the above code, I have removed the undeclared identifier &#39;DW_TAG_subroutine_typeInfinite loop* loop = nullptr;&#39; as it was not used anywhere in the code and seems to be a mistake. 
+
+I have also created a dummy PDFDoc object by passing a dummy file name to its constructor as it doesn&#39;t have a default constructor. 
+
+The &#39;OutputDev&#39; class is an abstract class and cannot be instantiated directly. So, I have created a derived class &#39;MyOutputDev&#39; and provided the implementation for the pure virtual functions &#39;upsideDown()&#39;, &#39;useDrawChar()&#39; and &#39;interpretType3Chars()&#39; in it. Then, I have created an object of &#39;MyOutputDev&#39; class and passed it to &#39;displayPageSlice()&#39; function.
+</pre>
+
+
+<h3>Fixer prompt #3</h3>
+<pre>
+
+Given the following C++ fuzz harness and its build error message, fix the code to make it build for fuzzing.
+
+If there is undeclared identifier or unknown type name error, fix it by finding and including the related libraries.
+
+MUST RETURN THE FULL CODE, INCLUDING UNCHANGED PARTS.
+
+Below is the code needs to be built:
+&lt;code&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;stdint.h&gt;
+#include &#34;GString.h&#34;
+#include &#34;PDFDoc.h&#34;
+#include &#34;OutputDev.h&#34;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  if (size &lt; 1) {
+    return 0;
+  }
+
+  FuzzedDataProvider fuzzed_data_provider(data, size);
+  int num1 = fuzzed_data_provider.ConsumeIntegral&lt;int&gt;();
+  double num2 = fuzzed_data_provider.ConsumeFloatingPoint&lt;double&gt;();
+  double num3 = fuzzed_data_provider.ConsumeFloatingPoint&lt;double&gt;();
+  int num4 = fuzzed_data_provider.ConsumeIntegral&lt;int&gt;();
+  GBool bool1 = fuzzed_data_provider.ConsumeBool();
+  GBool bool2 = fuzzed_data_provider.ConsumeBool();
+  GBool bool3 = fuzzed_data_provider.ConsumeBool();
+  int num5 = fuzzed_data_provider.ConsumeIntegral&lt;int&gt;();
+  int num6 = fuzzed_data_provider.ConsumeIntegral&lt;int&gt;();
+  int num7 = fuzzed_data_provider.ConsumeIntegral&lt;int&gt;();
+  int num8 = fuzzed_data_provider.ConsumeIntegral&lt;int&gt;();
+  
+  GString fileName(&#34;dummy.pdf&#34;);
+  PDFDoc doc(&amp;fileName);
+  
+  class MyOutputDev: public OutputDev {
+    public:
+      GBool upsideDown() { return gTrue; }
+      GBool useDrawChar() { return gTrue; }
+      GBool interpretType3Chars() { return gTrue; }
+  };
+  
+  MyOutputDev output;
+  doc.displayPageSlice(&amp;output, num1, num2, num3, num4, bool1, bool2, bool3, num5, num6, num7, num8, nullptr, nullptr);
+
+  return 0;
+}
+&lt;/code&gt;
+
+Below is the error to fix:
+The code can build successfully but has a runtime issue: Fuzzing crashed immediately at runtime (ASAN-ERROR: AddressSanitizer: SEGV on unknown address 0x000000000038 (pc 0x7f683c19efc4 bp 0x7fff9ffa3e40 sp 0x7fff9ffa3e08 T0)), indicating fuzz target code for invoking the function under test is incorrect or unrobust.
+&lt;error&gt;
+Crash stacks:
+Stack 0:
+#0 0x7f683c19efc4 in __pthread_mutex_lock (/lib/x86_64-linux-gnu/libpthread.so.0+0xafc4) (BuildId: 9a65bb469e45a1c6fbcffae5b82a2fd7a69eb479)
+#1 0x564fe25857e6 in Catalog::getPage(int) /src/xpdf-4.05/xpdf/Catalog.cc:300:3
+#2 0x564fe252066f in PDFDoc::displayPageSlice(OutputDev*, int, double, double, int, int, int, int, int, int, int, int, int (*)(void*), void*) /src/xpdf-4.05/xpdf/PDFDoc.cc:476:12
+#3 0x564fe251c716 in LLVMFuzzerTestOneInput /src/xpdf-4.05/build/fuzz_JBIG2.cc:37:7
+#4 0x564fe23ce600 in fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:614:13
+#5 0x564fe23cde25 in fuzzer::Fuzzer::RunOne(unsigned char const*, unsigned long, bool, fuzzer::InputInfo*, bool, bool*) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:516:7
+#6 0x564fe23cfc76 in fuzzer::Fuzzer::ReadAndExecuteSeedCorpora(std::__Fuzzer::vector&lt;fuzzer::SizedFile, std::__Fuzzer::allocator&lt;fuzzer::SizedFile&gt;&gt;&amp;) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:812:5
+#7 0x564fe23d00e7 in fuzzer::Fuzzer::Loop(std::__Fuzzer::vector&lt;fuzzer::SizedFile, std::__Fuzzer::allocator&lt;fuzzer::SizedFile&gt;&gt;&amp;) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:867:3
+#8 0x564fe23be6f6 in fuzzer::FuzzerDriver(int*, char***, int (*)(unsigned char const*, unsigned long)) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:914:6
+#9 0x564fe23eac22 in main /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMain.cpp:20:10
+#10 0x7f683bf7d082 in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x24082) (BuildId: 0702430aef5fa3dda43986563e9ffcc47efbd75e)
+#11 0x564fe23af86d in _start (/out/fuzz_JBIG2+0x1cb86d)
+&lt;/error&gt;
+
+
+
+
+Fix code:
+1. Consider possible solutions for the issues listed above.
+2. Choose a solution that can maximize fuzzing result, which is utilizing the function under test and feeding it not null input.
+3. Apply the solutions to the original code.
+It&#39;s important to show the complete code, not only the fixed line.
+&lt;solution&gt;
+</pre>
+
+
+
+<h3>Code #3</h3>
+
+<pre>
+&lt;code&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;stdint.h&gt;
+#include &lt;fstream&gt;
+#include &#34;GString.h&#34;
+#include &#34;PDFDoc.h&#34;
+#include &#34;OutputDev.h&#34;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  if (size &lt; 1) {
+    return 0;
+  }
+
+  FuzzedDataProvider fuzzed_data_provider(data, size);
+  int num1 = fuzzed_data_provider.ConsumeIntegral&lt;int&gt;();
+  double num2 = fuzzed_data_provider.ConsumeFloatingPoint&lt;double&gt;();
+  double num3 = fuzzed_data_provider.ConsumeFloatingPoint&lt;double&gt;();
+  int num4 = fuzzed_data_provider.ConsumeIntegral&lt;int&gt;();
+  GBool bool1 = fuzzed_data_provider.ConsumeBool();
+  GBool bool2 = fuzzed_data_provider.ConsumeBool();
+  GBool bool3 = fuzzed_data_provider.ConsumeBool();
+  int num5 = fuzzed_data_provider.ConsumeIntegral&lt;int&gt;();
+  int num6 = fuzzed_data_provider.ConsumeIntegral&lt;int&gt;();
+  int num7 = fuzzed_data_provider.ConsumeIntegral&lt;int&gt;();
+  int num8 = fuzzed_data_provider.ConsumeIntegral&lt;int&gt;();
+  
+  std::ofstream out(&#34;dummy.pdf&#34;);
+  out.write(reinterpret_cast&lt;const char*&gt;(data), size);
+  out.close();
+  
+  GString fileName(&#34;dummy.pdf&#34;);
+  PDFDoc doc(&amp;fileName);
+  
+  class MyOutputDev: public OutputDev {
+    public:
+      GBool upsideDown() { return gTrue; }
+      GBool useDrawChar() { return gTrue; }
+      GBool interpretType3Chars() { return gTrue; }
+  };
+  
+  MyOutputDev output;
+  doc.displayPageSlice(&amp;output, num1, num2, num3, num4, bool1, bool2, bool3, num5, num6, num7, num8, nullptr, nullptr);
+
+  return 0;
+}
+&lt;/code&gt;
+&lt;/solution&gt;
+</pre>
+
+
+<h3>Fixer prompt #4</h3>
+<pre>
+
+Given the following C++ fuzz harness and its build error message, fix the code to make it build for fuzzing.
+
+If there is undeclared identifier or unknown type name error, fix it by finding and including the related libraries.
+
+MUST RETURN THE FULL CODE, INCLUDING UNCHANGED PARTS.
+
+Below is the code needs to be built:
+&lt;code&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;stdint.h&gt;
+#include &lt;fstream&gt;
+#include &#34;GString.h&#34;
+#include &#34;PDFDoc.h&#34;
+#include &#34;OutputDev.h&#34;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  if (size &lt; 1) {
+    return 0;
+  }
+
+  FuzzedDataProvider fuzzed_data_provider(data, size);
+  int num1 = fuzzed_data_provider.ConsumeIntegral&lt;int&gt;();
+  double num2 = fuzzed_data_provider.ConsumeFloatingPoint&lt;double&gt;();
+  double num3 = fuzzed_data_provider.ConsumeFloatingPoint&lt;double&gt;();
+  int num4 = fuzzed_data_provider.ConsumeIntegral&lt;int&gt;();
+  GBool bool1 = fuzzed_data_provider.ConsumeBool();
+  GBool bool2 = fuzzed_data_provider.ConsumeBool();
+  GBool bool3 = fuzzed_data_provider.ConsumeBool();
+  int num5 = fuzzed_data_provider.ConsumeIntegral&lt;int&gt;();
+  int num6 = fuzzed_data_provider.ConsumeIntegral&lt;int&gt;();
+  int num7 = fuzzed_data_provider.ConsumeIntegral&lt;int&gt;();
+  int num8 = fuzzed_data_provider.ConsumeIntegral&lt;int&gt;();
+  
+  std::ofstream out(&#34;dummy.pdf&#34;);
+  out.write(reinterpret_cast&lt;const char*&gt;(data), size);
+  out.close();
+  
+  GString fileName(&#34;dummy.pdf&#34;);
+  PDFDoc doc(&amp;fileName);
+  
+  class MyOutputDev: public OutputDev {
+    public:
+      GBool upsideDown() { return gTrue; }
+      GBool useDrawChar() { return gTrue; }
+      GBool interpretType3Chars() { return gTrue; }
+  };
+  
+  MyOutputDev output;
+  doc.displayPageSlice(&amp;output, num1, num2, num3, num4, bool1, bool2, bool3, num5, num6, num7, num8, nullptr, nullptr);
+
+  return 0;
+}
+&lt;/code&gt;
+
+Below is the error to fix:
+The code can build successfully but has a runtime issue: Fuzzing crashed immediately at runtime (ASAN-ERROR: AddressSanitizer: SEGV on unknown address 0x000000000038 (pc 0x7fbc40934fc4 bp 0x7ffe6b257c40 sp 0x7ffe6b257c08 T0)), indicating fuzz target code for invoking the function under test is incorrect or unrobust.
+&lt;error&gt;
+Crash stacks:
+Stack 0:
+#0 0x7fbc40934fc4 in __pthread_mutex_lock (/lib/x86_64-linux-gnu/libpthread.so.0+0xafc4) (BuildId: 9a65bb469e45a1c6fbcffae5b82a2fd7a69eb479)
+#1 0x562329cda9d6 in Catalog::getPage(int) /src/xpdf-4.05/xpdf/Catalog.cc:300:3
+#2 0x562329c7586f in PDFDoc::displayPageSlice(OutputDev*, int, double, double, int, int, int, int, int, int, int, int, int (*)(void*), void*) /src/xpdf-4.05/xpdf/PDFDoc.cc:476:12
+#3 0x562329c6da17 in LLVMFuzzerTestOneInput /src/xpdf-4.05/build/fuzz_JBIG2.cc:42:7
+#4 0x562329b1f3f0 in fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:614:13
+#5 0x562329b1ec15 in fuzzer::Fuzzer::RunOne(unsigned char const*, unsigned long, bool, fuzzer::InputInfo*, bool, bool*) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:516:7
+#6 0x562329b20a66 in fuzzer::Fuzzer::ReadAndExecuteSeedCorpora(std::__Fuzzer::vector&lt;fuzzer::SizedFile, std::__Fuzzer::allocator&lt;fuzzer::SizedFile&gt;&gt;&amp;) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:812:5
+#7 0x562329b20ed7 in fuzzer::Fuzzer::Loop(std::__Fuzzer::vector&lt;fuzzer::SizedFile, std::__Fuzzer::allocator&lt;fuzzer::SizedFile&gt;&gt;&amp;) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:867:3
+#8 0x562329b0f4e6 in fuzzer::FuzzerDriver(int*, char***, int (*)(unsigned char const*, unsigned long)) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:914:6
+#9 0x562329b3ba12 in main /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMain.cpp:20:10
+#10 0x7fbc40713082 in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x24082) (BuildId: 0702430aef5fa3dda43986563e9ffcc47efbd75e)
+#11 0x562329b0065d in _start (/out/fuzz_JBIG2+0x1d665d)
+&lt;/error&gt;
+
+
+
+
+Fix code:
+1. Consider possible solutions for the issues listed above.
+2. Choose a solution that can maximize fuzzing result, which is utilizing the function under test and feeding it not null input.
+3. Apply the solutions to the original code.
+It&#39;s important to show the complete code, not only the fixed line.
+&lt;solution&gt;
+</pre>
+
+
+
+<h3>Code #4</h3>
+
+<pre>
+The crash stack indicates that the issue is with the `PDFDoc::displayPageSlice` method. The problem might be due to the `num1` parameter being used as the page number, which might not exist in the document. To fix this, we can ensure that `num1` is always a valid page number. 
+
+The fixed code is as follows:
+
+```cpp
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;stdint.h&gt;
+#include &lt;fstream&gt;
+#include &#34;GString.h&#34;
+#include &#34;PDFDoc.h&#34;
+#include &#34;OutputDev.h&#34;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  if (size &lt; 1) {
+    return 0;
+  }
+
+  FuzzedDataProvider fuzzed_data_provider(data, size);
+  int num1 = fuzzed_data_provider.ConsumeIntegral&lt;int&gt;();
+  double num2 = fuzzed_data_provider.ConsumeFloatingPoint&lt;double&gt;();
+  double num3 = fuzzed_data_provider.ConsumeFloatingPoint&lt;double&gt;();
+  int num4 = fuzzed_data_provider.ConsumeIntegral&lt;int&gt;();
+  GBool bool1 = fuzzed_data_provider.ConsumeBool();
+  GBool bool2 = fuzzed_data_provider.ConsumeBool();
+  GBool bool3 = fuzzed_data_provider.ConsumeBool();
+  int num5 = fuzzed_data_provider.ConsumeIntegral&lt;int&gt;();
+  int num6 = fuzzed_data_provider.ConsumeIntegral&lt;int&gt;();
+  int num7 = fuzzed_data_provider.ConsumeIntegral&lt;int&gt;();
+  int num8 = fuzzed_data_provider.ConsumeIntegral&lt;int&gt;();
+  
+  std::ofstream out(&#34;dummy.pdf&#34;);
+  out.write(reinterpret_cast&lt;const char*&gt;(data), size);
+  out.close();
+  
+  GString fileName(&#34;dummy.pdf&#34;);
+  PDFDoc doc(&amp;fileName);
+  
+  class MyOutputDev: public OutputDev {
+    public:
+      GBool upsideDown() { return gTrue; }
+      GBool useDrawChar() { return gTrue; }
+      GBool interpretType3Chars() { return gTrue; }
+  };
+  
+  MyOutputDev output;
+  num1 = num1 % doc.getNumPages() + 1; // Ensure num1 is a valid page number
+  doc.displayPageSlice(&amp;output, num1, num2, num3, num4, bool1, bool2, bool3, num5, num6, num7, num8, nullptr, nullptr);
+
+  return 0;
+}
+```
+
+In the fixed code, the line `num1 = num1 % doc.getNumPages() + 1;` ensures that `num1` is always a valid page number. The modulo operator (`%`) is used to limit `num1` to the range of valid page numbers, and `+ 1` is used to shift the range from `0–(numPages-1)` to `1–numPages`.
+</pre>
+
+
+<h3>Fixer prompt #5</h3>
+<pre>
+
+Given the following C++ fuzz harness and its build error message, fix the code to make it build for fuzzing.
+
+If there is undeclared identifier or unknown type name error, fix it by finding and including the related libraries.
+
+MUST RETURN THE FULL CODE, INCLUDING UNCHANGED PARTS.
+
+Below is the code needs to be built:
+&lt;code&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;stdint.h&gt;
+#include &lt;fstream&gt;
+#include &#34;GString.h&#34;
+#include &#34;PDFDoc.h&#34;
+#include &#34;OutputDev.h&#34;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  if (size &lt; 1) {
+    return 0;
+  }
+
+  FuzzedDataProvider fuzzed_data_provider(data, size);
+  int num1 = fuzzed_data_provider.ConsumeIntegral&lt;int&gt;();
+  double num2 = fuzzed_data_provider.ConsumeFloatingPoint&lt;double&gt;();
+  double num3 = fuzzed_data_provider.ConsumeFloatingPoint&lt;double&gt;();
+  int num4 = fuzzed_data_provider.ConsumeIntegral&lt;int&gt;();
+  GBool bool1 = fuzzed_data_provider.ConsumeBool();
+  GBool bool2 = fuzzed_data_provider.ConsumeBool();
+  GBool bool3 = fuzzed_data_provider.ConsumeBool();
+  int num5 = fuzzed_data_provider.ConsumeIntegral&lt;int&gt;();
+  int num6 = fuzzed_data_provider.ConsumeIntegral&lt;int&gt;();
+  int num7 = fuzzed_data_provider.ConsumeIntegral&lt;int&gt;();
+  int num8 = fuzzed_data_provider.ConsumeIntegral&lt;int&gt;();
+  
+  std::ofstream out(&#34;dummy.pdf&#34;);
+  out.write(reinterpret_cast&lt;const char*&gt;(data), size);
+  out.close();
+  
+  GString fileName(&#34;dummy.pdf&#34;);
+  PDFDoc doc(&amp;fileName);
+  
+  class MyOutputDev: public OutputDev {
+    public:
+      GBool upsideDown() { return gTrue; }
+      GBool useDrawChar() { return gTrue; }
+      GBool interpretType3Chars() { return gTrue; }
+  };
+  
+  MyOutputDev output;
+  num1 = num1 % doc.getNumPages() + 1; // Ensure num1 is a valid page number
+  doc.displayPageSlice(&amp;output, num1, num2, num3, num4, bool1, bool2, bool3, num5, num6, num7, num8, nullptr, nullptr);
+
+  return 0;
+}
+&lt;/code&gt;
+
+Below is the error to fix:
+The code can build successfully but has a runtime issue: Fuzzing crashed immediately at runtime (ASAN-ERROR: AddressSanitizer: SEGV on unknown address 0x000000000050 (pc 0x5608e8ce59f2 bp 0x7ffcde593540 sp 0x7ffcde5933e0 T0)), indicating fuzz target code for invoking the function under test is incorrect or unrobust.
+&lt;error&gt;
+Crash stacks:
+Stack 0:
+#0 0x5608e8ce59f2 in LLVMFuzzerTestOneInput /src/xpdf-4.05/build/fuzz_JBIG2.cc:42:15
+#1 0x5608e8b973f0 in fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:614:13
+#2 0x5608e8b96c15 in fuzzer::Fuzzer::RunOne(unsigned char const*, unsigned long, bool, fuzzer::InputInfo*, bool, bool*) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:516:7
+#3 0x5608e8b98a66 in fuzzer::Fuzzer::ReadAndExecuteSeedCorpora(std::__Fuzzer::vector&lt;fuzzer::SizedFile, std::__Fuzzer::allocator&lt;fuzzer::SizedFile&gt;&gt;&amp;) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:812:5
+#4 0x5608e8b98ed7 in fuzzer::Fuzzer::Loop(std::__Fuzzer::vector&lt;fuzzer::SizedFile, std::__Fuzzer::allocator&lt;fuzzer::SizedFile&gt;&gt;&amp;) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:867:3
+#5 0x5608e8b874e6 in fuzzer::FuzzerDriver(int*, char***, int (*)(unsigned char const*, unsigned long)) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:914:6
+#6 0x5608e8bb3a12 in main /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMain.cpp:20:10
+#7 0x7f012104b082 in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x24082) (BuildId: 0702430aef5fa3dda43986563e9ffcc47efbd75e)
+#8 0x5608e8b7865d in _start (/out/fuzz_JBIG2+0x1d665d)
+&lt;/error&gt;
+
+
+
+
+Fix code:
+1. Consider possible solutions for the issues listed above.
+2. Choose a solution that can maximize fuzzing result, which is utilizing the function under test and feeding it not null input.
+3. Apply the solutions to the original code.
+It&#39;s important to show the complete code, not only the fixed line.
+&lt;solution&gt;
+</pre>
+
+
+
+<h3>Code #5</h3>
+
+<pre>
+&lt;code&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;stdint.h&gt;
+#include &lt;fstream&gt;
+#include &#34;GString.h&#34;
+#include &#34;PDFDoc.h&#34;
+#include &#34;OutputDev.h&#34;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  if (size &lt; 1) {
+    return 0;
+  }
+
+  FuzzedDataProvider fuzzed_data_provider(data, size);
+  int num1 = fuzzed_data_provider.ConsumeIntegral&lt;int&gt;();
+  double num2 = fuzzed_data_provider.ConsumeFloatingPoint&lt;double&gt;();
+  double num3 = fuzzed_data_provider.ConsumeFloatingPoint&lt;double&gt;();
+  int num4 = fuzzed_data_provider.ConsumeIntegral&lt;int&gt;();
+  GBool bool1 = fuzzed_data_provider.ConsumeBool();
+  GBool bool2 = fuzzed_data_provider.ConsumeBool();
+  GBool bool3 = fuzzed_data_provider.ConsumeBool();
+  int num5 = fuzzed_data_provider.ConsumeIntegral&lt;int&gt;();
+  int num6 = fuzzed_data_provider.ConsumeIntegral&lt;int&gt;();
+  int num7 = fuzzed_data_provider.ConsumeIntegral&lt;int&gt;();
+  int num8 = fuzzed_data_provider.ConsumeIntegral&lt;int&gt;();
+  
+  std::ofstream out(&#34;dummy.pdf&#34;);
+  out.write(reinterpret_cast&lt;const char*&gt;(data), size);
+  out.close();
+  
+  GString fileName(&#34;dummy.pdf&#34;);
+  PDFDoc doc(&amp;fileName);
+  
+  class MyOutputDev: public OutputDev {
+    public:
+      GBool upsideDown() { return gTrue; }
+      GBool useDrawChar() { return gTrue; }
+      GBool interpretType3Chars() { return gTrue; }
+  };
+  
+  MyOutputDev output;
+  if(doc.getNumPages() &gt; 0){
+    num1 = num1 % doc.getNumPages() + 1; // Ensure num1 is a valid page number
+    doc.displayPageSlice(&amp;output, num1, num2, num3, num4, bool1, bool2, bool3, num5, num6, num7, num8, nullptr, nullptr);
+  }
+
+  return 0;
+}
+&lt;/code&gt;
+&lt;solution&gt;
+
+The fix here is to add a condition to check if the document has pages before trying to display a page slice. This prevents a divide by zero error when the document has no pages.
+</pre>
+
+
+<h2>Logs</h2>
+<pre>
+Fixing /home/chyun/oss-fuzz-gen1/results4/output-xpdf-_zn6pdfdoc16displaypagesliceep9outputdeviddiiiiiiiipfipves2_/fixed_targets/02.cc with gpt-4, attempt 1.
+Fixing /home/chyun/oss-fuzz-gen1/results4/output-xpdf-_zn6pdfdoc16displaypagesliceep9outputdeviddiiiiiiiipfipves2_/fixed_targets/02.cc with gpt-4, attempt 2.
+Fixing /home/chyun/oss-fuzz-gen1/results4/output-xpdf-_zn6pdfdoc16displaypagesliceep9outputdeviddiiiiiiiipfipves2_/fixed_targets/02.cc with gpt-4, attempt 3.
+Fixing /home/chyun/oss-fuzz-gen1/results4/output-xpdf-_zn6pdfdoc16displaypagesliceep9outputdeviddiiiiiiiipfipves2_/fixed_targets/02.cc with gpt-4, attempt 4.
+Fixing /home/chyun/oss-fuzz-gen1/results4/output-xpdf-_zn6pdfdoc16displaypagesliceep9outputdeviddiiiiiiiipfipves2_/fixed_targets/02.cc with gpt-4, attempt 5.
+Successfully built /home/chyun/oss-fuzz-gen1/results4/output-xpdf-_zn6pdfdoc16displaypagesliceep9outputdeviddiiiiiiiipfipves2_/fixed_targets/02.cc with gpt-4 in 5 iterations of fixing.
+Triaging the crash related to /home/chyun/oss-fuzz-gen1/results4/output-xpdf-_zn6pdfdoc16displaypagesliceep9outputdeviddiiiiiiiipfipves2_/fixed_targets/02.cc with gpt-4.
+Warning: Failed to fix semantic error FP_NEAR_INIT_CRASH in xpdf-zn6pdfdoc16displaypagesliceep9outputdeviddiiiiiiiipfipves2-02.
+
+</pre>
+
+<h2>Run logs</h2>
+<pre>
+INFO:__main__:Running: docker run --privileged --shm-size=2g --platform linux/amd64 --rm -e FUZZING_ENGINE=libfuzzer -e SANITIZER=address -e RUN_FUZZER_MODE=interactive -e HELPER=True -v /home/chyun/oss-fuzz-gen1/results4/output-xpdf-_zn6pdfdoc16displaypagesliceep9outputdeviddiiiiiiiipfipves2_/corpora/02.cc:/tmp/fuzz_JBIG2_corpus -v /tmp/tmpeui9jktt/build/out/xpdf-zn6pdfdoc16displaypagesliceep9outputdeviddiiiiiiiipfipves2-02:/out -t gcr.io/oss-fuzz-base/base-runner run_fuzzer fuzz_JBIG2 -print_final_stats=1 -max_total_time=30 -len_control=0 -timeout=30.
+vm.mmap_rnd_bits = 28
+rm: cannot remove &#39;/tmp/fuzz_JBIG2_corpus&#39;: Device or resource busy
+/out/fuzz_JBIG2 -rss_limit_mb=2560 -timeout=25 -print_final_stats=1 -max_total_time=30 -len_control=0 -timeout=30 /tmp/fuzz_JBIG2_corpus -detect_leaks=0 &lt; /dev/null
+INFO: Running with entropic power schedule (0xFF, 100).
+INFO: Seed: 1410130002
+INFO: Loaded 1 modules   (27151 inline 8-bit counters): 27151 [0x556ffe39d688, 0x556ffe3a4097), 
+INFO: Loaded 1 PC tables (27151 PCs): 27151 [0x556ffe3a4098,0x556ffe40e188), 
+INFO:        0 files found in /tmp/fuzz_JBIG2_corpus
+INFO: -max_len is not provided; libFuzzer will not generate inputs larger than 4096 bytes
+INFO: A corpus is not provided, starting from an empty corpus
+Syntax Warning: May not be a PDF file (continuing anyway)
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: PDF file is damaged - attempting to reconstruct xref table...
+Syntax Error: Couldn&#39;t find trailer dictionary
+Syntax Error: Couldn&#39;t read xref table
+AddressSanitizer:DEADLYSIGNAL
+=================================================================
+[1m[31m==16==ERROR: AddressSanitizer: SEGV on unknown address 0x000000000050 (pc 0x556ffdf169bb bp 0x7ffc98a77300 sp 0x7ffc98a771a0 T0)
+[1m[0m==16==The signal is caused by a READ memory access.
+==16==Hint: address points to the zero page.
+SCARINESS: 10 (null-deref)
+    #0 0x556ffdf169bb in getNumPages /src/xpdf-4.05/build/../xpdf/Catalog.h:49:30
+    #1 0x556ffdf169bb in getNumPages /src/xpdf-4.05/build/../xpdf/PDFDoc.h:93:39
+    #2 0x556ffdf169bb in LLVMFuzzerTestOneInput /src/xpdf-4.05/build/fuzz_JBIG2.cc:42:10
+    #3 0x556ffddc83f0 in fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:614:13
+    #4 0x556ffddc7c15 in fuzzer::Fuzzer::RunOne(unsigned char const*, unsigned long, bool, fuzzer::InputInfo*, bool, bool*) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:516:7
+    #5 0x556ffddc9a66 in fuzzer::Fuzzer::ReadAndExecuteSeedCorpora(std::__Fuzzer::vector&lt;fuzzer::SizedFile, std::__Fuzzer::allocator&lt;fuzzer::SizedFile&gt;&gt;&amp;) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:812:5
+    #6 0x556ffddc9ed7 in fuzzer::Fuzzer::Loop(std::__Fuzzer::vector&lt;fuzzer::SizedFile, std::__Fuzzer::allocator&lt;fuzzer::SizedFile&gt;&gt;&amp;) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:867:3
+    #7 0x556ffddb84e6 in fuzzer::FuzzerDriver(int*, char***, int (*)(unsigned char const*, unsigned long)) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:914:6
+    #8 0x556ffdde4a12 in main /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMain.cpp:20:10
+    #9 0x7f41222c5082 in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x24082) (BuildId: 0702430aef5fa3dda43986563e9ffcc47efbd75e)
+    #10 0x556ffdda965d in _start (/out/fuzz_JBIG2+0x1d665d)
+
+DEDUP_TOKEN: getNumPages--getNumPages--LLVMFuzzerTestOneInput
+AddressSanitizer can not provide additional info.
+SUMMARY: AddressSanitizer: SEGV /src/xpdf-4.05/build/../xpdf/Catalog.h:49:30 in getNumPages
+==16==ABORTING
+MS: 0 ; base unit: 0000000000000000000000000000000000000000
+0xa,
+\012
+artifact_prefix=&#39;./&#39;; Test unit written to ./crash-adc83b19e793491b1c6ea0fd8b46cd9f32e592fc
+Base64: Cg==
+stat::number_of_executed_units: 2
+stat::average_exec_per_sec:     0
+stat::new_units_added:          0
+stat::slowest_unit_time_sec:    0
+stat::peak_rss_mb:              35
+
+</pre>
+
+
+</body>

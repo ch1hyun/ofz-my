@@ -1,0 +1,985 @@
+<!doctype html>
+
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Experiment results</title>
+<style>
+* {
+    box-sizing: border-box;
+}
+
+html {
+    line-height: 1.15;
+}
+
+body {
+    font-family: sans-serif;
+    font-size: 16px;
+}
+
+table {
+    border-collapse: collapse;
+    border-spacing: 0;
+}
+
+td, th {
+    border-right: 1px #dedede solid;
+    border-bottom: 1px #dedede solid;
+    padding: 5px;
+    text-align: left;
+}
+td:first-child, th:first-child {
+    border-left: 1px #dedede solid;
+}
+th {
+    border-top: 1px #dedede solid;
+}
+
+tbody tr:nth-child(odd) {
+    background-color: #f4f5ff;
+}
+</style>
+<body>
+    LLM: 
+    
+<h1>output-http-parser-http_errno_name / 01</h1>
+Bug: False
+<br>
+Crash reason: NO_COV_INCREASE
+<br>
+<br>
+
+<h2>Triage</h2>
+<pre>
+
+</pre>
+<br>
+
+
+
+
+
+<h3>Final code</h3>
+
+<pre>
+#include &lt;stdint.h&gt;
+#include &lt;stddef.h&gt;
+#include &#34;http_parser.h&#34;
+
+const char * http_errno_name(enum http_errno err);
+
+int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  if(size &lt; 1){
+    return 0;
+  }
+  // The HTTP_ERRNO_MAX is not defined in the http_parser.h, so we can&#39;t use it.
+  // Instead, we can use HPE_UNKNOWN which is the last element in the http_errno enum.
+  enum http_errno err_no = (enum http_errno)(data[0] % HPE_UNKNOWN); 
+  const char * err_name = http_errno_name(err_no);
+  
+  // Add code to use the err_name to increase code coverage
+  if (err_name != NULL) {
+    printf(&#34;Error name: %s\n&#34;, err_name);
+  }
+  
+  return 0;
+}
+</pre>
+
+
+<h3>Fixer prompt #1</h3>
+<pre>
+
+Given the following C fuzz harness and its build error message, fix the code to make it build for fuzzing.
+
+If there is undeclared identifier or unknown type name error, fix it by finding and including the related libraries.
+
+MUST RETURN THE FULL CODE, INCLUDING UNCHANGED PARTS.
+
+Below is the code needs to be built:
+&lt;code&gt;
+#include &lt;stdint.h&gt;
+#include &#34;http_parser.h&#34;
+
+const char * http_errno_name(enum http_errno err);
+
+int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  if(!size){
+    return 0;
+  }
+  enum http_errno err_no = data[0] % 64; 
+  http_errno_name(err_no);
+  
+  return 0;
+}
+&lt;/code&gt;
+
+Below is the error to fix:
+The code can build successfully but has a runtime issue: Fuzzing crashed immediately at runtime (ASAN-ERROR: AddressSanitizer: ABRT on unknown address 0x00000000000c (pc 0x7f74e78b400b bp 0x7f74e7a29588 sp 0x7ffc8de231d0 T0)), indicating fuzz target code for invoking the function under test is incorrect or unrobust.
+&lt;error&gt;
+Crash stacks:
+Stack 0:
+#0 0x7f74e78b400b in raise (/lib/x86_64-linux-gnu/libc.so.6+0x4300b) (BuildId: 0702430aef5fa3dda43986563e9ffcc47efbd75e)
+#1 0x7f74e7893858 in abort (/lib/x86_64-linux-gnu/libc.so.6+0x22858) (BuildId: 0702430aef5fa3dda43986563e9ffcc47efbd75e)
+#2 0x7f74e7893728  (/lib/x86_64-linux-gnu/libc.so.6+0x22728) (BuildId: 0702430aef5fa3dda43986563e9ffcc47efbd75e)
+#3 0x7f74e78a4fd5 in __assert_fail (/lib/x86_64-linux-gnu/libc.so.6+0x33fd5) (BuildId: 0702430aef5fa3dda43986563e9ffcc47efbd75e)
+#4 0x5592d21a5359 in http_errno_name /src/http-parser/http_parser.c:2243:3
+#5 0x5592d21a6b55 in LLVMFuzzerTestOneInput /src/http-parser/fuzzers/fuzz_url.c:11:3
+#6 0x5592d204b470 in fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:614:13
+#7 0x5592d204ac95 in fuzzer::Fuzzer::RunOne(unsigned char const*, unsigned long, bool, fuzzer::InputInfo*, bool, bool*) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:516:7
+#8 0x5592d204c465 in fuzzer::Fuzzer::MutateAndTestOne() /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:760:19
+#9 0x5592d204d255 in fuzzer::Fuzzer::Loop(std::__Fuzzer::vector&lt;fuzzer::SizedFile, std::__Fuzzer::allocator&lt;fuzzer::SizedFile&gt;&gt;&amp;) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:905:5
+#10 0x5592d203b566 in fuzzer::FuzzerDriver(int*, char***, int (*)(unsigned char const*, unsigned long)) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:914:6
+#11 0x5592d2067a92 in main /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMain.cpp:20:10
+#12 0x7f74e7895082 in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x24082) (BuildId: 0702430aef5fa3dda43986563e9ffcc47efbd75e)
+#13 0x5592d202c6dd in _start (/out/fuzz_url+0x466dd)
+&lt;/error&gt;
+
+
+
+
+Fix code:
+1. Consider possible solutions for the issues listed above.
+2. Choose a solution that can maximize fuzzing result, which is utilizing the function under test and feeding it not null input.
+3. Apply the solutions to the original code.
+It&#39;s important to show the complete code, not only the fixed line.
+&lt;solution&gt;
+</pre>
+
+
+
+<h3>Code #1</h3>
+
+<pre>
+#include &lt;stdint.h&gt;
+#include &#34;http_parser.h&#34;
+
+const char * http_errno_name(enum http_errno err);
+
+int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  if(size &lt; 1){
+    return 0;
+  }
+  enum http_errno err_no = (enum http_errno)(data[0] % 64); 
+  http_errno_name(err_no);
+  
+  return 0;
+}
+&lt;/solution&gt;
+</pre>
+
+
+<h3>Fixer prompt #2</h3>
+<pre>
+
+Given the following C fuzz harness and its build error message, fix the code to make it build for fuzzing.
+
+If there is undeclared identifier or unknown type name error, fix it by finding and including the related libraries.
+
+MUST RETURN THE FULL CODE, INCLUDING UNCHANGED PARTS.
+
+Below is the code needs to be built:
+&lt;code&gt;
+#include &lt;stdint.h&gt;
+#include &#34;http_parser.h&#34;
+
+const char * http_errno_name(enum http_errno err);
+
+int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  if(size &lt; 1){
+    return 0;
+  }
+  enum http_errno err_no = (enum http_errno)(data[0] % 64); 
+  http_errno_name(err_no);
+  
+  return 0;
+}
+&lt;/code&gt;
+
+Below is the error to fix:
+The code can build successfully but has a runtime issue: Fuzzing crashed immediately at runtime (ASAN-ERROR: AddressSanitizer: ABRT on unknown address 0x00000000000b (pc 0x7fd8f941400b bp 0x7fd8f9589588 sp 0x7fffc1b3f410 T0)), indicating fuzz target code for invoking the function under test is incorrect or unrobust.
+&lt;error&gt;
+Crash stacks:
+Stack 0:
+#0 0x7fd8f941400b in raise (/lib/x86_64-linux-gnu/libc.so.6+0x4300b) (BuildId: 0702430aef5fa3dda43986563e9ffcc47efbd75e)
+#1 0x7fd8f93f3858 in abort (/lib/x86_64-linux-gnu/libc.so.6+0x22858) (BuildId: 0702430aef5fa3dda43986563e9ffcc47efbd75e)
+#2 0x7fd8f93f3728  (/lib/x86_64-linux-gnu/libc.so.6+0x22728) (BuildId: 0702430aef5fa3dda43986563e9ffcc47efbd75e)
+#3 0x7fd8f9404fd5 in __assert_fail (/lib/x86_64-linux-gnu/libc.so.6+0x33fd5) (BuildId: 0702430aef5fa3dda43986563e9ffcc47efbd75e)
+#4 0x55e796c18359 in http_errno_name /src/http-parser/http_parser.c:2243:3
+#5 0x55e796c19b55 in LLVMFuzzerTestOneInput /src/http-parser/fuzzers/fuzz_url.c:11:3
+#6 0x55e796abe470 in fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:614:13
+#7 0x55e796abdc95 in fuzzer::Fuzzer::RunOne(unsigned char const*, unsigned long, bool, fuzzer::InputInfo*, bool, bool*) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:516:7
+#8 0x55e796abf465 in fuzzer::Fuzzer::MutateAndTestOne() /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:760:19
+#9 0x55e796ac0255 in fuzzer::Fuzzer::Loop(std::__Fuzzer::vector&lt;fuzzer::SizedFile, std::__Fuzzer::allocator&lt;fuzzer::SizedFile&gt;&gt;&amp;) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:905:5
+#10 0x55e796aae566 in fuzzer::FuzzerDriver(int*, char***, int (*)(unsigned char const*, unsigned long)) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:914:6
+#11 0x55e796adaa92 in main /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMain.cpp:20:10
+#12 0x7fd8f93f5082 in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x24082) (BuildId: 0702430aef5fa3dda43986563e9ffcc47efbd75e)
+#13 0x55e796a9f6dd in _start (/out/fuzz_url+0x466dd)
+&lt;/error&gt;
+
+
+
+
+Fix code:
+1. Consider possible solutions for the issues listed above.
+2. Choose a solution that can maximize fuzzing result, which is utilizing the function under test and feeding it not null input.
+3. Apply the solutions to the original code.
+It&#39;s important to show the complete code, not only the fixed line.
+&lt;solution&gt;
+</pre>
+
+
+
+<h3>Code #2</h3>
+
+<pre>
+#include &lt;stdint.h&gt;
+#include &#34;http_parser.h&#34;
+
+const char * http_errno_name(enum http_errno err);
+
+int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  if(size &lt; 1){
+    return 0;
+  }
+  enum http_errno err_no = (enum http_errno)(data[0] % HTTP_ERRNO_MAX); 
+  http_errno_name(err_no);
+  
+  return 0;
+}
+</pre>
+
+
+<h3>Fixer prompt #3</h3>
+<pre>
+
+Given the following C fuzz harness and its build error message, fix the code to make it build for fuzzing.
+
+If there is undeclared identifier or unknown type name error, fix it by finding and including the related libraries.
+
+MUST RETURN THE FULL CODE, INCLUDING UNCHANGED PARTS.
+
+Below is the code needs to be built:
+&lt;code&gt;
+#include &lt;stdint.h&gt;
+#include &#34;http_parser.h&#34;
+
+const char * http_errno_name(enum http_errno err);
+
+int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  if(size &lt; 1){
+    return 0;
+  }
+  enum http_errno err_no = (enum http_errno)(data[0] % HTTP_ERRNO_MAX); 
+  http_errno_name(err_no);
+  
+  return 0;
+}
+&lt;/code&gt;
+
+Below is the error to fix:
+The code has the following build issues:
+&lt;error&gt;
+fuzzers/fuzz_url.c:10:56: error: use of undeclared identifier &#39;HTTP_ERRNO_MAX&#39;
+   10 |   enum http_errno err_no = (enum http_errno)(data[0] % HTTP_ERRNO_MAX);
+      |                                                        ^
+&lt;/error&gt;
+
+
+
+
+Fix code:
+1. Consider possible solutions for the issues listed above.
+2. Choose a solution that can maximize fuzzing result, which is utilizing the function under test and feeding it not null input.
+3. Apply the solutions to the original code.
+It&#39;s important to show the complete code, not only the fixed line.
+&lt;solution&gt;
+</pre>
+
+
+
+<h3>Code #3</h3>
+
+<pre>
+#include &lt;stdint.h&gt;
+#include &#34;http_parser.h&#34;
+
+const char * http_errno_name(enum http_errno err);
+
+int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  if(size &lt; 1){
+    return 0;
+  }
+  // The HTTP_ERRNO_MAX is not defined in the http_parser.h, so we can&#39;t use it.
+  // Instead, we can use _HTTP_ERRNO_MAX which is the last element in the http_errno enum.
+  enum http_errno err_no = (enum http_errno)(data[0] % _HTTP_ERRNO_MAX); 
+  http_errno_name(err_no);
+  
+  return 0;
+}
+</pre>
+
+
+<h3>Fixer prompt #4</h3>
+<pre>
+
+Given the following C fuzz harness and its build error message, fix the code to make it build for fuzzing.
+
+If there is undeclared identifier or unknown type name error, fix it by finding and including the related libraries.
+
+MUST RETURN THE FULL CODE, INCLUDING UNCHANGED PARTS.
+
+Below is the code needs to be built:
+&lt;code&gt;
+#include &lt;stdint.h&gt;
+#include &#34;http_parser.h&#34;
+
+const char * http_errno_name(enum http_errno err);
+
+int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  if(size &lt; 1){
+    return 0;
+  }
+  // The HTTP_ERRNO_MAX is not defined in the http_parser.h, so we can&#39;t use it.
+  // Instead, we can use _HTTP_ERRNO_MAX which is the last element in the http_errno enum.
+  enum http_errno err_no = (enum http_errno)(data[0] % _HTTP_ERRNO_MAX); 
+  http_errno_name(err_no);
+  
+  return 0;
+}
+&lt;/code&gt;
+
+Below is the error to fix:
+The code has the following build issues:
+&lt;error&gt;
+fuzzers/fuzz_url.c:12:56: error: use of undeclared identifier &#39;_HTTP_ERRNO_MAX&#39;
+   12 |   enum http_errno err_no = (enum http_errno)(data[0] % _HTTP_ERRNO_MAX);
+      |                                                        ^
+&lt;/error&gt;
+
+
+
+
+Fix code:
+1. Consider possible solutions for the issues listed above.
+2. Choose a solution that can maximize fuzzing result, which is utilizing the function under test and feeding it not null input.
+3. Apply the solutions to the original code.
+It&#39;s important to show the complete code, not only the fixed line.
+&lt;solution&gt;
+</pre>
+
+
+
+<h3>Code #4</h3>
+
+<pre>
+#include &lt;stdint.h&gt;
+#include &lt;stddef.h&gt;
+#include &#34;http_parser.h&#34;
+
+const char * http_errno_name(enum http_errno err);
+
+int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  if(size &lt; 1){
+    return 0;
+  }
+  // The HTTP_ERRNO_MAX is not defined in the http_parser.h, so we can&#39;t use it.
+  // Instead, we can use HPE_UNKNOWN which is the last element in the http_errno enum.
+  enum http_errno err_no = (enum http_errno)(data[0] % HPE_UNKNOWN); 
+  http_errno_name(err_no);
+  
+  return 0;
+}
+</pre>
+
+
+<h3>Fixer prompt #5</h3>
+<pre>
+
+Given the following C fuzz harness and its build error message, fix the code to make it build for fuzzing.
+
+If there is undeclared identifier or unknown type name error, fix it by finding and including the related libraries.
+
+MUST RETURN THE FULL CODE, INCLUDING UNCHANGED PARTS.
+
+Below is the code needs to be built:
+&lt;code&gt;
+#include &lt;stdint.h&gt;
+#include &lt;stddef.h&gt;
+#include &#34;http_parser.h&#34;
+
+const char * http_errno_name(enum http_errno err);
+
+int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  if(size &lt; 1){
+    return 0;
+  }
+  // The HTTP_ERRNO_MAX is not defined in the http_parser.h, so we can&#39;t use it.
+  // Instead, we can use HPE_UNKNOWN which is the last element in the http_errno enum.
+  enum http_errno err_no = (enum http_errno)(data[0] % HPE_UNKNOWN); 
+  http_errno_name(err_no);
+  
+  return 0;
+}
+&lt;/code&gt;
+
+Below is the error to fix:
+The code can build successfully but has a runtime issue: No code coverage increasement, indicating the fuzz target ineffectively invokes the function under test.
+
+
+
+
+Fix code:
+1. Consider possible solutions for the issues listed above.
+2. Choose a solution that can maximize fuzzing result, which is utilizing the function under test and feeding it not null input.
+3. Apply the solutions to the original code.
+It&#39;s important to show the complete code, not only the fixed line.
+&lt;solution&gt;
+</pre>
+
+
+
+<h3>Code #5</h3>
+
+<pre>
+#include &lt;stdint.h&gt;
+#include &lt;stddef.h&gt;
+#include &#34;http_parser.h&#34;
+
+const char * http_errno_name(enum http_errno err);
+
+int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  if(size &lt; 1){
+    return 0;
+  }
+  // The HTTP_ERRNO_MAX is not defined in the http_parser.h, so we can&#39;t use it.
+  // Instead, we can use HPE_UNKNOWN which is the last element in the http_errno enum.
+  enum http_errno err_no = (enum http_errno)(data[0] % HPE_UNKNOWN); 
+  const char * err_name = http_errno_name(err_no);
+  
+  // Add code to use the err_name to increase code coverage
+  if (err_name != NULL) {
+    printf(&#34;Error name: %s\n&#34;, err_name);
+  }
+  
+  return 0;
+}
+</pre>
+
+
+<h2>Logs</h2>
+<pre>
+Fixing /home/chyun/oss-fuzz-gen/results4/output-http-parser-http_errno_name/fixed_targets/01.c with gpt-4, attempt 1.
+Fixing /home/chyun/oss-fuzz-gen/results4/output-http-parser-http_errno_name/fixed_targets/01.c with gpt-4, attempt 2.
+Fixing /home/chyun/oss-fuzz-gen/results4/output-http-parser-http_errno_name/fixed_targets/01.c with gpt-4, attempt 3.
+Fixing /home/chyun/oss-fuzz-gen/results4/output-http-parser-http_errno_name/fixed_targets/01.c with gpt-4, attempt 4.
+Fixing /home/chyun/oss-fuzz-gen/results4/output-http-parser-http_errno_name/fixed_targets/01.c with gpt-4, attempt 5.
+Successfully built /home/chyun/oss-fuzz-gen/results4/output-http-parser-http_errno_name/fixed_targets/01.c with gpt-4 in 5 iterations of fixing.
+Triaging the crash related to /home/chyun/oss-fuzz-gen/results4/output-http-parser-http_errno_name/fixed_targets/01.c with gpt-4.
+Warning: no crash info in http-parser-http_errno_name-01.
+Warning: Failed to fix semantic error NO_COV_INCREASE in http-parser-http_errno_name-01.
+
+</pre>
+
+<h2>Run logs</h2>
+<pre>
+INFO:__main__:Running: docker run --privileged --shm-size=2g --platform linux/amd64 --rm -e FUZZING_ENGINE=libfuzzer -e SANITIZER=address -e RUN_FUZZER_MODE=interactive -e HELPER=True -v /home/chyun/oss-fuzz-gen/results4/output-http-parser-http_errno_name/corpora/01.c:/tmp/fuzz_url_corpus -v /tmp/tmpwdyfg0lo/build/out/http-parser-http_errno_name-01:/out -t gcr.io/oss-fuzz-base/base-runner run_fuzzer fuzz_url -print_final_stats=1 -max_total_time=30 -len_control=0 -timeout=30.
+vm.mmap_rnd_bits = 28
+rm: cannot remove &#39;/tmp/fuzz_url_corpus&#39;: Device or resource busy
+/out/fuzz_url -rss_limit_mb=2560 -timeout=25 -print_final_stats=1 -max_total_time=30 -len_control=0 -timeout=30 /tmp/fuzz_url_corpus &lt; /dev/null
+INFO: Running with entropic power schedule (0xFF, 100).
+INFO: Seed: 2840464374
+INFO: Loaded 1 modules   (906 inline 8-bit counters): 906 [0x5631792e4af0, 0x5631792e4e7a), 
+INFO: Loaded 1 PC tables (906 PCs): 906 [0x5631792e4e80,0x5631792e8720), 
+INFO:        0 files found in /tmp/fuzz_url_corpus
+INFO: -max_len is not provided; libFuzzer will not generate inputs larger than 4096 bytes
+INFO: A corpus is not provided, starting from an empty corpus
+Error name: HPE_CB_chunk_complete
+#2	INITED cov: 4 ft: 5 corp: 1/1b exec/s: 0 rss: 29Mb
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_chunk_complete
+Error name: HPE_INVALID_FRAGMENT
+Error name: HPE_LF_EXPECTED
+Error name: HPE_LF_EXPECTED
+Error name: HPE_CB_status
+Error name: HPE_CB_message_begin
+Error name: HPE_CB_message_begin
+Error name: HPE_CB_message_begin
+Error name: HPE_INVALID_CHUNK_SIZE
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_chunk_complete
+Error name: HPE_INVALID_HOST
+Error name: HPE_INVALID_HOST
+Error name: HPE_INVALID_HOST
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_chunk_complete
+Error name: HPE_OK
+Error name: HPE_OK
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_message_begin
+Error name: HPE_CB_message_begin
+Error name: HPE_CB_message_begin
+Error name: HPE_CB_message_begin
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_chunk_complete
+Error name: HPE_UNEXPECTED_CONTENT_LENGTH
+Error name: HPE_UNEXPECTED_CONTENT_LENGTH
+Error name: HPE_HEADER_OVERFLOW
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_chunk_complete
+Error name: HPE_OK
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_chunk_complete
+Error name: HPE_INVALID_CONSTANT
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_status
+Error name: HPE_CB_status
+Error name: HPE_CB_status
+Error name: HPE_CB_status
+Error name: HPE_CB_status
+Error name: HPE_INVALID_CHUNK_SIZE
+Error name: HPE_CB_message_begin
+Error name: HPE_CB_message_begin
+Error name: HPE_CB_message_begin
+Error name: HPE_PAUSED
+Error name: HPE_PAUSED
+Error name: HPE_PAUSED
+Error name: HPE_PAUSED
+Error name: HPE_PAUSED
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_chunk_complete
+Error name: HPE_INVALID_EOF_STATE
+Error name: HPE_INVALID_EOF_STATE
+Error name: HPE_INVALID_EOF_STATE
+Error name: HPE_UNEXPECTED_CONTENT_LENGTH
+Error name: HPE_OK
+Error name: HPE_OK
+Error name: HPE_OK
+Error name: HPE_OK
+Error name: HPE_OK
+Error name: HPE_OK
+Error name: HPE_OK
+Error name: HPE_OK
+Error name: HPE_OK
+Error name: HPE_UNEXPECTED_CONTENT_LENGTH
+Error name: HPE_OK
+Error name: HPE_OK
+Error name: HPE_OK
+Error name: HPE_OK
+Error name: HPE_CB_chunk_complete
+Error name: HPE_INVALID_VERSION
+Error name: HPE_PAUSED
+Error name: HPE_PAUSED
+Error name: HPE_PAUSED
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_chunk_complete
+Error name: HPE_HEADER_OVERFLOW
+Error name: HPE_HEADER_OVERFLOW
+Error name: HPE_HEADER_OVERFLOW
+Error name: HPE_HEADER_OVERFLOW
+Error name: HPE_HEADER_OVERFLOW
+Error name: HPE_CB_chunk_complete
+Error name: HPE_OK
+Error name: HPE_OK
+Error name: HPE_OK
+Error name: HPE_OK
+Error name: HPE_CB_chunk_complete
+Error name: HPE_OK
+Error name: HPE_OK
+Error name: HPE_OK
+Error name: HPE_OK
+Error name: HPE_OK
+Error name: HPE_OK
+Error name: HPE_INVALID_CHUNK_SIZE
+Error name: HPE_PAUSED
+Error name: HPE_PAUSED
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_chunk_complete
+Error name: HPE_PAUSED
+Error name: HPE_PAUSED
+Error name: HPE_PAUSED
+Error name: HPE_PAUSED
+Error name: HPE_CB_message_complete
+Error name: HPE_CB_message_complete
+Error name: HPE_INVALID_INTERNAL_STATE
+Error name: HPE_INVALID_INTERNAL_STATE
+Error name: HPE_INVALID_INTERNAL_STATE
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_chunk_complete
+Error name: HPE_PAUSED
+Error name: HPE_PAUSED
+Error name: HPE_PAUSED
+Error name: HPE_PAUSED
+Error name: HPE_PAUSED
+Error name: HPE_CB_chunk_complete
+Error name: HPE_INVALID_VERSION
+Error name: HPE_INVALID_VERSION
+Error name: HPE_CB_chunk_complete
+Error name: HPE_INVALID_INTERNAL_STATE
+Error name: HPE_CB_header_field
+Error name: HPE_CB_header_field
+Error name: HPE_INVALID_FRAGMENT
+Error name: HPE_INVALID_FRAGMENT
+Error name: HPE_INVALID_FRAGMENT
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_chunk_complete
+Error name: HPE_UNEXPECTED_CONTENT_LENGTH
+Error name: HPE_UNEXPECTED_CONTENT_LENGTH
+Error name: HPE_INVALID_CHUNK_SIZE
+Error name: HPE_INVALID_CHUNK_SIZE
+Error name: HPE_INVALID_CHUNK_SIZE
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_chunk_complete
+Error name: HPE_INVALID_EOF_STATE
+Error name: HPE_INVALID_EOF_STATE
+Error name: HPE_INVALID_EOF_STATE
+Error name: HPE_INVALID_EOF_STATE
+Error name: HPE_INVALID_EOF_STATE
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_message_begin
+Error name: HPE_INVALID_URL
+Error name: HPE_INVALID_URL
+Error name: HPE_INVALID_URL
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_chunk_complete
+Error name: HPE_PAUSED
+Error name: HPE_PAUSED
+Error name: HPE_PAUSED
+Error name: HPE_CB_chunk_complete
+Error name: HPE_STRICT
+Error name: HPE_INVALID_CONSTANT
+Error name: HPE_INVALID_CONSTANT
+Error name: HPE_INVALID_CONSTANT
+Error name: HPE_CB_url
+Error name: HPE_CB_url
+Error name: HPE_CB_url
+Error name: HPE_CB_url
+Error name: HPE_CB_url
+Error name: HPE_CB_chunk_complete
+Error name: HPE_UNEXPECTED_CONTENT_LENGTH
+Error name: HPE_CB_chunk_complete
+Error name: HPE_INVALID_PATH
+Error name: HPE_INVALID_PATH
+Error name: HPE_OK
+Error name: HPE_OK
+Error name: HPE_OK
+Error name: HPE_OK
+Error name: HPE_OK
+Error name: HPE_INVALID_FRAGMENT
+Error name: HPE_INVALID_FRAGMENT
+Error name: HPE_PAUSED
+Error name: HPE_PAUSED
+Error name: HPE_PAUSED
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_chunk_complete
+Error name: HPE_UNEXPE
+...truncated...
+hunk_complete
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_chunk_complete
+Error name: HPE_INVALID_INTERNAL_STATE
+Error name: HPE_INVALID_INTERNAL_STATE
+Error name: HPE_INVALID_INTERNAL_STATE
+Error name: HPE_INVALID_PORT
+Error name: HPE_INVALID_PORT
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_header_field
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_chunk_complete
+Error name: HPE_STRICT
+Error name: HPE_STRICT
+Error name: HPE_STRICT
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_url
+Error name: HPE_CB_url
+Error name: HPE_CB_url
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_message_begin
+Error name: HPE_PAUSED
+Error name: HPE_PAUSED
+Error name: HPE_CB_url
+Error name: HPE_CB_url
+Error name: HPE_CB_url
+Error name: HPE_OK
+Error name: HPE_OK
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_chunk_complete
+Error name: HPE_PAUSED
+Error name: HPE_PAUSED
+Error name: HPE_PAUSED
+Error name: HPE_PAUSED
+Error name: HPE_PAUSED
+Error name: HPE_PAUSED
+Error name: HPE_PAUSED
+Error name: HPE_PAUSED
+Error name: HPE_PAUSED
+Error name: HPE_PAUSED
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_message_begin
+Error name: HPE_CB_message_begin
+Error name: HPE_OK
+Error name: HPE_STRICT
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CLOSED_CONNECTION
+Error name: HPE_CLOSED_CONNECTION
+Error name: HPE_CLOSED_CONNECTION
+Error name: HPE_INVALID_INTERNAL_STATE
+Error name: HPE_CLOSED_CONNECTION
+Error name: HPE_CLOSED_CONNECTION
+Error name: HPE_CLOSED_CONNECTION
+Error name: HPE_CLOSED_CONNECTION
+Error name: HPE_INVALID_VERSION
+Error name: HPE_INVALID_VERSION
+Error name: HPE_INVALID_VERSION
+Error name: HPE_INVALID_VERSION
+Error name: HPE_INVALID_VERSION
+Error name: HPE_CB_status
+Error name: HPE_INVALID_INTERNAL_STATE
+Error name: HPE_PAUSED
+Error name: HPE_PAUSED
+Error name: HPE_UNEXPECTED_CONTENT_LENGTH
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_body
+Error name: HPE_CB_body
+Error name: HPE_CB_chunk_header
+Error name: HPE_CB_chunk_header
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_chunk_complete
+Error name: HPE_INVALID_VERSION
+Error name: HPE_CB_message_begin
+Error name: HPE_OK
+Error name: HPE_INVALID_VERSION
+Error name: HPE_CB_status
+Error name: HPE_CB_status
+Error name: HPE_CB_status
+Error name: HPE_CB_status
+Error name: HPE_INVALID_HEADER_TOKEN
+Error name: HPE_INVALID_HEADER_TOKEN
+Error name: HPE_INVALID_HEADER_TOKEN
+Error name: HPE_INVALID_HEADER_TOKEN
+Error name: HPE_INVALID_HEADER_TOKEN
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_chunk_complete
+Error name: HPE_INVALID_CONTENT_LENGTH
+Error name: HPE_INVALID_CONTENT_LENGTH
+Error name: HPE_CB_status
+Error name: HPE_CB_status
+Error name: HPE_CB_body
+Error name: HPE_CB_url
+Error name: HPE_CB_url
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_chunk_complete
+Error name: HPE_INVALID_URL
+Error name: HPE_INVALID_URL
+Error name: HPE_INVALID_URL
+Error name: HPE_INVALID_URL
+Error name: HPE_CB_header_value
+Error name: HPE_OK
+Error name: HPE_OK
+Error name: HPE_OK
+Error name: HPE_OK
+Error name: HPE_OK
+Error name: HPE_UNEXPECTED_CONTENT_LENGTH
+Error name: HPE_UNEXPECTED_CONTENT_LENGTH
+Error name: HPE_UNEXPECTED_CONTENT_LENGTH
+Error name: HPE_UNEXPECTED_CONTENT_LENGTH
+Error name: HPE_CB_chunk_complete
+Error name: HPE_INVALID_INTERNAL_STATE
+Error name: HPE_INVALID_INTERNAL_STATE
+Error name: HPE_INVALID_INTERNAL_STATE
+Error name: HPE_INVALID_INTERNAL_STATE
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_body
+Error name: HPE_CB_body
+Error name: HPE_CB_body
+Error name: HPE_CB_body
+Error name: HPE_CB_body
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CLOSED_CONNECTION
+Error name: HPE_CLOSED_CONNECTION
+Error name: HPE_INVALID_PATH
+Error name: HPE_CB_chunk_complete
+Error name: HPE_INVALID_CHUNK_SIZE
+Error name: HPE_CB_chunk_complete
+Error name: HPE_PAUSED
+Error name: HPE_INVALID_HEADER_TOKEN
+Error name: HPE_INVALID_HEADER_TOKEN
+Error name: HPE_PAUSED
+Error name: HPE_PAUSED
+Error name: HPE_PAUSED
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_body
+Error name: HPE_CB_body
+Error name: HPE_CB_body
+Error name: HPE_CB_body
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_status
+Error name: HPE_CB_status
+Error name: HPE_LF_EXPECTED
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_message_begin
+Error name: HPE_CB_message_begin
+Error name: HPE_CB_message_begin
+Error name: HPE_CB_message_begin
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_message_begin
+Error name: HPE_CB_message_begin
+Error name: HPE_CB_message_begin
+Error name: HPE_CB_message_begin
+Error name: HPE_CB_message_begin
+Error name: HPE_CB_chunk_complete
+Error name: HPE_LF_EXPECTED
+Error name: HPE_CB_header_field
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_chunk_complete
+Error name: HPE_UNEXPECTED_CONTENT_LENGTH
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_chunk_complete
+Error name: HPE_INVALID_EOF_STATE
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_chunk_complete
+Error name: HPE_CB_chunk_complete
+Error name: HPE_INVALID_STATUS
+#2033132	DONE   cov: 4 ft: 5 corp: 1/1b lim: 4096 exec/s: 65584 rss: 56Mb
+Done 2033132 runs in 31 second(s)
+stat::number_of_executed_units: 2033132
+stat::average_exec_per_sec:     65584
+stat::new_units_added:          0
+stat::slowest_unit_time_sec:    0
+stat::peak_rss_mb:              56
+
+</pre>
+
+
+</body>

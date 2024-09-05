@@ -1,0 +1,886 @@
+<!doctype html>
+
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Experiment results</title>
+<style>
+* {
+    box-sizing: border-box;
+}
+
+html {
+    line-height: 1.15;
+}
+
+body {
+    font-family: sans-serif;
+    font-size: 16px;
+}
+
+table {
+    border-collapse: collapse;
+    border-spacing: 0;
+}
+
+td, th {
+    border-right: 1px #dedede solid;
+    border-bottom: 1px #dedede solid;
+    padding: 5px;
+    text-align: left;
+}
+td:first-child, th:first-child {
+    border-left: 1px #dedede solid;
+}
+th {
+    border-top: 1px #dedede solid;
+}
+
+tbody tr:nth-child(odd) {
+    background-color: #f4f5ff;
+}
+</style>
+<body>
+    LLM: 
+    
+<h1>output-xpdf-_zn6pdfdoc12displaypagesep9outputdeviiddiiiipfipves2_ / 02</h1>
+Bug: True
+<br>
+Crash reason: NO_SEMANTIC_ERR
+<br>
+<br>
+
+<h2>Triage</h2>
+<pre>
+Crash is caused by bug in fuzz driver.
+
+The crash is caused by a null-dereference error in the fuzz driver. This is due to the fact that the fuzz driver is not properly initializing the `PDFDoc` object. The `PDFDoc` constructor expects a `GString` object that represents a filename. However, the file &#34;fuzzed.pdf&#34; does not exist, which likely causes a null pointer to be passed to the `displayPages` function, leading to the crash. The driver should create a valid PDF file with the name &#34;fuzzed.pdf&#34; before creating the `PDFDoc` object.
+</pre>
+<br>
+
+
+
+
+
+<h3>Final code</h3>
+
+<pre>
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+#include &lt;stddef.h&gt;
+#include &lt;stdint.h&gt;
+#include &lt;string.h&gt;
+
+#include &#34;Object.h&#34;
+#include &#34;Stream.h&#34;
+#include &#34;PDFDoc.h&#34;
+#include &#34;OutputDev.h&#34;
+
+class MyOutputDev : public OutputDev {
+public:
+  virtual GBool upsideDown() { return gFalse; }
+  virtual GBool useDrawChar() { return gTrue; }
+  virtual GBool interpretType3Chars() { return gFalse; }
+};
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  if (size &lt; 1) {
+    return 0;
+  }
+
+  FuzzedDataProvider fuzzed_data(data, size);
+  
+  // Create necessary objects and initialize with fuzzed data
+  MyOutputDev outputDev;
+  int startPage = fuzzed_data.ConsumeIntegral&lt;int&gt;();
+  int endPage = fuzzed_data.ConsumeIntegral&lt;int&gt;();
+  double hDPI = fuzzed_data.ConsumeFloatingPoint&lt;double&gt;();
+  double vDPI = fuzzed_data.ConsumeFloatingPoint&lt;double&gt;();
+  int rotate = fuzzed_data.ConsumeIntegral&lt;int&gt;();
+  GBool useMediaBox = fuzzed_data.ConsumeBool();
+  GBool crop = fuzzed_data.ConsumeBool();
+  GBool printing = fuzzed_data.ConsumeBool();
+
+  // Use a dynamically allocated GString object instead of a local one
+  GString* fileName = new GString(&#34;fuzzed.pdf&#34;);
+  PDFDoc pdfDoc(fileName);
+
+  // Call the function under test
+  pdfDoc.displayPages(&amp;outputDev, startPage, endPage, hDPI, vDPI, rotate, useMediaBox, crop, printing, nullptr, nullptr);
+
+  return 0;
+}
+</pre>
+
+
+<h3>Fixer prompt #1</h3>
+<pre>
+
+Given the following C++ fuzz harness and its build error message, fix the code to make it build for fuzzing.
+
+If there is undeclared identifier or unknown type name error, fix it by finding and including the related libraries.
+
+MUST RETURN THE FULL CODE, INCLUDING UNCHANGED PARTS.
+
+Below is the code needs to be built:
+&lt;code&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+#include &lt;stddef.h&gt;
+#include &lt;stdint.h&gt;
+#include &lt;string.h&gt;
+
+#include &#34;Object.h&#34;
+#include &#34;Stream.h&#34;
+#include
+&lt;/code&gt;
+
+Below is the error to fix:
+The code has the following build issues:
+&lt;error&gt;
+The target function `void PDFDoc::displayPages(OutputDev *, int, int, double, double, int, GBool, GBool, GBool, DW_TAG_subroutine_typeInfinite loop *, void *)` was not called by the fuzz target `LLVMFuzzerTestOneInput`.YOU MUST CALL FUNCTION `void PDFDoc::displayPages(OutputDev *, int, int, double, double, int, GBool, GBool, GBool, DW_TAG_subroutine_typeInfinite loop *, void *)` INSIDE FUNCTION `LLVMFuzzerTestOneInput`.
+&lt;/error&gt;
+
+
+
+
+Fix code:
+1. Consider possible solutions for the issues listed above.
+2. Choose a solution that can maximize fuzzing result, which is utilizing the function under test and feeding it not null input.
+3. Apply the solutions to the original code.
+It&#39;s important to show the complete code, not only the fixed line.
+&lt;solution&gt;
+</pre>
+
+
+
+<h3>Code #1</h3>
+
+<pre>
+```c++
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+#include &lt;stddef.h&gt;
+#include &lt;stdint.h&gt;
+#include &lt;string.h&gt;
+
+#include &#34;Object.h&#34;
+#include &#34;Stream.h&#34;
+#include &#34;PDFDoc.h&#34;
+#include &#34;OutputDev.h&#34;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  if (size &lt; 1) {
+    return 0;
+  }
+
+  FuzzedDataProvider fuzzed_data(data, size);
+  
+  // Create necessary objects and initialize with fuzzed data
+  OutputDev outputDev;
+  int startPage = fuzzed_data.ConsumeIntegral&lt;int&gt;();
+  int endPage = fuzzed_data.ConsumeIntegral&lt;int&gt;();
+  double hDPI = fuzzed_data.ConsumeFloatingPoint&lt;double&gt;();
+  double vDPI = fuzzed_data.ConsumeFloatingPoint&lt;double&gt;();
+  int rotate = fuzzed_data.ConsumeIntegral&lt;int&gt;();
+  GBool useMediaBox = fuzzed_data.ConsumeBool();
+  GBool crop = fuzzed_data.ConsumeBool();
+  GBool printing = fuzzed_data.ConsumeBool();
+  PDFDoc pdfDoc;
+
+  // Call the function under test
+  pdfDoc.displayPages(&amp;outputDev, startPage, endPage, hDPI, vDPI, rotate, useMediaBox, crop, printing, nullptr, nullptr);
+
+  return 0;
+}
+```
+This code fixes the build error by adding a call to the `PDFDoc::displayPages` function inside the `LLVMFuzzerTestOneInput` function. It creates the necessary objects and initializes them with fuzzed data from the `FuzzedDataProvider`. The `PDFDoc` and `OutputDev` headers are also included to resolve any potential undeclared identifier or unknown type name errors.
+</pre>
+
+
+<h3>Fixer prompt #2</h3>
+<pre>
+
+Given the following C++ fuzz harness and its build error message, fix the code to make it build for fuzzing.
+
+If there is undeclared identifier or unknown type name error, fix it by finding and including the related libraries.
+
+MUST RETURN THE FULL CODE, INCLUDING UNCHANGED PARTS.
+
+Below is the code needs to be built:
+&lt;code&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+#include &lt;stddef.h&gt;
+#include &lt;stdint.h&gt;
+#include &lt;string.h&gt;
+
+#include &#34;Object.h&#34;
+#include &#34;Stream.h&#34;
+#include &#34;PDFDoc.h&#34;
+#include &#34;OutputDev.h&#34;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  if (size &lt; 1) {
+    return 0;
+  }
+
+  FuzzedDataProvider fuzzed_data(data, size);
+  
+  // Create necessary objects and initialize with fuzzed data
+  OutputDev outputDev;
+  int startPage = fuzzed_data.ConsumeIntegral&lt;int&gt;();
+  int endPage = fuzzed_data.ConsumeIntegral&lt;int&gt;();
+  double hDPI = fuzzed_data.ConsumeFloatingPoint&lt;double&gt;();
+  double vDPI = fuzzed_data.ConsumeFloatingPoint&lt;double&gt;();
+  int rotate = fuzzed_data.ConsumeIntegral&lt;int&gt;();
+  GBool useMediaBox = fuzzed_data.ConsumeBool();
+  GBool crop = fuzzed_data.ConsumeBool();
+  GBool printing = fuzzed_data.ConsumeBool();
+  PDFDoc pdfDoc;
+
+  // Call the function under test
+  pdfDoc.displayPages(&amp;outputDev, startPage, endPage, hDPI, vDPI, rotate, useMediaBox, crop, printing, nullptr, nullptr);
+
+  return 0;
+}
+&lt;/code&gt;
+
+Below is the error to fix:
+The code has the following build issues:
+&lt;error&gt;
+fuzz_JBIG2.cc:20:13: error: variable type &#39;OutputDev&#39; is an abstract class
+   20 |   OutputDev outputDev;
+      |             ^
+../xpdf/OutputDev.h:48:17: note: unimplemented pure virtual method &#39;upsideDown&#39; in &#39;OutputDev&#39;
+   48 |   virtual GBool upsideDown() = 0;
+      |                 ^
+../xpdf/OutputDev.h:51:17: note: unimplemented pure virtual method &#39;useDrawChar&#39; in &#39;OutputDev&#39;
+   51 |   virtual GBool useDrawChar() = 0;
+      |                 ^
+../xpdf/OutputDev.h:64:17: note: unimplemented pure virtual method &#39;interpretType3Chars&#39; in &#39;OutputDev&#39;
+   64 |   virtual GBool interpretType3Chars() = 0;
+      |                 ^
+fuzz_JBIG2.cc:29:10: error: no matching constructor for initialization of &#39;PDFDoc&#39;
+   29 |   PDFDoc pdfDoc;
+      |          ^
+../xpdf/PDFDoc.h:35:7: note: candidate constructor (the implicit copy constructor) not viable: requires 1 argument, but 0 were provided
+   35 | class PDFDoc {
+      |       ^~~~~~
+../xpdf/PDFDoc.h:38:3: note: candidate constructor not viable: requires at least argument &#39;fileNameA&#39;, but no arguments were provided
+   38 |   PDFDoc(GString *fileNameA, GString *ownerPassword = NULL,
+      |   ^      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+   39 |          GString *userPassword = NULL, PDFCore *coreA = NULL);
+      |          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+../xpdf/PDFDoc.h:48:3: note: candidate constructor not viable: requires at least argument &#39;fileNameA&#39;, but no arguments were provided
+   48 |   PDFDoc(char *fileNameA, GString *ownerPassword = NULL,
+      |   ^      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+   49 |          GString *userPassword = NULL, PDFCore *coreA = NULL);
+      |          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+../xpdf/PDFDoc.h:51:3: note: candidate constructor not viable: requires at least argument &#39;strA&#39;, but no arguments were provided
+   51 |   PDFDoc(BaseStream *strA, GString *ownerPassword = NULL,
+      |   ^      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+   52 |          GString *userPassword = NULL, PDFCore *coreA = NULL);
+      |          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+&lt;/error&gt;
+
+
+
+
+Fix code:
+1. Consider possible solutions for the issues listed above.
+2. Choose a solution that can maximize fuzzing result, which is utilizing the function under test and feeding it not null input.
+3. Apply the solutions to the original code.
+It&#39;s important to show the complete code, not only the fixed line.
+&lt;solution&gt;
+</pre>
+
+
+
+<h3>Code #2</h3>
+
+<pre>
+&lt;code&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+#include &lt;stddef.h&gt;
+#include &lt;stdint.h&gt;
+#include &lt;string.h&gt;
+
+#include &#34;Object.h&#34;
+#include &#34;Stream.h&#34;
+#include &#34;PDFDoc.h&#34;
+#include &#34;OutputDev.h&#34;
+
+class MyOutputDev : public OutputDev {
+public:
+  virtual GBool upsideDown() { return gFalse; }
+  virtual GBool useDrawChar() { return gTrue; }
+  virtual GBool interpretType3Chars() { return gFalse; }
+};
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  if (size &lt; 1) {
+    return 0;
+  }
+
+  FuzzedDataProvider fuzzed_data(data, size);
+  
+  // Create necessary objects and initialize with fuzzed data
+  MyOutputDev outputDev;
+  int startPage = fuzzed_data.ConsumeIntegral&lt;int&gt;();
+  int endPage = fuzzed_data.ConsumeIntegral&lt;int&gt;();
+  double hDPI = fuzzed_data.ConsumeFloatingPoint&lt;double&gt;();
+  double vDPI = fuzzed_data.ConsumeFloatingPoint&lt;double&gt;();
+  int rotate = fuzzed_data.ConsumeIntegral&lt;int&gt;();
+  GBool useMediaBox = fuzzed_data.ConsumeBool();
+  GBool crop = fuzzed_data.ConsumeBool();
+  GBool printing = fuzzed_data.ConsumeBool();
+
+  GString fileName(&#34;fuzzed.pdf&#34;);
+  PDFDoc pdfDoc(&amp;fileName);
+
+  // Call the function under test
+  pdfDoc.displayPages(&amp;outputDev, startPage, endPage, hDPI, vDPI, rotate, useMediaBox, crop, printing, nullptr, nullptr);
+
+  return 0;
+}
+&lt;/code&gt;
+</pre>
+
+
+<h3>Fixer prompt #3</h3>
+<pre>
+
+Given the following C++ fuzz harness and its build error message, fix the code to make it build for fuzzing.
+
+If there is undeclared identifier or unknown type name error, fix it by finding and including the related libraries.
+
+MUST RETURN THE FULL CODE, INCLUDING UNCHANGED PARTS.
+
+Below is the code needs to be built:
+&lt;code&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+#include &lt;stddef.h&gt;
+#include &lt;stdint.h&gt;
+#include &lt;string.h&gt;
+
+#include &#34;Object.h&#34;
+#include &#34;Stream.h&#34;
+#include &#34;PDFDoc.h&#34;
+#include &#34;OutputDev.h&#34;
+
+class MyOutputDev : public OutputDev {
+public:
+  virtual GBool upsideDown() { return gFalse; }
+  virtual GBool useDrawChar() { return gTrue; }
+  virtual GBool interpretType3Chars() { return gFalse; }
+};
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  if (size &lt; 1) {
+    return 0;
+  }
+
+  FuzzedDataProvider fuzzed_data(data, size);
+  
+  // Create necessary objects and initialize with fuzzed data
+  MyOutputDev outputDev;
+  int startPage = fuzzed_data.ConsumeIntegral&lt;int&gt;();
+  int endPage = fuzzed_data.ConsumeIntegral&lt;int&gt;();
+  double hDPI = fuzzed_data.ConsumeFloatingPoint&lt;double&gt;();
+  double vDPI = fuzzed_data.ConsumeFloatingPoint&lt;double&gt;();
+  int rotate = fuzzed_data.ConsumeIntegral&lt;int&gt;();
+  GBool useMediaBox = fuzzed_data.ConsumeBool();
+  GBool crop = fuzzed_data.ConsumeBool();
+  GBool printing = fuzzed_data.ConsumeBool();
+
+  GString fileName(&#34;fuzzed.pdf&#34;);
+  PDFDoc pdfDoc(&amp;fileName);
+
+  // Call the function under test
+  pdfDoc.displayPages(&amp;outputDev, startPage, endPage, hDPI, vDPI, rotate, useMediaBox, crop, printing, nullptr, nullptr);
+
+  return 0;
+}
+&lt;/code&gt;
+
+Below is the error to fix:
+The code can build successfully but has a runtime issue: Fuzzing crashed immediately at runtime (ASAN-ERROR: AddressSanitizer: attempting free on address which was not malloc()-ed: 0x7f6780b69ab0 in thread T0), indicating fuzz target code for invoking the function under test is incorrect or unrobust.
+&lt;error&gt;
+Crash stacks:
+Stack 0:
+#0 0x558275ee218d in operator delete(void*) /src/llvm-project/compiler-rt/lib/asan/asan_new_delete.cpp:152:3
+#1 0x558275ee4517 in LLVMFuzzerTestOneInput /src/xpdf-4.05/build/fuzz_JBIG2.cc:44:1
+#2 0x558275d96600 in fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:614:13
+#3 0x558275d95e25 in fuzzer::Fuzzer::RunOne(unsigned char const*, unsigned long, bool, fuzzer::InputInfo*, bool, bool*) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:516:7
+#4 0x558275d97c76 in fuzzer::Fuzzer::ReadAndExecuteSeedCorpora(std::__Fuzzer::vector&lt;fuzzer::SizedFile, std::__Fuzzer::allocator&lt;fuzzer::SizedFile&gt;&gt;&amp;) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:812:5
+#5 0x558275d980e7 in fuzzer::Fuzzer::Loop(std::__Fuzzer::vector&lt;fuzzer::SizedFile, std::__Fuzzer::allocator&lt;fuzzer::SizedFile&gt;&gt;&amp;) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:867:3
+#6 0x558275d866f6 in fuzzer::FuzzerDriver(int*, char***, int (*)(unsigned char const*, unsigned long)) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:914:6
+#7 0x558275db2c22 in main /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMain.cpp:20:10
+#8 0x7f67810cd082 in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x24082) (BuildId: 0702430aef5fa3dda43986563e9ffcc47efbd75e)
+#9 0x558275d7786d in _start (/out/fuzz_JBIG2+0x1cb86d)
+&lt;/error&gt;
+
+
+
+
+Fix code:
+1. Consider possible solutions for the issues listed above.
+2. Choose a solution that can maximize fuzzing result, which is utilizing the function under test and feeding it not null input.
+3. Apply the solutions to the original code.
+It&#39;s important to show the complete code, not only the fixed line.
+&lt;solution&gt;
+</pre>
+
+
+
+<h3>Code #3</h3>
+
+<pre>
+&lt;code&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+#include &lt;stddef.h&gt;
+#include &lt;stdint.h&gt;
+#include &lt;string.h&gt;
+
+#include &#34;Object.h&#34;
+#include &#34;Stream.h&#34;
+#include &#34;PDFDoc.h&#34;
+#include &#34;OutputDev.h&#34;
+
+class MyOutputDev : public OutputDev {
+public:
+  virtual GBool upsideDown() { return gFalse; }
+  virtual GBool useDrawChar() { return gTrue; }
+  virtual GBool interpretType3Chars() { return gFalse; }
+};
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  if (size &lt; 1) {
+    return 0;
+  }
+
+  FuzzedDataProvider fuzzed_data(data, size);
+  
+  // Create necessary objects and initialize with fuzzed data
+  MyOutputDev outputDev;
+  int startPage = fuzzed_data.ConsumeIntegral&lt;int&gt;();
+  int endPage = fuzzed_data.ConsumeIntegral&lt;int&gt;();
+  double hDPI = fuzzed_data.ConsumeFloatingPoint&lt;double&gt;();
+  double vDPI = fuzzed_data.ConsumeFloatingPoint&lt;double&gt;();
+  int rotate = fuzzed_data.ConsumeIntegral&lt;int&gt;();
+  GBool useMediaBox = fuzzed_data.ConsumeBool();
+  GBool crop = fuzzed_data.ConsumeBool();
+  GBool printing = fuzzed_data.ConsumeBool();
+
+  // Allocate memory for fileName using new
+  GString* fileName = new GString(&#34;fuzzed.pdf&#34;);
+  PDFDoc pdfDoc(fileName);
+
+  // Call the function under test
+  pdfDoc.displayPages(&amp;outputDev, startPage, endPage, hDPI, vDPI, rotate, useMediaBox, crop, printing, nullptr, nullptr);
+
+  // Deallocate memory for fileName
+  delete fileName;
+
+  return 0;
+}
+&lt;/code&gt;
+&lt;solution&gt;
+</pre>
+
+
+<h3>Fixer prompt #4</h3>
+<pre>
+
+Given the following C++ fuzz harness and its build error message, fix the code to make it build for fuzzing.
+
+If there is undeclared identifier or unknown type name error, fix it by finding and including the related libraries.
+
+MUST RETURN THE FULL CODE, INCLUDING UNCHANGED PARTS.
+
+Below is the code needs to be built:
+&lt;code&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+#include &lt;stddef.h&gt;
+#include &lt;stdint.h&gt;
+#include &lt;string.h&gt;
+
+#include &#34;Object.h&#34;
+#include &#34;Stream.h&#34;
+#include &#34;PDFDoc.h&#34;
+#include &#34;OutputDev.h&#34;
+
+class MyOutputDev : public OutputDev {
+public:
+  virtual GBool upsideDown() { return gFalse; }
+  virtual GBool useDrawChar() { return gTrue; }
+  virtual GBool interpretType3Chars() { return gFalse; }
+};
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  if (size &lt; 1) {
+    return 0;
+  }
+
+  FuzzedDataProvider fuzzed_data(data, size);
+  
+  // Create necessary objects and initialize with fuzzed data
+  MyOutputDev outputDev;
+  int startPage = fuzzed_data.ConsumeIntegral&lt;int&gt;();
+  int endPage = fuzzed_data.ConsumeIntegral&lt;int&gt;();
+  double hDPI = fuzzed_data.ConsumeFloatingPoint&lt;double&gt;();
+  double vDPI = fuzzed_data.ConsumeFloatingPoint&lt;double&gt;();
+  int rotate = fuzzed_data.ConsumeIntegral&lt;int&gt;();
+  GBool useMediaBox = fuzzed_data.ConsumeBool();
+  GBool crop = fuzzed_data.ConsumeBool();
+  GBool printing = fuzzed_data.ConsumeBool();
+
+  // Allocate memory for fileName using new
+  GString* fileName = new GString(&#34;fuzzed.pdf&#34;);
+  PDFDoc pdfDoc(fileName);
+
+  // Call the function under test
+  pdfDoc.displayPages(&amp;outputDev, startPage, endPage, hDPI, vDPI, rotate, useMediaBox, crop, printing, nullptr, nullptr);
+
+  // Deallocate memory for fileName
+  delete fileName;
+
+  return 0;
+}
+&lt;/code&gt;
+
+Below is the error to fix:
+The code can build successfully but has a runtime issue: Fuzzing crashed immediately at runtime (ASAN-ERROR: AddressSanitizer: heap-use-after-free on address 0x5020000000f8 at pc 0x56345076e450 bp 0x7ffca48d67d0 sp 0x7ffca48d67c8), indicating fuzz target code for invoking the function under test is incorrect or unrobust.
+&lt;error&gt;
+Crash stacks:
+Stack 0:
+#0 0x56345076e44f in GString::~GString() /src/xpdf-4.05/goo/GString.cc:205:12
+#1 0x5634504ddfc0 in PDFDoc::~PDFDoc() /src/xpdf-4.05/xpdf/PDFDoc.cc:358:5
+#2 0x5634504da519 in LLVMFuzzerTestOneInput /src/xpdf-4.05/build/fuzz_JBIG2.cc:48:1
+#3 0x56345038c600 in fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:614:13
+#4 0x56345038be25 in fuzzer::Fuzzer::RunOne(unsigned char const*, unsigned long, bool, fuzzer::InputInfo*, bool, bool*) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:516:7
+#5 0x56345038dc76 in fuzzer::Fuzzer::ReadAndExecuteSeedCorpora(std::__Fuzzer::vector&lt;fuzzer::SizedFile, std::__Fuzzer::allocator&lt;fuzzer::SizedFile&gt;&gt;&amp;) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:812:5
+#6 0x56345038e0e7 in fuzzer::Fuzzer::Loop(std::__Fuzzer::vector&lt;fuzzer::SizedFile, std::__Fuzzer::allocator&lt;fuzzer::SizedFile&gt;&gt;&amp;) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:867:3
+#7 0x56345037c6f6 in fuzzer::FuzzerDriver(int*, char***, int (*)(unsigned char const*, unsigned long)) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:914:6
+#8 0x5634503a8c22 in main /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMain.cpp:20:10
+#9 0x7fedbd0be082 in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x24082) (BuildId: 0702430aef5fa3dda43986563e9ffcc47efbd75e)
+#10 0x56345036d86d in _start (/out/fuzz_JBIG2+0x1cb86d)
+Stack 1:
+#0 0x5634504d818d in operator delete(void*) /src/llvm-project/compiler-rt/lib/asan/asan_new_delete.cpp:152:3
+#1 0x5634504da511 in LLVMFuzzerTestOneInput /src/xpdf-4.05/build/fuzz_JBIG2.cc:45:3
+#2 0x56345038c600 in fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:614:13
+#3 0x56345038be25 in fuzzer::Fuzzer::RunOne(unsigned char const*, unsigned long, bool, fuzzer::InputInfo*, bool, bool*) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:516:7
+#4 0x56345038dc76 in fuzzer::Fuzzer::ReadAndExecuteSeedCorpora(std::__Fuzzer::vector&lt;fuzzer::SizedFile, std::__Fuzzer::allocator&lt;fuzzer::SizedFile&gt;&gt;&amp;) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:812:5
+#5 0x56345038e0e7 in fuzzer::Fuzzer::Loop(std::__Fuzzer::vector&lt;fuzzer::SizedFile, std::__Fuzzer::allocator&lt;fuzzer::SizedFile&gt;&gt;&amp;) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:867:3
+#6 0x56345037c6f6 in fuzzer::FuzzerDriver(int*, char***, int (*)(unsigned char const*, unsigned long)) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:914:6
+#7 0x5634503a8c22 in main /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMain.cpp:20:10
+#8 0x7fedbd0be082 in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x24082) (BuildId: 0702430aef5fa3dda43986563e9ffcc47efbd75e)
+Stack 2:
+#0 0x5634504d792d in operator new(unsigned long) /src/llvm-project/compiler-rt/lib/asan/asan_new_delete.cpp:95:3
+#1 0x5634504da468 in LLVMFuzzerTestOneInput /src/xpdf-4.05/build/fuzz_JBIG2.cc:38:23
+#2 0x56345038c600 in fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:614:13
+#3 0x56345038be25 in fuzzer::Fuzzer::RunOne(unsigned char const*, unsigned long, bool, fuzzer::InputInfo*, bool, bool*) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:516:7
+#4 0x56345038dc76 in fuzzer::Fuzzer::ReadAndExecuteSeedCorpora(std::__Fuzzer::vector&lt;fuzzer::SizedFile, std::__Fuzzer::allocator&lt;fuzzer::SizedFile&gt;&gt;&amp;) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:812:5
+#5 0x56345038e0e7 in fuzzer::Fuzzer::Loop(std::__Fuzzer::vector&lt;fuzzer::SizedFile, std::__Fuzzer::allocator&lt;fuzzer::SizedFile&gt;&gt;&amp;) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:867:3
+#6 0x56345037c6f6 in fuzzer::FuzzerDriver(int*, char***, int (*)(unsigned char const*, unsigned long)) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:914:6
+#7 0x5634503a8c22 in main /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMain.cpp:20:10
+#8 0x7fedbd0be082 in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x24082) (BuildId: 0702430aef5fa3dda43986563e9ffcc47efbd75e)
+&lt;/error&gt;
+
+
+
+
+Fix code:
+1. Consider possible solutions for the issues listed above.
+2. Choose a solution that can maximize fuzzing result, which is utilizing the function under test and feeding it not null input.
+3. Apply the solutions to the original code.
+It&#39;s important to show the complete code, not only the fixed line.
+&lt;solution&gt;
+</pre>
+
+
+
+<h3>Code #4</h3>
+
+<pre>
+The issue here is that the PDFDoc object is trying to access the GString object after it has been deleted. To fix this, we can use a local GString object instead of a pointer. This way, the GString object will not be deleted until the function returns, which is after the PDFDoc object is destroyed.
+
+Here is the fixed code:
+
+```cpp
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+#include &lt;stddef.h&gt;
+#include &lt;stdint.h&gt;
+#include &lt;string.h&gt;
+
+#include &#34;Object.h&#34;
+#include &#34;Stream.h&#34;
+#include &#34;PDFDoc.h&#34;
+#include &#34;OutputDev.h&#34;
+
+class MyOutputDev : public OutputDev {
+public:
+  virtual GBool upsideDown() { return gFalse; }
+  virtual GBool useDrawChar() { return gTrue; }
+  virtual GBool interpretType3Chars() { return gFalse; }
+};
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  if (size &lt; 1) {
+    return 0;
+  }
+
+  FuzzedDataProvider fuzzed_data(data, size);
+  
+  // Create necessary objects and initialize with fuzzed data
+  MyOutputDev outputDev;
+  int startPage = fuzzed_data.ConsumeIntegral&lt;int&gt;();
+  int endPage = fuzzed_data.ConsumeIntegral&lt;int&gt;();
+  double hDPI = fuzzed_data.ConsumeFloatingPoint&lt;double&gt;();
+  double vDPI = fuzzed_data.ConsumeFloatingPoint&lt;double&gt;();
+  int rotate = fuzzed_data.ConsumeIntegral&lt;int&gt;();
+  GBool useMediaBox = fuzzed_data.ConsumeBool();
+  GBool crop = fuzzed_data.ConsumeBool();
+  GBool printing = fuzzed_data.ConsumeBool();
+
+  // Use a local GString object instead of a pointer
+  GString fileName(&#34;fuzzed.pdf&#34;);
+  PDFDoc pdfDoc(&amp;fileName);
+
+  // Call the function under test
+  pdfDoc.displayPages(&amp;outputDev, startPage, endPage, hDPI, vDPI, rotate, useMediaBox, crop, printing, nullptr, nullptr);
+
+  return 0;
+}
+```
+This code should now build and run without crashing.
+</pre>
+
+
+<h3>Fixer prompt #5</h3>
+<pre>
+
+Given the following C++ fuzz harness and its build error message, fix the code to make it build for fuzzing.
+
+If there is undeclared identifier or unknown type name error, fix it by finding and including the related libraries.
+
+MUST RETURN THE FULL CODE, INCLUDING UNCHANGED PARTS.
+
+Below is the code needs to be built:
+&lt;code&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+#include &lt;stddef.h&gt;
+#include &lt;stdint.h&gt;
+#include &lt;string.h&gt;
+
+#include &#34;Object.h&#34;
+#include &#34;Stream.h&#34;
+#include &#34;PDFDoc.h&#34;
+#include &#34;OutputDev.h&#34;
+
+class MyOutputDev : public OutputDev {
+public:
+  virtual GBool upsideDown() { return gFalse; }
+  virtual GBool useDrawChar() { return gTrue; }
+  virtual GBool interpretType3Chars() { return gFalse; }
+};
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  if (size &lt; 1) {
+    return 0;
+  }
+
+  FuzzedDataProvider fuzzed_data(data, size);
+  
+  // Create necessary objects and initialize with fuzzed data
+  MyOutputDev outputDev;
+  int startPage = fuzzed_data.ConsumeIntegral&lt;int&gt;();
+  int endPage = fuzzed_data.ConsumeIntegral&lt;int&gt;();
+  double hDPI = fuzzed_data.ConsumeFloatingPoint&lt;double&gt;();
+  double vDPI = fuzzed_data.ConsumeFloatingPoint&lt;double&gt;();
+  int rotate = fuzzed_data.ConsumeIntegral&lt;int&gt;();
+  GBool useMediaBox = fuzzed_data.ConsumeBool();
+  GBool crop = fuzzed_data.ConsumeBool();
+  GBool printing = fuzzed_data.ConsumeBool();
+
+  // Use a local GString object instead of a pointer
+  GString fileName(&#34;fuzzed.pdf&#34;);
+  PDFDoc pdfDoc(&amp;fileName);
+
+  // Call the function under test
+  pdfDoc.displayPages(&amp;outputDev, startPage, endPage, hDPI, vDPI, rotate, useMediaBox, crop, printing, nullptr, nullptr);
+
+  return 0;
+}
+&lt;/code&gt;
+
+Below is the error to fix:
+The code can build successfully but has a runtime issue: Fuzzing crashed immediately at runtime (ASAN-ERROR: AddressSanitizer: attempting free on address which was not malloc()-ed: 0x7faaa077fab0 in thread T0), indicating fuzz target code for invoking the function under test is incorrect or unrobust.
+&lt;error&gt;
+Crash stacks:
+Stack 0:
+#0 0x556408cca18d in operator delete(void*) /src/llvm-project/compiler-rt/lib/asan/asan_new_delete.cpp:152:3
+#1 0x556408ccc517 in LLVMFuzzerTestOneInput /src/xpdf-4.05/build/fuzz_JBIG2.cc:45:1
+#2 0x556408b7e600 in fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:614:13
+#3 0x556408b7de25 in fuzzer::Fuzzer::RunOne(unsigned char const*, unsigned long, bool, fuzzer::InputInfo*, bool, bool*) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:516:7
+#4 0x556408b7fc76 in fuzzer::Fuzzer::ReadAndExecuteSeedCorpora(std::__Fuzzer::vector&lt;fuzzer::SizedFile, std::__Fuzzer::allocator&lt;fuzzer::SizedFile&gt;&gt;&amp;) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:812:5
+#5 0x556408b800e7 in fuzzer::Fuzzer::Loop(std::__Fuzzer::vector&lt;fuzzer::SizedFile, std::__Fuzzer::allocator&lt;fuzzer::SizedFile&gt;&gt;&amp;) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:867:3
+#6 0x556408b6e6f6 in fuzzer::FuzzerDriver(int*, char***, int (*)(unsigned char const*, unsigned long)) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:914:6
+#7 0x556408b9ac22 in main /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMain.cpp:20:10
+#8 0x7faaa0f36082 in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x24082) (BuildId: 0702430aef5fa3dda43986563e9ffcc47efbd75e)
+#9 0x556408b5f86d in _start (/out/fuzz_JBIG2+0x1cb86d)
+&lt;/error&gt;
+
+
+
+
+Fix code:
+1. Consider possible solutions for the issues listed above.
+2. Choose a solution that can maximize fuzzing result, which is utilizing the function under test and feeding it not null input.
+3. Apply the solutions to the original code.
+It&#39;s important to show the complete code, not only the fixed line.
+&lt;solution&gt;
+</pre>
+
+
+
+<h3>Code #5</h3>
+
+<pre>
+The issue seems to be with the GString object being deleted when it goes out of scope. The PDFDoc object might be trying to delete the GString object when it itself is deleted, causing the error. To fix this, we can dynamically allocate the GString object and let the PDFDoc object handle its deletion.
+
+Here is the fixed code:
+
+```cpp
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+#include &lt;stddef.h&gt;
+#include &lt;stdint.h&gt;
+#include &lt;string.h&gt;
+
+#include &#34;Object.h&#34;
+#include &#34;Stream.h&#34;
+#include &#34;PDFDoc.h&#34;
+#include &#34;OutputDev.h&#34;
+
+class MyOutputDev : public OutputDev {
+public:
+  virtual GBool upsideDown() { return gFalse; }
+  virtual GBool useDrawChar() { return gTrue; }
+  virtual GBool interpretType3Chars() { return gFalse; }
+};
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  if (size &lt; 1) {
+    return 0;
+  }
+
+  FuzzedDataProvider fuzzed_data(data, size);
+  
+  // Create necessary objects and initialize with fuzzed data
+  MyOutputDev outputDev;
+  int startPage = fuzzed_data.ConsumeIntegral&lt;int&gt;();
+  int endPage = fuzzed_data.ConsumeIntegral&lt;int&gt;();
+  double hDPI = fuzzed_data.ConsumeFloatingPoint&lt;double&gt;();
+  double vDPI = fuzzed_data.ConsumeFloatingPoint&lt;double&gt;();
+  int rotate = fuzzed_data.ConsumeIntegral&lt;int&gt;();
+  GBool useMediaBox = fuzzed_data.ConsumeBool();
+  GBool crop = fuzzed_data.ConsumeBool();
+  GBool printing = fuzzed_data.ConsumeBool();
+
+  // Use a dynamically allocated GString object instead of a local one
+  GString* fileName = new GString(&#34;fuzzed.pdf&#34;);
+  PDFDoc pdfDoc(fileName);
+
+  // Call the function under test
+  pdfDoc.displayPages(&amp;outputDev, startPage, endPage, hDPI, vDPI, rotate, useMediaBox, crop, printing, nullptr, nullptr);
+
+  return 0;
+}
+```
+This code dynamically allocates the GString object and passes it to the PDFDoc object. The PDFDoc object will then handle the deletion of the GString object when it is deleted.
+</pre>
+
+
+<h2>Logs</h2>
+<pre>
+Fixing /home/chyun/oss-fuzz-gen1/results3/output-xpdf-_zn6pdfdoc12displaypagesep9outputdeviiddiiiipfipves2_/fixed_targets/02.cc with gpt-4, attempt 1.
+Fixing /home/chyun/oss-fuzz-gen1/results3/output-xpdf-_zn6pdfdoc12displaypagesep9outputdeviiddiiiipfipves2_/fixed_targets/02.cc with gpt-4, attempt 2.
+Fixing /home/chyun/oss-fuzz-gen1/results3/output-xpdf-_zn6pdfdoc12displaypagesep9outputdeviiddiiiipfipves2_/fixed_targets/02.cc with gpt-4, attempt 3.
+Fixing /home/chyun/oss-fuzz-gen1/results3/output-xpdf-_zn6pdfdoc12displaypagesep9outputdeviiddiiiipfipves2_/fixed_targets/02.cc with gpt-4, attempt 4.
+Fixing /home/chyun/oss-fuzz-gen1/results3/output-xpdf-_zn6pdfdoc12displaypagesep9outputdeviiddiiiipfipves2_/fixed_targets/02.cc with gpt-4, attempt 5.
+Successfully built /home/chyun/oss-fuzz-gen1/results3/output-xpdf-_zn6pdfdoc12displaypagesep9outputdeviiddiiiipfipves2_/fixed_targets/02.cc with gpt-4 in 5 iterations of fixing.
+Triaging the crash related to /home/chyun/oss-fuzz-gen1/results3/output-xpdf-_zn6pdfdoc12displaypagesep9outputdeviiddiiiipfipves2_/fixed_targets/02.cc with gpt-4.
+Result for xpdf-zn6pdfdoc12displaypagesep9outputdeviiddiiiipfipves2-02: crashes=True, coverage=0.0036711536322171544 (99/26967), coverage diff=0.000481035187723982 (60/124731)
+
+</pre>
+
+<h2>Run logs</h2>
+<pre>
+INFO:__main__:Running: docker run --privileged --shm-size=2g --platform linux/amd64 --rm -e FUZZING_ENGINE=libfuzzer -e SANITIZER=address -e RUN_FUZZER_MODE=interactive -e HELPER=True -v /home/chyun/oss-fuzz-gen1/results3/output-xpdf-_zn6pdfdoc12displaypagesep9outputdeviiddiiiipfipves2_/corpora/02.cc:/tmp/fuzz_JBIG2_corpus -v /tmp/tmpfgjc0s8z/build/out/xpdf-zn6pdfdoc12displaypagesep9outputdeviiddiiiipfipves2-02:/out -t gcr.io/oss-fuzz-base/base-runner run_fuzzer fuzz_JBIG2 -print_final_stats=1 -max_total_time=30 -len_control=0 -timeout=30.
+vm.mmap_rnd_bits = 28
+rm: cannot remove &#39;/tmp/fuzz_JBIG2_corpus&#39;: Device or resource busy
+/out/fuzz_JBIG2 -rss_limit_mb=2560 -timeout=25 -print_final_stats=1 -max_total_time=30 -len_control=0 -timeout=30 /tmp/fuzz_JBIG2_corpus -detect_leaks=0 &lt; /dev/null
+INFO: Running with entropic power schedule (0xFF, 100).
+INFO: Seed: 866838709
+INFO: Loaded 1 modules   (26967 inline 8-bit counters): 26967 [0x559e3f968458, 0x559e3f96edaf), 
+INFO: Loaded 1 PC tables (26967 PCs): 26967 [0x559e3f96edb0,0x559e3f9d8320), 
+INFO:        0 files found in /tmp/fuzz_JBIG2_corpus
+INFO: -max_len is not provided; libFuzzer will not generate inputs larger than 4096 bytes
+INFO: A corpus is not provided, starting from an empty corpus
+I/O Error: Couldn&#39;t open file &#39;fuzzed.pdf&#39;
+#2	INITED cov: 98 ft: 99 corp: 1/1b exec/s: 0 rss: 34Mb
+I/O Error: Couldn&#39;t open file &#39;fuzzed.pdf&#39;
+#3	NEW    cov: 98 ft: 101 corp: 2/3b lim: 4096 exec/s: 0 rss: 34Mb L: 2/2 MS: 1 InsertByte-
+I/O Error: Couldn&#39;t open file &#39;fuzzed.pdf&#39;
+I/O Error: Couldn&#39;t open file &#39;fuzzed.pdf&#39;
+#5	NEW    cov: 99 ft: 104 corp: 3/7b lim: 4096 exec/s: 0 rss: 34Mb L: 4/4 MS: 2 InsertByte-CrossOver-
+I/O Error: Couldn&#39;t open file &#39;fuzzed.pdf&#39;
+I/O Error: Couldn&#39;t open file &#39;fuzzed.pdf&#39;
+I/O Error: Couldn&#39;t open file &#39;fuzzed.pdf&#39;
+#8	NEW    cov: 99 ft: 105 corp: 4/10b lim: 4096 exec/s: 0 rss: 34Mb L: 3/4 MS: 3 InsertByte-ShuffleBytes-CopyPart-
+I/O Error: Couldn&#39;t open file &#39;fuzzed.pdf&#39;
+AddressSanitizer:DEADLYSIGNAL
+=================================================================
+[1m[31m==16==ERROR: AddressSanitizer: SEGV on unknown address 0x0000000002c0 (pc 0x7f4c0a698fc4 bp 0x7ffcf8a8ed00 sp 0x7ffcf8a8ece8 T0)
+[1m[0m==16==The signal is caused by a READ memory access.
+==16==Hint: address points to the zero page.
+SCARINESS: 10 (null-deref)
+    #0 0x7f4c0a698fc4 in __pthread_mutex_lock (/lib/x86_64-linux-gnu/libpthread.so.0+0xafc4) (BuildId: 9a65bb469e45a1c6fbcffae5b82a2fd7a69eb479)
+    #1 0x559e3f68520f in GlobalParams::getPrintStatusInfo() /src/xpdf-4.05/xpdf/GlobalParams.cc:3556:3
+    #2 0x559e3f5531ee in PDFDoc::displayPages(OutputDev*, int, int, double, double, int, int, int, int, int (*)(void*), void*) /src/xpdf-4.05/xpdf/PDFDoc.cc:459:23
+    #3 0x559e3f54f4f7 in LLVMFuzzerTestOneInput /src/xpdf-4.05/build/fuzz_JBIG2.cc:42:10
+    #4 0x559e3f401600 in fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:614:13
+    #5 0x559e3f400e25 in fuzzer::Fuzzer::RunOne(unsigned char const*, unsigned long, bool, fuzzer::InputInfo*, bool, bool*) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:516:7
+    #6 0x559e3f4025f5 in fuzzer::Fuzzer::MutateAndTestOne() /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:760:19
+    #7 0x559e3f4033e5 in fuzzer::Fuzzer::Loop(std::__Fuzzer::vector&lt;fuzzer::SizedFile, std::__Fuzzer::allocator&lt;fuzzer::SizedFile&gt;&gt;&amp;) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:905:5
+    #8 0x559e3f3f16f6 in fuzzer::FuzzerDriver(int*, char***, int (*)(unsigned char const*, unsigned long)) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:914:6
+    #9 0x559e3f41dc22 in main /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMain.cpp:20:10
+    #10 0x7f4c0a477082 in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x24082) (BuildId: 0702430aef5fa3dda43986563e9ffcc47efbd75e)
+    #11 0x559e3f3e286d in _start (/out/fuzz_JBIG2+0x1cb86d)
+
+DEDUP_TOKEN: __pthread_mutex_lock--GlobalParams::getPrintStatusInfo()--PDFDoc::displayPages(OutputDev*, int, int, double, double, int, int, int, int, int (*)(void*), void*)
+AddressSanitizer can not provide additional info.
+SUMMARY: AddressSanitizer: SEGV (/lib/x86_64-linux-gnu/libpthread.so.0+0xafc4) (BuildId: 9a65bb469e45a1c6fbcffae5b82a2fd7a69eb479) in __pthread_mutex_lock
+==16==ABORTING
+MS: 1 InsertRepeatedBytes-; base unit: adc83b19e793491b1c6ea0fd8b46cd9f32e592fc
+0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xa,
+\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\012
+artifact_prefix=&#39;./&#39;; Test unit written to ./crash-f14e3e76793670a0ca463c4565796311b75210c7
+Base64: //////////////////////8K
+stat::number_of_executed_units: 9
+stat::average_exec_per_sec:     0
+stat::new_units_added:          3
+stat::slowest_unit_time_sec:    0
+stat::peak_rss_mb:              35
+
+</pre>
+
+
+</body>
