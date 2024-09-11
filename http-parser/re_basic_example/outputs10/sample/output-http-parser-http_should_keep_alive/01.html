@@ -1,0 +1,149 @@
+<!doctype html>
+
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Experiment results</title>
+<style>
+* {
+    box-sizing: border-box;
+}
+
+html {
+    line-height: 1.15;
+}
+
+body {
+    font-family: sans-serif;
+    font-size: 16px;
+}
+
+table {
+    border-collapse: collapse;
+    border-spacing: 0;
+}
+
+td, th {
+    border-right: 1px #dedede solid;
+    border-bottom: 1px #dedede solid;
+    padding: 5px;
+    text-align: left;
+}
+td:first-child, th:first-child {
+    border-left: 1px #dedede solid;
+}
+th {
+    border-top: 1px #dedede solid;
+}
+
+tbody tr:nth-child(odd) {
+    background-color: #f4f5ff;
+}
+</style>
+<body>
+    LLM: 
+    
+<h1>output-http-parser-http_should_keep_alive / 01</h1>
+Bug: True
+<br>
+Crash reason: NO_SEMANTIC_ERR
+<br>
+<br>
+
+<h2>Triage</h2>
+<pre>
+Crash is caused by bug in fuzz driver.
+
+The crash is a segmentation fault (SEGV) caused by a null dereference. This occurs in the fuzz driver where it calls the function http_parser_execute with NULL as the second argument. This NULL pointer is then dereferenced in the project function http_parser_execute, causing the crash. The fuzz driver should have passed a valid pointer to a http_parser_settings object instead of NULL.
+</pre>
+<br>
+
+
+
+
+
+<h3>Final code</h3>
+
+<pre>
+#include &#34;http_parser.h&#34;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+#include &lt;cstddef&gt;
+#include &lt;cstdint&gt;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  http_parser parser;
+  http_parser_init(&amp;parser, HTTP_BOTH);
+  
+  FuzzedDataProvider provider(data, size);
+  auto remaining_bytes = provider.ConsumeRemainingBytes&lt;char&gt;();
+
+  http_parser_execute(&amp;parser, NULL, remaining_bytes.data(), remaining_bytes.size());
+  http_should_keep_alive(&amp;parser);
+  
+  return 0;
+}
+</pre>
+
+
+<h2>Logs</h2>
+<pre>
+Successfully built /home/chyun/oss-fuzz-gen5/results10/output-http-parser-http_should_keep_alive/fixed_targets/01.c with gpt-4 in 0 iterations of fixing.
+Triaging the crash related to /home/chyun/oss-fuzz-gen5/results10/output-http-parser-http_should_keep_alive/fixed_targets/01.c with gpt-4.
+Result for http-parser-http_should_keep_alive-01: crashes=True, coverage=0.035196687370600416 (34/966), coverage diff=0.0037735849056603774 (6/1590)
+
+</pre>
+
+<h2>Run logs</h2>
+<pre>
+INFO:__main__:Running: docker run --privileged --shm-size=2g --platform linux/amd64 --rm -e FUZZING_ENGINE=libfuzzer -e SANITIZER=address -e RUN_FUZZER_MODE=interactive -e HELPER=True -v /home/chyun/oss-fuzz-gen5/results10/output-http-parser-http_should_keep_alive/corpora/01.c:/tmp/fuzz_url_corpus -v /tmp/tmpils02g2d/build/out/http-parser-http_should_keep_alive-01:/out -t gcr.io/oss-fuzz-base/base-runner run_fuzzer fuzz_url -print_final_stats=1 -max_total_time=30 -len_control=0 -timeout=30.
+vm.mmap_rnd_bits = 28
+rm: cannot remove &#39;/tmp/fuzz_url_corpus&#39;: Device or resource busy
+/out/fuzz_url -rss_limit_mb=2560 -timeout=25 -print_final_stats=1 -max_total_time=30 -len_control=0 -timeout=30 /tmp/fuzz_url_corpus &lt; /dev/null
+INFO: Running with entropic power schedule (0xFF, 100).
+INFO: Seed: 1720753018
+INFO: Loaded 1 modules   (966 inline 8-bit counters): 966 [0x55f2ab1e5b30, 0x55f2ab1e5ef6), 
+INFO: Loaded 1 PC tables (966 PCs): 966 [0x55f2ab1e5ef8,0x55f2ab1e9b58), 
+INFO:        0 files found in /tmp/fuzz_url_corpus
+INFO: -max_len is not provided; libFuzzer will not generate inputs larger than 4096 bytes
+INFO: A corpus is not provided, starting from an empty corpus
+#2	INITED cov: 28 ft: 29 corp: 1/1b exec/s: 0 rss: 30Mb
+#3	NEW    cov: 31 ft: 32 corp: 2/2b lim: 4096 exec/s: 0 rss: 30Mb L: 1/1 MS: 1 ChangeByte-
+#6	NEW    cov: 32 ft: 33 corp: 3/3b lim: 4096 exec/s: 0 rss: 30Mb L: 1/1 MS: 3 CopyPart-ShuffleBytes-ChangeByte-
+#24	NEW    cov: 33 ft: 35 corp: 4/5b lim: 4096 exec/s: 0 rss: 30Mb L: 2/2 MS: 3 ShuffleBytes-ShuffleBytes-CrossOver-
+#40	NEW    cov: 33 ft: 38 corp: 5/8b lim: 4096 exec/s: 0 rss: 30Mb L: 3/3 MS: 1 CopyPart-
+#41	NEW    cov: 34 ft: 39 corp: 6/60b lim: 4096 exec/s: 0 rss: 30Mb L: 52/52 MS: 1 InsertRepeatedBytes-
+AddressSanitizer:DEADLYSIGNAL
+=================================================================
+[1m[31m==11==ERROR: AddressSanitizer: SEGV on unknown address 0x000000000000 (pc 0x55f2ab1448d8 bp 0x7ffee172c410 sp 0x7ffee172c2e0 T0)
+[1m[0m==11==The signal is caused by a READ memory access.
+==11==Hint: address points to the zero page.
+SCARINESS: 10 (null-deref)
+    #0 0x55f2ab1448d8 in http_parser_execute /src/http-parser/http_parser.c:966:9
+    #1 0x55f2ab14cd0b in LLVMFuzzerTestOneInput /src/http-parser/fuzzers/fuzz_url.cpp:13:3
+    #2 0x55f2aaff14e0 in fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:614:13
+    #3 0x55f2aaff0d05 in fuzzer::Fuzzer::RunOne(unsigned char const*, unsigned long, bool, fuzzer::InputInfo*, bool, bool*) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:516:7
+    #4 0x55f2aaff24d5 in fuzzer::Fuzzer::MutateAndTestOne() /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:760:19
+    #5 0x55f2aaff32c5 in fuzzer::Fuzzer::Loop(std::__Fuzzer::vector&lt;fuzzer::SizedFile, std::__Fuzzer::allocator&lt;fuzzer::SizedFile&gt;&gt;&amp;) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:905:5
+    #6 0x55f2aafe15d6 in fuzzer::FuzzerDriver(int*, char***, int (*)(unsigned char const*, unsigned long)) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:914:6
+    #7 0x55f2ab00db02 in main /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMain.cpp:20:10
+    #8 0x7f3322ac8082 in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x24082) (BuildId: 0702430aef5fa3dda43986563e9ffcc47efbd75e)
+    #9 0x55f2aafd274d in _start (/out/fuzz_url+0x4e74d)
+
+DEDUP_TOKEN: http_parser_execute--LLVMFuzzerTestOneInput--fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long)
+AddressSanitizer can not provide additional info.
+SUMMARY: AddressSanitizer: SEGV /src/http-parser/http_parser.c:966:9 in http_parser_execute
+==11==ABORTING
+MS: 3 ChangeBit-ShuffleBytes-InsertByte-; base unit: c7255dc48b42d44f6c0676d6009051b7e1aa885b
+0x43,0x2f,
+C/
+artifact_prefix=&#39;./&#39;; Test unit written to ./crash-61b09792983d26f5850af7dfdcb2c76851d4bca5
+Base64: Qy8=
+stat::number_of_executed_units: 124
+stat::average_exec_per_sec:     0
+stat::new_units_added:          5
+stat::slowest_unit_time_sec:    0
+stat::peak_rss_mb:              31
+
+</pre>
+
+
+</body>

@@ -1,0 +1,312 @@
+<!doctype html>
+
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Experiment results</title>
+<style>
+* {
+    box-sizing: border-box;
+}
+
+html {
+    line-height: 1.15;
+}
+
+body {
+    font-family: sans-serif;
+    font-size: 16px;
+}
+
+table {
+    border-collapse: collapse;
+    border-spacing: 0;
+}
+
+td, th {
+    border-right: 1px #dedede solid;
+    border-bottom: 1px #dedede solid;
+    padding: 5px;
+    text-align: left;
+}
+td:first-child, th:first-child {
+    border-left: 1px #dedede solid;
+}
+th {
+    border-top: 1px #dedede solid;
+}
+
+tbody tr:nth-child(odd) {
+    background-color: #f4f5ff;
+}
+</style>
+<body>
+    LLM: 
+    
+<h1>output-http-parser-http_should_keep_alive / 01</h1>
+Bug: False
+<br>
+Crash reason: NO_SEMANTIC_ERR
+<br>
+<br>
+
+<h2>Triage</h2>
+<pre>
+
+</pre>
+<br>
+
+
+
+
+
+<h3>Final code</h3>
+
+<pre>
+#include &lt;stdint.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;string.h&gt;
+extern &#34;C&#34; {
+#include &#34;http_parser.h&#34;
+}
+
+static const http_parser_settings settings_null = {
+  .on_message_begin = 0,
+  .on_header_field = 0,
+  .on_header_value = 0,
+  .on_url = 0,
+  .on_status = 0,
+  .on_body = 0,
+  .on_headers_complete = 0,
+  .on_message_complete = 0,
+  .on_chunk_header = 0,
+  .on_chunk_complete = 0
+};
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  http_parser *parser = (http_parser *)malloc(sizeof(http_parser));
+
+  http_parser_init(parser, HTTP_BOTH);
+  size_t parsed = http_parser_execute(parser, &amp;settings_null,
+                                      reinterpret_cast&lt;const char *&gt;(data), size);
+  // Call the function under test.
+  int keep_alive = http_should_keep_alive(parser);
+
+  if (parsed != size) {
+      size_t offset = parser-&gt;nread;
+      while (parsed != size &amp;&amp; offset != size) {
+          http_parser_init(parser, HTTP_BOTH);
+          parsed += http_parser_execute(parser, &amp;settings_null,
+                                        reinterpret_cast&lt;const char *&gt;(data + offset),
+                                        size - offset);
+          offset = parser-&gt;nread;
+      }
+  }
+  
+  free(parser);
+  return 0;
+}
+</pre>
+
+
+<h3>Fixer prompt #1</h3>
+<pre>
+
+Given the following C fuzz harness and its build error message, fix the code to make it build for fuzzing.
+
+If there is undeclared identifier or unknown type name error, fix it by finding and including the related libraries.
+
+MUST RETURN THE FULL CODE, INCLUDING UNCHANGED PARTS.
+
+Below is the code needs to be built:
+&lt;code&gt;
+&lt;solution&gt;
+#include &lt;stdint.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;string.h&gt;
+#include &#34;http_parser.h&#34;
+
+static const http_parser_settings settings_null = {
+  .on_message_begin = 0,
+  .on_header_field = 0,
+  .on_header_value = 0,
+  .on_url = 0,
+  .on_status = 0,
+  .on_body = 0,
+  .on_headers_complete = 0,
+  .on_message_complete = 0,
+  .on_chunk_header = 0,
+  .on_chunk_complete = 0
+};
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  http_parser *parser = (http_parser *)malloc(sizeof(http_parser));
+
+  http_parser_init(parser, HTTP_BOTH);
+  size_t parsed = http_parser_execute(parser, &amp;settings_null,
+                                      reinterpret_cast&lt;const char *&gt;(data), size);
+  // Call the function under test.
+  int keep_alive = http_should_keep_alive(parser);
+
+  if (parsed != size) {
+      size_t offset = parser-&gt;nread;
+      while (parsed != size &amp;&amp; offset != size) {
+          http_parser_init(parser, HTTP_BOTH);
+          parsed += http_parser_execute(parser, &amp;settings_null,
+                                        reinterpret_cast&lt;const char *&gt;(data + offset),
+                                        size - offset);
+          offset = parser-&gt;nread;
+      }
+  }
+  
+  free(parser);
+  return 0;
+}
+&lt;/code&gt;
+
+Below is the error to fix:
+The code has the following build issues:
+&lt;error&gt;
+fuzzers/fuzz_url.c:1:1: error: expected identifier or &#39;(&#39;
+    1 | &lt;solution&gt;
+      | ^
+In file included from fuzzers/fuzz_url.c:3:
+In file included from /usr/include/stdlib.h:394:
+/usr/include/x86_64-linux-gnu/sys/types.h:33:9: error: unknown type name &#39;__u_char&#39;
+   33 | typedef __u_char u_char;
+      |         ^
+fuzzers/fuzz_url.c:20:8: error: expected identifier or &#39;(&#39;
+   20 | extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+      |        ^
+&lt;/error&gt;
+
+
+Below are instructions to assist you in fixing the error.
+&lt;instruction&gt;
+IMPORTANT: ALWAYS INCLUDE STANDARD LIBRARIES BEFORE PROJECT-SPECIFIC (http-parser) LIBRARIES. This order prevents errors like &#34;unknown type name&#34; for basic types. Additionally, include project-specific libraries that contain declarations before those thatuse these declared symbols.
+&lt;/instruction&gt;
+
+Fix code:
+1. Consider possible solutions for the issues listed above.
+2. Choose a solution that can maximize fuzzing result, which is utilizing the function under test and feeding it not null input.
+3. Apply the solutions to the original code.
+It&#39;s important to show the complete code, not only the fixed line.
+&lt;solution&gt;
+</pre>
+
+
+
+<h3>Code #1</h3>
+
+<pre>
+#include &lt;stdint.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;string.h&gt;
+extern &#34;C&#34; {
+#include &#34;http_parser.h&#34;
+}
+
+static const http_parser_settings settings_null = {
+  .on_message_begin = 0,
+  .on_header_field = 0,
+  .on_header_value = 0,
+  .on_url = 0,
+  .on_status = 0,
+  .on_body = 0,
+  .on_headers_complete = 0,
+  .on_message_complete = 0,
+  .on_chunk_header = 0,
+  .on_chunk_complete = 0
+};
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  http_parser *parser = (http_parser *)malloc(sizeof(http_parser));
+
+  http_parser_init(parser, HTTP_BOTH);
+  size_t parsed = http_parser_execute(parser, &amp;settings_null,
+                                      reinterpret_cast&lt;const char *&gt;(data), size);
+  // Call the function under test.
+  int keep_alive = http_should_keep_alive(parser);
+
+  if (parsed != size) {
+      size_t offset = parser-&gt;nread;
+      while (parsed != size &amp;&amp; offset != size) {
+          http_parser_init(parser, HTTP_BOTH);
+          parsed += http_parser_execute(parser, &amp;settings_null,
+                                        reinterpret_cast&lt;const char *&gt;(data + offset),
+                                        size - offset);
+          offset = parser-&gt;nread;
+      }
+  }
+  
+  free(parser);
+  return 0;
+}
+</pre>
+
+
+<h2>Logs</h2>
+<pre>
+Fixing /home/chyun/oss-fuzz-gen4/results3/output-http-parser-http_should_keep_alive/fixed_targets/01.c with gpt-4, attempt 1.
+Successfully built /home/chyun/oss-fuzz-gen4/results3/output-http-parser-http_should_keep_alive/fixed_targets/01.c with gpt-4 in 1 iterations of fixing.
+Triaging the crash related to /home/chyun/oss-fuzz-gen4/results3/output-http-parser-http_should_keep_alive/fixed_targets/01.c with gpt-4.
+Warning: no crash info in http-parser-http_should_keep_alive-01.
+Result for http-parser-http_should_keep_alive-01: crashes=False, coverage=0.02643171806167401 (24/908), coverage diff=0.0037735849056603774 (6/1590)
+
+</pre>
+
+<h2>Run logs</h2>
+<pre>
+INFO:__main__:Running: docker run --privileged --shm-size=2g --platform linux/amd64 --rm -e FUZZING_ENGINE=libfuzzer -e SANITIZER=address -e RUN_FUZZER_MODE=interactive -e HELPER=True -v /home/chyun/oss-fuzz-gen4/results3/output-http-parser-http_should_keep_alive/corpora/01.c:/tmp/fuzz_url_corpus -v /tmp/tmpq4gq2bkg/build/out/http-parser-http_should_keep_alive-01:/out -t gcr.io/oss-fuzz-base/base-runner run_fuzzer fuzz_url -print_final_stats=1 -max_total_time=30 -len_control=0 -timeout=30.
+vm.mmap_rnd_bits = 28
+rm: cannot remove &#39;/tmp/fuzz_url_corpus&#39;: Device or resource busy
+/out/fuzz_url -rss_limit_mb=2560 -timeout=25 -print_final_stats=1 -max_total_time=30 -len_control=0 -timeout=30 /tmp/fuzz_url_corpus &lt; /dev/null
+INFO: Running with entropic power schedule (0xFF, 100).
+INFO: Seed: 1095418110
+INFO: Loaded 1 modules   (908 inline 8-bit counters): 908 [0x557bb6e0daf0, 0x557bb6e0de7c), 
+INFO: Loaded 1 PC tables (908 PCs): 908 [0x557bb6e0de80,0x557bb6e11740), 
+INFO:        0 files found in /tmp/fuzz_url_corpus
+INFO: -max_len is not provided; libFuzzer will not generate inputs larger than 4096 bytes
+INFO: A corpus is not provided, starting from an empty corpus
+#2	INITED cov: 16 ft: 17 corp: 1/1b exec/s: 0 rss: 29Mb
+#3	NEW    cov: 17 ft: 20 corp: 2/3b lim: 4096 exec/s: 0 rss: 30Mb L: 2/2 MS: 1 CrossOver-
+#4	NEW    cov: 17 ft: 23 corp: 3/7b lim: 4096 exec/s: 0 rss: 30Mb L: 4/4 MS: 1 CrossOver-
+#5	NEW    cov: 22 ft: 28 corp: 4/8b lim: 4096 exec/s: 0 rss: 30Mb L: 1/4 MS: 1 ChangeBit-
+#8	NEW    cov: 24 ft: 41 corp: 5/12b lim: 4096 exec/s: 0 rss: 30Mb L: 4/4 MS: 3 CopyPart-CrossOver-ChangeByte-
+ALARM: working on the last Unit for 31 seconds
+       and the timeout value is 30 (use -timeout=N to change)
+MS: 1 InsertRepeatedBytes-; base unit: 71853c6197a6a7f222db0f1978c7cb232b87c5ee
+0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0xa,0xa,
+\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\012\012
+artifact_prefix=&#39;./&#39;; Test unit written to ./timeout-43f86db1c903cb45d5b87c7619f0b7a5deaeff7d
+Base64: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAKCg==
+==12== ERROR: libFuzzer: timeout after 31 seconds
+    #0 0x557bb6d5d401 in __sanitizer_print_stack_trace /src/llvm-project/compiler-rt/lib/asan/asan_stack.cpp:87:3
+    #1 0x557bb6c60228 in fuzzer::PrintStackTrace() /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerUtil.cpp:210:5
+    #2 0x557bb6c42ec7 in fuzzer::Fuzzer::AlarmCallback() /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:304:5
+    #3 0x7f8e1d65641f  (/lib/x86_64-linux-gnu/libpthread.so.0+0x1441f) (BuildId: 9a65bb469e45a1c6fbcffae5b82a2fd7a69eb479)
+    #4 0x557bb6c5ddbc in AddValue /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerValueBitMap.h:39:18
+    #5 0x557bb6c5ddbc in HandleCmp&lt;unsigned char&gt; /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerTracePC.cpp:392:19
+    #6 0x557bb6c5ddbc in __sanitizer_cov_trace_const_cmp1 /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerTracePC.cpp:545:15
+    #7 0x557bb6d91f83 in http_parser_execute /src/http-parser/http_parser.c:733:28
+    #8 0x557bb6d9fc2a in LLVMFuzzerTestOneInput /src/http-parser/fuzzers/fuzz_url.cpp:34:21
+    #9 0x557bb6c44470 in fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:614:13
+    #10 0x557bb6c43c95 in fuzzer::Fuzzer::RunOne(unsigned char const*, unsigned long, bool, fuzzer::InputInfo*, bool, bool*) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:516:7
+    #11 0x557bb6c45465 in fuzzer::Fuzzer::MutateAndTestOne() /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:760:19
+    #12 0x557bb6c46255 in fuzzer::Fuzzer::Loop(std::__Fuzzer::vector&lt;fuzzer::SizedFile, std::__Fuzzer::allocator&lt;fuzzer::SizedFile&gt;&gt;&amp;) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:905:5
+    #13 0x557bb6c34566 in fuzzer::FuzzerDriver(int*, char***, int (*)(unsigned char const*, unsigned long)) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:914:6
+    #14 0x557bb6c60a92 in main /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMain.cpp:20:10
+    #15 0x7f8e1d42b082 in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x24082) (BuildId: 0702430aef5fa3dda43986563e9ffcc47efbd75e)
+    #16 0x557bb6c256dd in _start (/out/fuzz_url+0x466dd)
+
+DEDUP_TOKEN: __sanitizer_print_stack_trace--fuzzer::PrintStackTrace()--fuzzer::Fuzzer::AlarmCallback()
+SUMMARY: libFuzzer: timeout
+stat::number_of_executed_units: 9
+stat::average_exec_per_sec:     0
+stat::new_units_added:          4
+stat::slowest_unit_time_sec:    0
+stat::peak_rss_mb:              31
+
+</pre>
+
+
+</body>

@@ -1,0 +1,183 @@
+<!doctype html>
+
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Experiment results</title>
+<style>
+* {
+    box-sizing: border-box;
+}
+
+html {
+    line-height: 1.15;
+}
+
+body {
+    font-family: sans-serif;
+    font-size: 16px;
+}
+
+table {
+    border-collapse: collapse;
+    border-spacing: 0;
+}
+
+td, th {
+    border-right: 1px #dedede solid;
+    border-bottom: 1px #dedede solid;
+    padding: 5px;
+    text-align: left;
+}
+td:first-child, th:first-child {
+    border-left: 1px #dedede solid;
+}
+th {
+    border-top: 1px #dedede solid;
+}
+
+tbody tr:nth-child(odd) {
+    background-color: #f4f5ff;
+}
+</style>
+<body>
+    LLM: 
+    
+<h1>output-http-parser-http_errno_name / 01</h1>
+Bug: False
+<br>
+Crash reason: NO_SEMANTIC_ERR
+<br>
+<br>
+
+<h2>Triage</h2>
+<pre>
+
+</pre>
+<br>
+
+
+
+
+
+<h3>Final code</h3>
+
+<pre>
+#include &#34;http_parser.h&#34;
+#include &lt;stdint.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;string.h&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  if(size == 0)
+    return 0;
+  FuzzedDataProvider fuzzed_data(data, size);
+  enum http_errno httpErrNo = static_cast&lt;enum http_errno&gt;(fuzzed_data.ConsumeIntegralInRange&lt;unsigned short&gt;(0, sizeof(enum http_errno)-1));
+  const char * errorName = http_errno_name(httpErrNo);
+  return 0;
+}
+</pre>
+
+
+<h3>Fixer prompt #1</h3>
+<pre>
+
+Given the following C fuzz harness and its build error message, fix the code to make it build for fuzzing.
+
+If there is undeclared identifier or unknown type name error, fix it by finding and including the related libraries.
+
+MUST RETURN THE FULL CODE, INCLUDING UNCHANGED PARTS.
+
+Below is the code needs to be built:
+&lt;code&gt;
+#include &#34;http_parser.h&#34;
+#include &lt;stdint.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;string.h&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  FuzzedDataProvider fuzzed_data(data, size);
+  enum http_errno httpErrNo = static_cast&lt;enum http_errno&gt;(fuzzed_data.ConsumeIntegralInRange&lt;unsigned short&gt;(0, sizeof(enum http_errno)));
+  const char * errorName = http_errno_name(httpErrNo);
+  return 0;
+}
+&lt;/code&gt;
+
+Below is the error to fix:
+The code can build successfully but has a runtime issue: No code coverage increasement, indicating the fuzz target ineffectively invokes the function under test.
+
+
+
+
+Fix code:
+1. Consider possible solutions for the issues listed above.
+2. Choose a solution that can maximize fuzzing result, which is utilizing the function under test and feeding it not null input.
+3. Apply the solutions to the original code.
+It&#39;s important to show the complete code, not only the fixed line.
+&lt;solution&gt;
+</pre>
+
+
+
+<h3>Code #1</h3>
+
+<pre>
+&lt;code&gt;
+#include &#34;http_parser.h&#34;
+#include &lt;stdint.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;string.h&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  if(size == 0)
+    return 0;
+  FuzzedDataProvider fuzzed_data(data, size);
+  enum http_errno httpErrNo = static_cast&lt;enum http_errno&gt;(fuzzed_data.ConsumeIntegralInRange&lt;unsigned short&gt;(0, sizeof(enum http_errno)-1));
+  const char * errorName = http_errno_name(httpErrNo);
+  return 0;
+}
+&lt;/code&gt;
+&lt;/solution&gt;
+
+The issue was with the fuzz target not effectively invoking the function under test. The function http_errno_name(httpErrNo) is not invoked when size is 0 because FuzzedDataProvider::ConsumeIntegralInRange() returns 0 when size is 0. To fix this, we need to add a condition to check if size is 0 and return 0 immediately. Also, we need to subtract 1 from sizeof(enum http_errno) because the size of the enum is 1 greater than the maximum value of the enum.
+</pre>
+
+
+<h2>Logs</h2>
+<pre>
+Fixing /home/chyun/oss-fuzz-gen5/results10/output-http-parser-http_errno_name/fixed_targets/01.c with gpt-4, attempt 1.
+Successfully built /home/chyun/oss-fuzz-gen5/results10/output-http-parser-http_errno_name/fixed_targets/01.c with gpt-4 in 1 iterations of fixing.
+Triaging the crash related to /home/chyun/oss-fuzz-gen5/results10/output-http-parser-http_errno_name/fixed_targets/01.c with gpt-4.
+Warning: no crash info in http-parser-http_errno_name-01.
+Result for http-parser-http_errno_name-01: crashes=False, coverage=0.007700770077007701 (7/909), coverage diff=0.0 (0/1590)
+
+</pre>
+
+<h2>Run logs</h2>
+<pre>
+INFO:__main__:Running: docker run --privileged --shm-size=2g --platform linux/amd64 --rm -e FUZZING_ENGINE=libfuzzer -e SANITIZER=address -e RUN_FUZZER_MODE=interactive -e HELPER=True -v /home/chyun/oss-fuzz-gen5/results10/output-http-parser-http_errno_name/corpora/01.c:/tmp/fuzz_url_corpus -v /tmp/tmpils02g2d/build/out/http-parser-http_errno_name-01:/out -t gcr.io/oss-fuzz-base/base-runner run_fuzzer fuzz_url -print_final_stats=1 -max_total_time=30 -len_control=0 -timeout=30.
+vm.mmap_rnd_bits = 28
+rm: cannot remove &#39;/tmp/fuzz_url_corpus&#39;: Device or resource busy
+/out/fuzz_url -rss_limit_mb=2560 -timeout=25 -print_final_stats=1 -max_total_time=30 -len_control=0 -timeout=30 /tmp/fuzz_url_corpus &lt; /dev/null
+INFO: Running with entropic power schedule (0xFF, 100).
+INFO: Seed: 1868144867
+INFO: Loaded 1 modules   (909 inline 8-bit counters): 909 [0x55762c54eab0, 0x55762c54ee3d), 
+INFO: Loaded 1 PC tables (909 PCs): 909 [0x55762c54ee40,0x55762c552710), 
+INFO:        0 files found in /tmp/fuzz_url_corpus
+INFO: -max_len is not provided; libFuzzer will not generate inputs larger than 4096 bytes
+INFO: A corpus is not provided, starting from an empty corpus
+#2	INITED cov: 7 ft: 8 corp: 1/1b exec/s: 0 rss: 30Mb
+#524288	pulse  cov: 7 ft: 8 corp: 1/1b lim: 4096 exec/s: 262144 rss: 55Mb
+#1048576	pulse  cov: 7 ft: 8 corp: 1/1b lim: 4096 exec/s: 349525 rss: 56Mb
+#2097152	pulse  cov: 7 ft: 8 corp: 1/1b lim: 4096 exec/s: 299593 rss: 56Mb
+#4194304	pulse  cov: 7 ft: 8 corp: 1/1b lim: 4096 exec/s: 279620 rss: 56Mb
+
+</pre>
+
+
+</body>
