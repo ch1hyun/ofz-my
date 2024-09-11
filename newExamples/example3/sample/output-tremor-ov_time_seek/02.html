@@ -1,0 +1,746 @@
+<!doctype html>
+
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Experiment results</title>
+<style>
+* {
+    box-sizing: border-box;
+}
+
+html {
+    line-height: 1.15;
+}
+
+body {
+    font-family: sans-serif;
+    font-size: 16px;
+}
+
+table {
+    border-collapse: collapse;
+    border-spacing: 0;
+}
+
+td, th {
+    border-right: 1px #dedede solid;
+    border-bottom: 1px #dedede solid;
+    padding: 5px;
+    text-align: left;
+}
+td:first-child, th:first-child {
+    border-left: 1px #dedede solid;
+}
+th {
+    border-top: 1px #dedede solid;
+}
+
+tbody tr:nth-child(odd) {
+    background-color: #f4f5ff;
+}
+</style>
+<body>
+    LLM: 
+    
+<h1>output-tremor-ov_time_seek / 02</h1>
+Bug: True
+<br>
+Crash reason: NO_SEMANTIC_ERR
+<br>
+<br>
+
+<h2>Triage</h2>
+<pre>
+The crash is caused by a bug in the fuzz driver.
+
+The problem is in the fuzz driver where it reads the data from the input. It is trying to read more data than available which causes a heap buffer overflow. This is caused by the incorrect calculation of the &#39;len&#39; variable in the &#39;read_func&#39; function. The &#39;len&#39; is calculated as &#39;size1 * size2&#39; and then it checks if &#39;vd-&gt;current + len&#39; is greater than &#39;vd-&gt;data + vd-&gt;size&#39;. If it is, it adjusts &#39;len&#39; to &#39;vd-&gt;data + vd-&gt;size - vd-&gt;current&#39;. However, this does not account for the case when &#39;vd-&gt;current&#39; is already at the end of the data (&#39;vd-&gt;data + vd-&gt;size&#39;), causing &#39;len&#39; to be a large value and leading to a buffer overflow when &#39;memcpy&#39; is called.
+</pre>
+<br>
+
+
+
+
+
+<h3>Final code</h3>
+
+<pre>
+#include &#34;ivorbisfile.h&#34;
+#include &lt;cstddef&gt;
+#include &lt;cstdint&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+#include &lt;cstring&gt;
+#include &lt;vector&gt;
+
+#define INPUT_LIMIT 16384
+
+struct vorbis_data {
+  const uint8_t *current;
+  const uint8_t *data;
+  size_t size;
+};
+
+size_t read_func(void *ptr, size_t size1, size_t size2, void *datasource) {
+  vorbis_data *vd = (vorbis_data *)(datasource);
+  size_t len = size1 * size2;
+  if (vd-&gt;current + len &gt; vd-&gt;data + vd-&gt;size) {
+    len = vd-&gt;data + vd-&gt;size - vd-&gt;current;
+  }
+  if (len &gt; 0) {
+    memcpy(ptr, vd-&gt;current, len);
+    vd-&gt;current += len;
+  }
+  return len;
+}
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *Data, size_t Size) {
+  if (Size == 0) {
+    return 0;
+  }
+  
+  FuzzedDataProvider fdp(Data, Size);
+  
+  ov_callbacks memory_callbacks = {0};
+  memory_callbacks.read_func = read_func;
+  vorbis_data data_st;
+
+  data_st.size = fdp.ConsumeIntegralInRange&lt;size_t&gt;(0, INPUT_LIMIT);
+  std::vector&lt;uint8_t&gt; data = fdp.ConsumeRemainingBytes&lt;uint8_t&gt;();
+  if (data.empty()) {
+    return 0;
+  }
+  data_st.current = data.data();
+  data_st.data = data_st.current;
+  
+  OggVorbis_File vf;
+  int result = ov_open_callbacks(&amp;data_st, &amp;vf, NULL, 0, memory_callbacks);
+  
+  if (result &lt; 0) {
+    return 0;
+  }
+
+  ogg_int64_t seek_position = fdp.ConsumeIntegral&lt;ogg_int64_t&gt;();
+  ov_time_seek(&amp;vf, seek_position);
+  
+  ov_clear(&amp;vf);
+  
+  return 0;
+}
+</pre>
+
+
+<h3>Fixer prompt #1</h3>
+<pre>
+
+Given the following C++ fuzz harness and its build error message, fix the code to make it build for fuzzing.
+
+If there is undeclared identifier or unknown type name error, fix it by finding and including the related libraries.
+
+MUST RETURN THE FULL CODE, INCLUDING UNCHANGED PARTS.
+
+Below is the code needs to be built:
+&lt;code&gt;
+#include &#34;ivorbisfile.h&#34;
+#include &lt;cstddef&gt;
+#include &lt;cstdint&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+
+#define INPUT_LIMIT 16384
+
+struct vorbis_data {
+  const uint8_t *current;
+  const uint8_t *data;
+  size_t size;
+};
+
+size_t read_func(void *ptr, size_t size1, size_t size2, void *datasource) {
+  vorbis_data *vd = (vorbis_data *)(datasource);
+  size_t len = size1 * size2;
+  if (vd-&gt;current + len &gt; vd-&gt;data + vd-&gt;size) {
+    len = vd-&gt;data + vd-&gt;size - vd-&gt;current;
+  }
+  memcpy(ptr, vd-&gt;current, len);
+  vd-&gt;current += len;
+  return len;
+}
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *Data, size_t Size) {
+  FuzzedDataProvider fdp(Data, Size);
+  
+  ov_callbacks memory_callbacks = {0};
+  memory_callbacks.read_func = read_func;
+  vorbis_data data_st;
+
+  data_st.size = fdp.ConsumeIntegralInRange&lt;size_t&gt;(0, INPUT_LIMIT);
+  data_st.current = fdp.ConsumeData&lt;uint8_t&gt;(data_st.size);
+  data_st.data = data_st.current;
+  
+  OggVorbis_File vf;
+  int result = ov_open_callbacks(&amp;data_st, &amp;vf, NULL, 0, memory_callbacks);
+  
+  if (result &lt; 0) {
+    return 0;
+  }
+
+  ogg_int64_t seek_position = fdp.ConsumeIntegral&lt;ogg_int64_t&gt;();
+  ov_time_seek(&amp;vf, seek_position);
+  
+  ov_clear(&amp;vf);
+  
+  return 0;
+}
+&lt;/code&gt;
+
+Below is the error to fix:
+The code has the following build issues:
+&lt;error&gt;
+decode_fuzzer.cc:34:25: error: &#39;ConsumeData&#39; does not name a template but is followed by template arguments
+   34 |   data_st.current = fdp.ConsumeData&lt;uint8_t&gt;(data_st.size);
+      |                         ^          ~~~~~~~~~
+/usr/local/lib/clang/18/include/fuzzer/FuzzedDataProvider.h:329:35: note: non-template declaration found by name lookup
+  329 | inline size_t FuzzedDataProvider::ConsumeData(void *destination,
+      |                                   ^
+&lt;/error&gt;
+
+
+
+
+Fix code:
+1. Consider possible solutions for the issues listed above.
+2. Choose a solution that can maximize fuzzing result, which is utilizing the function under test and feeding it not null input.
+3. Apply the solutions to the original code.
+It&#39;s important to show the complete code, not only the fixed line.
+&lt;solution&gt;
+</pre>
+
+
+
+<h3>Code #1</h3>
+
+<pre>
+#include &#34;ivorbisfile.h&#34;
+#include &lt;cstddef&gt;
+#include &lt;cstdint&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+#include &lt;cstring&gt;
+
+
+#define INPUT_LIMIT 16384
+
+struct vorbis_data {
+  const uint8_t *current;
+  const uint8_t *data;
+  size_t size;
+};
+
+size_t read_func(void *ptr, size_t size1, size_t size2, void *datasource) {
+  vorbis_data *vd = (vorbis_data *)(datasource);
+  size_t len = size1 * size2;
+  if (vd-&gt;current + len &gt; vd-&gt;data + vd-&gt;size) {
+    len = vd-&gt;data + vd-&gt;size - vd-&gt;current;
+  }
+  memcpy(ptr, vd-&gt;current, len);
+  vd-&gt;current += len;
+  return len;
+}
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *Data, size_t Size) {
+  FuzzedDataProvider fdp(Data, Size);
+  
+  ov_callbacks memory_callbacks = {0};
+  memory_callbacks.read_func = read_func;
+  vorbis_data data_st;
+
+  data_st.size = fdp.ConsumeIntegralInRange&lt;size_t&gt;(0, INPUT_LIMIT);
+  std::vector&lt;uint8_t&gt; data = fdp.ConsumeBytes&lt;uint8_t&gt;(data_st.size);
+  data_st.current = data.data();
+  data_st.data = data_st.current;
+  
+  OggVorbis_File vf;
+  int result = ov_open_callbacks(&amp;data_st, &amp;vf, NULL, 0, memory_callbacks);
+  
+  if (result &lt; 0) {
+    return 0;
+  }
+
+  ogg_int64_t seek_position = fdp.ConsumeIntegral&lt;ogg_int64_t&gt;();
+  ov_time_seek(&amp;vf, seek_position);
+  
+  ov_clear(&amp;vf);
+  
+  return 0;
+}
+</pre>
+
+
+<h3>Fixer prompt #2</h3>
+<pre>
+
+Given the following C++ fuzz harness and its build error message, fix the code to make it build for fuzzing.
+
+If there is undeclared identifier or unknown type name error, fix it by finding and including the related libraries.
+
+MUST RETURN THE FULL CODE, INCLUDING UNCHANGED PARTS.
+
+Below is the code needs to be built:
+&lt;code&gt;
+#include &#34;ivorbisfile.h&#34;
+#include &lt;cstddef&gt;
+#include &lt;cstdint&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+#include &lt;cstring&gt;
+
+
+#define INPUT_LIMIT 16384
+
+struct vorbis_data {
+  const uint8_t *current;
+  const uint8_t *data;
+  size_t size;
+};
+
+size_t read_func(void *ptr, size_t size1, size_t size2, void *datasource) {
+  vorbis_data *vd = (vorbis_data *)(datasource);
+  size_t len = size1 * size2;
+  if (vd-&gt;current + len &gt; vd-&gt;data + vd-&gt;size) {
+    len = vd-&gt;data + vd-&gt;size - vd-&gt;current;
+  }
+  memcpy(ptr, vd-&gt;current, len);
+  vd-&gt;current += len;
+  return len;
+}
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *Data, size_t Size) {
+  FuzzedDataProvider fdp(Data, Size);
+  
+  ov_callbacks memory_callbacks = {0};
+  memory_callbacks.read_func = read_func;
+  vorbis_data data_st;
+
+  data_st.size = fdp.ConsumeIntegralInRange&lt;size_t&gt;(0, INPUT_LIMIT);
+  std::vector&lt;uint8_t&gt; data = fdp.ConsumeBytes&lt;uint8_t&gt;(data_st.size);
+  data_st.current = data.data();
+  data_st.data = data_st.current;
+  
+  OggVorbis_File vf;
+  int result = ov_open_callbacks(&amp;data_st, &amp;vf, NULL, 0, memory_callbacks);
+  
+  if (result &lt; 0) {
+    return 0;
+  }
+
+  ogg_int64_t seek_position = fdp.ConsumeIntegral&lt;ogg_int64_t&gt;();
+  ov_time_seek(&amp;vf, seek_position);
+  
+  ov_clear(&amp;vf);
+  
+  return 0;
+}
+&lt;/code&gt;
+
+Below is the error to fix:
+The code can build successfully but has a runtime issue: Fuzzing crashed immediately at runtime (ASAN-ERROR: AddressSanitizer: SEGV on unknown address 0x000000000002 (pc 0x7f1a89a51c12 bp 0x7ffd44b77ac0 sp 0x7ffd44b77278 T0)), indicating fuzz target code for invoking the function under test is incorrect or unrobust.
+&lt;error&gt;
+Crash stacks:
+Stack 0:
+#0 0x7f1a89a51c12  (/lib/x86_64-linux-gnu/libc.so.6+0xbbc12) (BuildId: 0702430aef5fa3dda43986563e9ffcc47efbd75e)
+#1 0x558eba94a904 in __asan_memcpy /src/llvm-project/compiler-rt/lib/asan/asan_interceptors_memintrinsics.cpp:63:3
+#2 0x558eba98bb71 in read_func(void*, unsigned long, unsigned long, void*) /src/tremor/decode_fuzzer.cc:22:3
+#3 0x558eba990f42 in _get_data /src/tremor/vorbisfile.c:67:16
+#4 0x558eba990f42 in _get_next_page /src/tremor/vorbisfile.c:123:20
+#5 0x558eba996ab8 in _fetch_headers /src/tremor/vorbisfile.c:285:23
+#6 0x558eba98db90 in _ov_open1 /src/tremor/vorbisfile.c:904:11
+#7 0x558eba98d77c in ov_open_callbacks /src/tremor/vorbisfile.c:985:11
+#8 0x558eba98bf79 in LLVMFuzzerTestOneInput /src/tremor/decode_fuzzer.cc:40:16
+#9 0x558eba83e4e0 in fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:614:13
+#10 0x558eba83dd05 in fuzzer::Fuzzer::RunOne(unsigned char const*, unsigned long, bool, fuzzer::InputInfo*, bool, bool*) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:516:7
+#11 0x558eba83fb56 in fuzzer::Fuzzer::ReadAndExecuteSeedCorpora(std::__Fuzzer::vector&lt;fuzzer::SizedFile, std::__Fuzzer::allocator&lt;fuzzer::SizedFile&gt;&gt;&amp;) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:812:5
+#12 0x558eba83ffc7 in fuzzer::Fuzzer::Loop(std::__Fuzzer::vector&lt;fuzzer::SizedFile, std::__Fuzzer::allocator&lt;fuzzer::SizedFile&gt;&gt;&amp;) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:867:3
+#13 0x558eba82e5d6 in fuzzer::FuzzerDriver(int*, char***, int (*)(unsigned char const*, unsigned long)) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:914:6
+#14 0x558eba85ab02 in main /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMain.cpp:20:10
+#15 0x7f1a899ba082 in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x24082) (BuildId: 0702430aef5fa3dda43986563e9ffcc47efbd75e)
+#16 0x558eba81f74d in _start (/out/decode_fuzzer+0x5474d)
+&lt;/error&gt;
+
+
+
+
+Fix code:
+1. Consider possible solutions for the issues listed above.
+2. Choose a solution that can maximize fuzzing result, which is utilizing the function under test and feeding it not null input.
+3. Apply the solutions to the original code.
+It&#39;s important to show the complete code, not only the fixed line.
+&lt;solution&gt;
+</pre>
+
+
+
+<h3>Code #2</h3>
+
+<pre>
+&lt;code&gt;
+#include &#34;ivorbisfile.h&#34;
+#include &lt;cstddef&gt;
+#include &lt;cstdint&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+#include &lt;cstring&gt;
+
+
+#define INPUT_LIMIT 16384
+
+struct vorbis_data {
+  const uint8_t *current;
+  const uint8_t *data;
+  size_t size;
+};
+
+size_t read_func(void *ptr, size_t size1, size_t size2, void *datasource) {
+  vorbis_data *vd = (vorbis_data *)(datasource);
+  size_t len = size1 * size2;
+  if (vd-&gt;current + len &gt; vd-&gt;data + vd-&gt;size) {
+    len = vd-&gt;data + vd-&gt;size - vd-&gt;current;
+  }
+  if (len &gt; 0) {
+    memcpy(ptr, vd-&gt;current, len);
+    vd-&gt;current += len;
+  }
+  return len;
+}
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *Data, size_t Size) {
+  if (Size == 0) {
+    return 0;
+  }
+  
+  FuzzedDataProvider fdp(Data, Size);
+  
+  ov_callbacks memory_callbacks = {0};
+  memory_callbacks.read_func = read_func;
+  vorbis_data data_st;
+
+  data_st.size = fdp.ConsumeIntegralInRange&lt;size_t&gt;(0, INPUT_LIMIT);
+  std::vector&lt;uint8_t&gt; data = fdp.ConsumeBytes&lt;uint8_t&gt;(data_st.size);
+  data_st.current = data.data();
+  data_st.data = data_st.current;
+  
+  OggVorbis_File vf;
+  int result = ov_open_callbacks(&amp;data_st, &amp;vf, NULL, 0, memory_callbacks);
+  
+  if (result &lt; 0) {
+    return 0;
+  }
+
+  ogg_int64_t seek_position = fdp.ConsumeIntegral&lt;ogg_int64_t&gt;();
+  ov_time_seek(&amp;vf, seek_position);
+  
+  ov_clear(&amp;vf);
+  
+  return 0;
+}
+&lt;/code&gt;
+&lt;solution&gt; 
+
+The code was fixed by adding a check for when the length is greater than 0 before the memcpy operation in the read_func function. This prevents a segmentation fault when the length is 0. 
+
+Also, a check for Size being 0 was added in the LLVMFuzzerTestOneInput function. This prevents the function from trying to consume data when there is none, which could lead to a crash.
+</pre>
+
+
+<h3>Fixer prompt #3</h3>
+<pre>
+
+Given the following C++ fuzz harness and its build error message, fix the code to make it build for fuzzing.
+
+If there is undeclared identifier or unknown type name error, fix it by finding and including the related libraries.
+
+MUST RETURN THE FULL CODE, INCLUDING UNCHANGED PARTS.
+
+Below is the code needs to be built:
+&lt;code&gt;
+#include &#34;ivorbisfile.h&#34;
+#include &lt;cstddef&gt;
+#include &lt;cstdint&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+#include &lt;cstring&gt;
+
+
+#define INPUT_LIMIT 16384
+
+struct vorbis_data {
+  const uint8_t *current;
+  const uint8_t *data;
+  size_t size;
+};
+
+size_t read_func(void *ptr, size_t size1, size_t size2, void *datasource) {
+  vorbis_data *vd = (vorbis_data *)(datasource);
+  size_t len = size1 * size2;
+  if (vd-&gt;current + len &gt; vd-&gt;data + vd-&gt;size) {
+    len = vd-&gt;data + vd-&gt;size - vd-&gt;current;
+  }
+  if (len &gt; 0) {
+    memcpy(ptr, vd-&gt;current, len);
+    vd-&gt;current += len;
+  }
+  return len;
+}
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *Data, size_t Size) {
+  if (Size == 0) {
+    return 0;
+  }
+  
+  FuzzedDataProvider fdp(Data, Size);
+  
+  ov_callbacks memory_callbacks = {0};
+  memory_callbacks.read_func = read_func;
+  vorbis_data data_st;
+
+  data_st.size = fdp.ConsumeIntegralInRange&lt;size_t&gt;(0, INPUT_LIMIT);
+  std::vector&lt;uint8_t&gt; data = fdp.ConsumeBytes&lt;uint8_t&gt;(data_st.size);
+  data_st.current = data.data();
+  data_st.data = data_st.current;
+  
+  OggVorbis_File vf;
+  int result = ov_open_callbacks(&amp;data_st, &amp;vf, NULL, 0, memory_callbacks);
+  
+  if (result &lt; 0) {
+    return 0;
+  }
+
+  ogg_int64_t seek_position = fdp.ConsumeIntegral&lt;ogg_int64_t&gt;();
+  ov_time_seek(&amp;vf, seek_position);
+  
+  ov_clear(&amp;vf);
+  
+  return 0;
+}
+&lt;/code&gt;
+
+Below is the error to fix:
+The code can build successfully but has a runtime issue: Fuzzing crashed immediately at runtime (ASAN-ERROR: AddressSanitizer: SEGV on unknown address 0x000000000002 (pc 0x7f07bb1e6c12 bp 0x7ffc29822e10 sp 0x7ffc298225c8 T0)), indicating fuzz target code for invoking the function under test is incorrect or unrobust.
+&lt;error&gt;
+Crash stacks:
+Stack 0:
+#0 0x7f07bb1e6c12  (/lib/x86_64-linux-gnu/libc.so.6+0xbbc12) (BuildId: 0702430aef5fa3dda43986563e9ffcc47efbd75e)
+#1 0x55875903d904 in __asan_memcpy /src/llvm-project/compiler-rt/lib/asan/asan_interceptors_memintrinsics.cpp:63:3
+#2 0x55875907eb9f in read_func(void*, unsigned long, unsigned long, void*) /src/tremor/decode_fuzzer.cc:23:5
+#3 0x558759083f92 in _get_data /src/tremor/vorbisfile.c:67:16
+#4 0x558759083f92 in _get_next_page /src/tremor/vorbisfile.c:123:20
+#5 0x558759089b08 in _fetch_headers /src/tremor/vorbisfile.c:285:23
+#6 0x558759080be0 in _ov_open1 /src/tremor/vorbisfile.c:904:11
+#7 0x5587590807cc in ov_open_callbacks /src/tremor/vorbisfile.c:985:11
+#8 0x55875907efd4 in LLVMFuzzerTestOneInput /src/tremor/decode_fuzzer.cc:46:16
+#9 0x558758f314e0 in fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:614:13
+#10 0x558758f30d05 in fuzzer::Fuzzer::RunOne(unsigned char const*, unsigned long, bool, fuzzer::InputInfo*, bool, bool*) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:516:7
+#11 0x558758f32b56 in fuzzer::Fuzzer::ReadAndExecuteSeedCorpora(std::__Fuzzer::vector&lt;fuzzer::SizedFile, std::__Fuzzer::allocator&lt;fuzzer::SizedFile&gt;&gt;&amp;) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:812:5
+#12 0x558758f32fc7 in fuzzer::Fuzzer::Loop(std::__Fuzzer::vector&lt;fuzzer::SizedFile, std::__Fuzzer::allocator&lt;fuzzer::SizedFile&gt;&gt;&amp;) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:867:3
+#13 0x558758f215d6 in fuzzer::FuzzerDriver(int*, char***, int (*)(unsigned char const*, unsigned long)) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:914:6
+#14 0x558758f4db02 in main /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMain.cpp:20:10
+#15 0x7f07bb14f082 in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x24082) (BuildId: 0702430aef5fa3dda43986563e9ffcc47efbd75e)
+#16 0x558758f1274d in _start (/out/decode_fuzzer+0x5474d)
+&lt;/error&gt;
+
+
+
+
+Fix code:
+1. Consider possible solutions for the issues listed above.
+2. Choose a solution that can maximize fuzzing result, which is utilizing the function under test and feeding it not null input.
+3. Apply the solutions to the original code.
+It&#39;s important to show the complete code, not only the fixed line.
+&lt;solution&gt;
+</pre>
+
+
+
+<h3>Code #3</h3>
+
+<pre>
+&lt;code&gt;
+#include &#34;ivorbisfile.h&#34;
+#include &lt;cstddef&gt;
+#include &lt;cstdint&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+#include &lt;cstring&gt;
+#include &lt;vector&gt;
+
+#define INPUT_LIMIT 16384
+
+struct vorbis_data {
+  const uint8_t *current;
+  const uint8_t *data;
+  size_t size;
+};
+
+size_t read_func(void *ptr, size_t size1, size_t size2, void *datasource) {
+  vorbis_data *vd = (vorbis_data *)(datasource);
+  size_t len = size1 * size2;
+  if (vd-&gt;current + len &gt; vd-&gt;data + vd-&gt;size) {
+    len = vd-&gt;data + vd-&gt;size - vd-&gt;current;
+  }
+  if (len &gt; 0) {
+    memcpy(ptr, vd-&gt;current, len);
+    vd-&gt;current += len;
+  }
+  return len;
+}
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *Data, size_t Size) {
+  if (Size == 0) {
+    return 0;
+  }
+  
+  FuzzedDataProvider fdp(Data, Size);
+  
+  ov_callbacks memory_callbacks = {0};
+  memory_callbacks.read_func = read_func;
+  vorbis_data data_st;
+
+  data_st.size = fdp.ConsumeIntegralInRange&lt;size_t&gt;(0, INPUT_LIMIT);
+  std::vector&lt;uint8_t&gt; data = fdp.ConsumeRemainingBytes&lt;uint8_t&gt;();
+  if (data.empty()) {
+    return 0;
+  }
+  data_st.current = data.data();
+  data_st.data = data_st.current;
+  
+  OggVorbis_File vf;
+  int result = ov_open_callbacks(&amp;data_st, &amp;vf, NULL, 0, memory_callbacks);
+  
+  if (result &lt; 0) {
+    return 0;
+  }
+
+  ogg_int64_t seek_position = fdp.ConsumeIntegral&lt;ogg_int64_t&gt;();
+  ov_time_seek(&amp;vf, seek_position);
+  
+  ov_clear(&amp;vf);
+  
+  return 0;
+}
+&lt;/code&gt;
+&lt;solution&gt;
+
+The code was fixed by changing `fdp.ConsumeBytes&lt;uint8_t&gt;(data_st.size)` to `fdp.ConsumeRemainingBytes&lt;uint8_t&gt;()` to ensure that the data vector is not empty, and adding a check `if (data.empty()) { return 0; }` to prevent the crash when the data vector is empty.
+</pre>
+
+
+<h2>Logs</h2>
+<pre>
+Fixing /home/chyun/oss-fuzz-gen2/results1/output-tremor-ov_time_seek/fixed_targets/02.cc with gpt-4, attempt 1.
+Fixing /home/chyun/oss-fuzz-gen2/results1/output-tremor-ov_time_seek/fixed_targets/02.cc with gpt-4, attempt 2.
+Fixing /home/chyun/oss-fuzz-gen2/results1/output-tremor-ov_time_seek/fixed_targets/02.cc with gpt-4, attempt 3.
+Successfully built /home/chyun/oss-fuzz-gen2/results1/output-tremor-ov_time_seek/fixed_targets/02.cc with gpt-4 in 3 iterations of fixing.
+Triaging the crash related to /home/chyun/oss-fuzz-gen2/results1/output-tremor-ov_time_seek/fixed_targets/02.cc with gpt-4.
+Result for tremor-ov_time_seek-02: crashes=True, coverage=0.0034749034749034747 (9/2590), coverage diff=0.0 (0/4818)
+
+</pre>
+
+<h2>Run logs</h2>
+<pre>
+INFO:__main__:Running: docker run --privileged --shm-size=2g --platform linux/amd64 --rm -e FUZZING_ENGINE=libfuzzer -e SANITIZER=address -e RUN_FUZZER_MODE=interactive -e HELPER=True -v /home/chyun/oss-fuzz-gen2/results1/output-tremor-ov_time_seek/corpora/02.cc:/tmp/decode_fuzzer_corpus -v /tmp/tmpy7f20uoh/build/out/tremor-ov_time_seek-02:/out -t gcr.io/oss-fuzz-base/base-runner run_fuzzer decode_fuzzer -print_final_stats=1 -max_total_time=30 -len_control=0 -timeout=30.
+vm.mmap_rnd_bits = 28
+rm: cannot remove &#39;/tmp/decode_fuzzer_corpus&#39;: Device or resource busy
+/out/decode_fuzzer -rss_limit_mb=2560 -timeout=25 -print_final_stats=1 -max_total_time=30 -len_control=0 -timeout=30 /tmp/decode_fuzzer_corpus &lt; /dev/null
+INFO: Running with entropic power schedule (0xFF, 100).
+INFO: Seed: 962625877
+INFO: Loaded 1 modules   (2590 inline 8-bit counters): 2590 [0x55c615cc1b18, 0x55c615cc2536), 
+INFO: Loaded 1 PC tables (2590 PCs): 2590 [0x55c615cc2538,0x55c615ccc718), 
+INFO:        0 files found in /tmp/decode_fuzzer_corpus
+INFO: -max_len is not provided; libFuzzer will not generate inputs larger than 4096 bytes
+INFO: A corpus is not provided, starting from an empty corpus
+#2	INITED cov: 8 ft: 9 corp: 1/1b exec/s: 0 rss: 30Mb
+#5	NEW    cov: 9 ft: 11 corp: 2/3b lim: 4096 exec/s: 0 rss: 30Mb L: 2/2 MS: 3 ChangeBit-ShuffleBytes-CopyPart-
+=================================================================
+[1m[31m==11==ERROR: AddressSanitizer: heap-buffer-overflow on address 0x502000000551 at pc 0x55c615ba5b3a bp 0x7ffe38d2d850 sp 0x7ffe38d2d010
+[1m[0m[1m[34mREAD of size 1024 at 0x502000000551 thread T0[1m[0m
+SCARINESS: 26 (multi-byte-read-heap-buffer-overflow)
+    #0 0x55c615ba5b39 in __asan_memcpy /src/llvm-project/compiler-rt/lib/asan/asan_interceptors_memintrinsics.cpp:63:3
+    #1 0x55c615be6b9f in read_func(void*, unsigned long, unsigned long, void*) /src/tremor/decode_fuzzer.cc:23:5
+    #2 0x55c615bebf92 in _get_data /src/tremor/vorbisfile.c:67:16
+    #3 0x55c615bebf92 in _get_next_page /src/tremor/vorbisfile.c:123:20
+    #4 0x55c615bf1b08 in _fetch_headers /src/tremor/vorbisfile.c:285:23
+    #5 0x55c615be8be0 in _ov_open1 /src/tremor/vorbisfile.c:904:11
+    #6 0x55c615be87cc in ov_open_callbacks /src/tremor/vorbisfile.c:985:11
+    #7 0x55c615be6faf in LLVMFuzzerTestOneInput /src/tremor/decode_fuzzer.cc:49:16
+    #8 0x55c615a994e0 in fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:614:13
+    #9 0x55c615a98d05 in fuzzer::Fuzzer::RunOne(unsigned char const*, unsigned long, bool, fuzzer::InputInfo*, bool, bool*) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:516:7
+    #10 0x55c615a9a4d5 in fuzzer::Fuzzer::MutateAndTestOne() /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:760:19
+    #11 0x55c615a9b2c5 in fuzzer::Fuzzer::Loop(std::__Fuzzer::vector&lt;fuzzer::SizedFile, std::__Fuzzer::allocator&lt;fuzzer::SizedFile&gt;&gt;&amp;) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:905:5
+    #12 0x55c615a895d6 in fuzzer::FuzzerDriver(int*, char***, int (*)(unsigned char const*, unsigned long)) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:914:6
+    #13 0x55c615ab5b02 in main /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMain.cpp:20:10
+    #14 0x7f2639c60082 in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x24082) (BuildId: 0702430aef5fa3dda43986563e9ffcc47efbd75e)
+    #15 0x55c615a7a74d in _start (/out/decode_fuzzer+0x5474d)
+
+DEDUP_TOKEN: __asan_memcpy--read_func(void*, unsigned long, unsigned long, void*)--_get_data
+[1m[32m0x502000000551 is located 0 bytes after 1-byte region [0x502000000550,0x502000000551)
+[1m[0m[1m[35mallocated by thread T0 here:[1m[0m
+    #0 0x55c615be480d in operator new(unsigned long) /src/llvm-project/compiler-rt/lib/asan/asan_new_delete.cpp:95:3
+    #1 0x55c615be74e7 in __libcpp_operator_new&lt;unsigned long&gt; /usr/local/bin/../include/c++/v1/new:268:10
+    #2 0x55c615be74e7 in __libcpp_allocate /usr/local/bin/../include/c++/v1/new:294:10
+    #3 0x55c615be74e7 in allocate /usr/local/bin/../include/c++/v1/__memory/allocator.h:114:38
+    #4 0x55c615be74e7 in __allocate_at_least&lt;std::__1::allocator&lt;unsigned char&gt; &gt; /usr/local/bin/../include/c++/v1/__memory/allocate_at_least.h:55:19
+    #5 0x55c615be74e7 in __vallocate /usr/local/bin/../include/c++/v1/vector:756:29
+    #6 0x55c615be74e7 in std::__1::vector&lt;unsigned char, std::__1::allocator&lt;unsigned char&gt;&gt;::vector(unsigned long) /usr/local/bin/../include/c++/v1/vector:1195:9
+    #7 0x55c615be6e69 in ConsumeBytes&lt;unsigned char&gt; /usr/local/lib/clang/18/include/fuzzer/FuzzedDataProvider.h:361:18
+    #8 0x55c615be6e69 in ConsumeBytes&lt;unsigned char&gt; /usr/local/lib/clang/18/include/fuzzer/FuzzedDataProvider.h:110:10
+    #9 0x55c615be6e69 in ConsumeRemainingBytes&lt;unsigned char&gt; /usr/local/lib/clang/18/include/fuzzer/FuzzedDataProvider.h:129:10
+    #10 0x55c615be6e69 in LLVMFuzzerTestOneInput /src/tremor/decode_fuzzer.cc:41:35
+    #11 0x55c615a994e0 in fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:614:13
+    #12 0x55c615a98d05 in fuzzer::Fuzzer::RunOne(unsigned char const*, unsigned long, bool, fuzzer::InputInfo*, bool, bool*) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:516:7
+    #13 0x55c615a9a4d5 in fuzzer::Fuzzer::MutateAndTestOne() /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:760:19
+    #14 0x55c615a9b2c5 in fuzzer::Fuzzer::Loop(std::__Fuzzer::vector&lt;fuzzer::SizedFile, std::__Fuzzer::allocator&lt;fuzzer::SizedFile&gt;&gt;&amp;) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:905:5
+    #15 0x55c615a895d6 in fuzzer::FuzzerDriver(int*, char***, int (*)(unsigned char const*, unsigned long)) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:914:6
+    #16 0x55c615ab5b02 in main /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMain.cpp:20:10
+    #17 0x7f2639c60082 in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x24082) (BuildId: 0702430aef5fa3dda43986563e9ffcc47efbd75e)
+
+DEDUP_TOKEN: operator new(unsigned long)--__libcpp_operator_new&lt;unsigned long&gt;--__libcpp_allocate
+SUMMARY: AddressSanitizer: heap-buffer-overflow /src/llvm-project/compiler-rt/lib/asan/asan_interceptors_memintrinsics.cpp:63:3 in __asan_memcpy
+Shadow bytes around the buggy address:
+  0x502000000280: [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[35mfd[1m[0m [1m[35mfd[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[35mfd[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[35mfd[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[35mfd[1m[0m [1m[31mfa[1m[0m
+  0x502000000300: [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[35mfd[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[35mfd[1m[0m [1m[35mfd[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[35mfd[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[35mfd[1m[0m [1m[31mfa[1m[0m
+  0x502000000380: [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[35mfd[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[0m00[1m[0m [1m[0m00[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[0m02[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[0m00[1m[0m [1m[31mfa[1m[0m
+  0x502000000400: [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[35mfd[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[0m00[1m[0m [1m[0m00[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[35mfd[1m[0m [1m[35mfd[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[35mfd[1m[0m [1m[35mfd[1m[0m
+  0x502000000480: [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[0m00[1m[0m [1m[0m00[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[0m00[1m[0m [1m[0m00[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[35mfd[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[35mfd[1m[0m [1m[31mfa[1m[0m
+=&gt;0x502000000500: [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[35mfd[1m[0m [1m[35mfd[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[0m03[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m[[1m[0m01[1m[0m][1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m
+  0x502000000580: [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m
+  0x502000000600: [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m
+  0x502000000680: [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m
+  0x502000000700: [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m
+  0x502000000780: [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           [1m[0m00[1m[0m
+  Partially addressable: [1m[0m01[1m[0m [1m[0m02[1m[0m [1m[0m03[1m[0m [1m[0m04[1m[0m [1m[0m05[1m[0m [1m[0m06[1m[0m [1m[0m07[1m[0m 
+  Heap left redzone:       [1m[31mfa[1m[0m
+  Freed heap region:       [1m[35mfd[1m[0m
+  Stack left redzone:      [1m[31mf1[1m[0m
+  Stack mid redzone:       [1m[31mf2[1m[0m
+  Stack right redzone:     [1m[31mf3[1m[0m
+  Stack after return:      [1m[35mf5[1m[0m
+  Stack use after scope:   [1m[35mf8[1m[0m
+  Global redzone:          [1m[31mf9[1m[0m
+  Global init order:       [1m[36mf6[1m[0m
+  Poisoned by user:        [1m[34mf7[1m[0m
+  Container overflow:      [1m[34mfc[1m[0m
+  Array cookie:            [1m[31mac[1m[0m
+  Intra object redzone:    [1m[33mbb[1m[0m
+  ASan internal:           [1m[33mfe[1m[0m
+  Left alloca redzone:     [1m[34mca[1m[0m
+  Right alloca redzone:    [1m[34mcb[1m[0m
+==11==ABORTING
+MS: 2 ChangeBinInt-CrossOver-; base unit: 7409372f8a34d13e88953a789b2c81e5e88d185c
+0x13,0xe,0xe,
+\023\016\016
+artifact_prefix=&#39;./&#39;; Test unit written to ./crash-cf474eac7c0636dfdedfa8bd35ee85dc80b9aa3b
+Base64: Ew4O
+stat::number_of_executed_units: 7
+stat::average_exec_per_sec:     0
+stat::new_units_added:          1
+stat::slowest_unit_time_sec:    0
+stat::peak_rss_mb:              31
+
+</pre>
+
+
+</body>

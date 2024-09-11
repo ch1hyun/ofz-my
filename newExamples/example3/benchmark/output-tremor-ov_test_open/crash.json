@@ -1,0 +1,43 @@
+{
+    "samples": [
+
+    {
+        "benchmark": "output-tremor-ov_test_open",
+        "sample": "01",
+        "status": "Done",
+        "compiles": "True",
+        "crashes": "False",
+        "crash_reason": "NO_SEMANTIC_ERR",
+        "bug": "True",
+        "coverage": "7.38",
+        "coverage_diff": "0.0006226650062266501",
+        "coverage_report": "#",
+        "stacktrace": "/stacktrace",
+        "target_binary": "/target_binary",
+        "reproducer": "/artifacts",
+        "run_log": "run.log",
+        "source_code": "#include <fuzzer/FuzzedDataProvider.h>\\n#include \"ivorbisfile.h\"\\n#include <cstdint>\\n#include <stdio.h>\\n#include <string.h>\\n\\n#define INPUT_LIMIT 16384\\n\\nstruct vorbis_data {\\n  const uint8_t *current;\\n  const uint8_t *data;\\n  size_t size;\\n};\\n\\nsize_t read_func(void *ptr, size_t size1, size_t size2, void *datasource) {\\n  vorbis_data *vd = (vorbis_data *)(datasource);\\n  size_t len = size1 * size2;\\n  if (vd->current + len > vd->data + vd->size) {\\n    len = vd->data + vd->size - vd->current;\\n  }\\n  memcpy(ptr, vd->current, len);\\n  vd->current += len;\\n  return len;\\n}\\n\\nextern \"C\" int LLVMFuzzerTestOneInput(const uint8_t *Data, size_t Size) {\\n  ov_callbacks memory_callbacks = {0};\\n  memory_callbacks.read_func = read_func;\\n  vorbis_data data_st;\\n  data_st.size = Size > INPUT_LIMIT ? INPUT_LIMIT : Size;\\n  data_st.current = Data;\\n  data_st.data = Data;\\n  OggVorbis_File vf;\\n\\n  // Call ov_test instead of ov_open to avoid actual file decodes\\n  int result = ov_test_callbacks(&data_st, &vf, NULL, 0, memory_callbacks);\\n  if(result != 0){\\n    return 0;\\n  }\\n\\n  // Then call ov_test_open to finish opening the file\\n  result = ov_test_open(&vf);\\n  if(result != 0){\\n    return 0;\\n  }\\n\\n  int current_section = 0;\\n  char pcm[4096];\\n  long read_result;\\n  while (true) {\\n    read_result = ov_read(&vf, pcm, sizeof(pcm), &current_section);\\n    if (read_result <= 0 && read_result != OV_HOLE) {\\n      break;\\n    }\\n  }\\n  ov_clear(&vf);\\n  return 0;\\n}  ",
+        "model": ""
+    },
+
+    {
+        "benchmark": "output-tremor-ov_test_open",
+        "sample": "02",
+        "status": "Done",
+        "compiles": "True",
+        "crashes": "False",
+        "crash_reason": "NO_SEMANTIC_ERR",
+        "bug": "True",
+        "coverage": "8.80",
+        "coverage_diff": "0.0",
+        "coverage_report": "#",
+        "stacktrace": "/stacktrace",
+        "target_binary": "/target_binary",
+        "reproducer": "/artifacts",
+        "run_log": "run.log",
+        "source_code": "#include <fuzzer/FuzzedDataProvider.h>\\n\\n#include <cstddef>\\n#include <cstdint>\\n#include <cstring>\\n\\n#include \"ivorbisfile.h\"\\n\\n// vorbis_data struct for the ov_callbacks\\nstruct vorbis_data {\\n  const uint8_t *current;\\n  const uint8_t *data;\\n  size_t size;\\n};\\n\\n// Proxy read function for ov_callbacks\\nsize_t read_func(void *ptr, size_t size1, size_t size2, void *datasource) {\\n  vorbis_data *vd = (vorbis_data *)datasource;\\n  size_t len = size1 * size2;\\n  if (vd->current + len > vd->data + vd->size) {\\n    len = vd->data + vd->size - vd->current;\\n  }\\n  memcpy(ptr, vd->current, len);\\n  vd->current += len;\\n  return len;\\n} \\n\\nextern \"C\" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {\\n  FuzzedDataProvider stream(data, size);\\n  \\n  // Create a new vorbis file with callbacks to our fuzzed data\\n  OggVorbis_File vf;\\n  ov_callbacks callbacks;\\n  callbacks.read_func = read_func;\\n  callbacks.seek_func = nullptr;\\n  callbacks.tell_func = nullptr;\\n  callbacks.close_func = nullptr;\\n\\n  vorbis_data vd;\\n  auto remaining_bytes = stream.ConsumeRemainingBytes<uint8_t>();\\n  vd.data = remaining_bytes.data();\\n  vd.current = vd.data;\\n  vd.size = remaining_bytes.size();\\n\\n  if (ov_open_callbacks(&vd, &vf, NULL, 0, callbacks) < 0) {\\n    return 0; // Unable to create a vorbis_file from the data\\n  }\\n\\n  // Calls the function-under-test\\n  ov_test_open(&vf);\\n\\n  ov_clear(&vf);\\n\\n  return 0;\\n}",
+        "model": ""
+    }
+
+    ]
+}

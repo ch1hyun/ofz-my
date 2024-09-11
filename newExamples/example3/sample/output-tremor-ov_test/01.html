@@ -1,0 +1,665 @@
+<!doctype html>
+
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Experiment results</title>
+<style>
+* {
+    box-sizing: border-box;
+}
+
+html {
+    line-height: 1.15;
+}
+
+body {
+    font-family: sans-serif;
+    font-size: 16px;
+}
+
+table {
+    border-collapse: collapse;
+    border-spacing: 0;
+}
+
+td, th {
+    border-right: 1px #dedede solid;
+    border-bottom: 1px #dedede solid;
+    padding: 5px;
+    text-align: left;
+}
+td:first-child, th:first-child {
+    border-left: 1px #dedede solid;
+}
+th {
+    border-top: 1px #dedede solid;
+}
+
+tbody tr:nth-child(odd) {
+    background-color: #f4f5ff;
+}
+</style>
+<body>
+    LLM: 
+    
+<h1>output-tremor-ov_test / 01</h1>
+Bug: False
+<br>
+Crash reason: NO_SEMANTIC_ERR
+<br>
+<br>
+
+<h2>Triage</h2>
+<pre>
+
+</pre>
+<br>
+
+
+
+
+
+<h3>Final code</h3>
+
+<pre>
+#include &lt;cstddef&gt;
+#include &lt;cstdint&gt;
+#include &lt;cstdio&gt;
+#include &lt;fcntl.h&gt;
+#include &lt;limits.h&gt;
+#include &lt;ogg/ogg.h&gt;
+#include &#34;/src/tremor/ivorbisfile.h&#34;
+#include &lt;stdlib.h&gt;
+#include &lt;unistd.h&gt;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
+  FILE *f;
+  char filename[PATH_MAX];
+  
+  // Create temporary file
+  snprintf(filename, sizeof(filename), &#34;/tmp/ov_test_fuzz.XXXXXX&#34;);
+  int fd = mkstemp(filename);
+  
+  if(fd == -1){
+    return 0;
+  }
+
+  write(fd, data, size);
+  close(fd);
+
+  f = fopen(filename, &#34;rb&#34;);
+
+  if(f == NULL){
+    printf(&#34;File Error\n&#34;);
+    return -1;
+  }
+
+  OggVorbis_File vf;
+  
+  if(ov_test(f, &amp;vf, NULL, 0) == 0)
+  {
+    ov_test_open(&amp;vf);
+    ov_clear(&amp;vf);
+  }
+  
+  // Close and remove file
+  fclose(f);
+  remove(filename);
+
+  return 0;
+}
+</pre>
+
+
+<h3>Fixer prompt #1</h3>
+<pre>
+
+Given the following C++ fuzz harness and its build error message, fix the code to make it build for fuzzing.
+
+If there is undeclared identifier or unknown type name error, fix it by finding and including the related libraries.
+
+MUST RETURN THE FULL CODE, INCLUDING UNCHANGED PARTS.
+
+Below is the code needs to be built:
+&lt;code&gt;
+// The function ov_test requires a FILE* parameter which cannot be generated from the provided &#39;data&#39;, &#39;size&#39; parameters of the LLVMFuzzerTestOneInput.
+// However, we can write &#39;data&#39; to a temp file and then use it for ov_test.
+
+#include &lt;cstddef&gt;
+#include &lt;cstdint&gt;
+#include &lt;cstdio&gt;
+#include &lt;fcntl.h&gt;
+#include &lt;limits.h&gt;
+#include &lt;ogg/ogg.h&gt;
+#include &lt;ov-internal.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;unistd.h&gt;
+#include &lt;vorbis/codec.h&gt;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
+  FILE *f;
+  char filename[PATH_MAX];
+  
+  // Create temporary file
+  snprintf(filename, sizeof(filename), &#34;/tmp/ov_test_fuzz.XXXXXX&#34;);
+  int fd = mkstemp(filename);
+  
+  if(fd == -1){
+    return 0;
+  }
+
+  write(fd, data, size);
+  close(fd);
+
+  f = fopen(filename, &#34;rb&#34;);
+
+  if(f == NULL){
+    printf(&#34;File Error\n&#34;);
+    return -1;
+  }
+
+  OggVorbis_File vf;
+  
+  if(ov_test(f, &amp;vf, NULL, 0) == 0)
+  {
+    ov_test_open(&amp;vf);
+    ov_clear(&amp;vf);
+  }
+  
+  // Close and remove file
+  fclose(f);
+  remove(filename);
+
+  return 0;
+}
+&lt;/code&gt;
+
+Below is the error to fix:
+The code has the following build issues:
+&lt;error&gt;
+decode_fuzzer.cc:10:10: fatal error: &#39;ov-internal.h&#39; file not found
+   10 | #include &lt;ov-internal.h&gt;
+      |          ^~~~~~~~~~~~~~~
+&lt;/error&gt;
+
+
+Below are instructions to assist you in fixing the error.
+&lt;instruction&gt;
+IMPORTANT: DO NOT include the header file ov-internal.h in the generated fuzz target again, the file does not exist in the project-under-test.
+If the non-existent &lt;filepath&gt;ov-internal.h&lt;/filepath&gt; was included for the declaration of &lt;code&gt;int ov_test(FILE *, OggVorbis_File *, const char *, long)&lt;/code&gt;, you must replace it with the EXACT path of the actual file &lt;filepath&gt;#include &#34;/src/tremor/ivorbisfile.h&#34;&lt;/filepath&gt;. For example:
+&lt;code&gt;
+#include &#34;#include &#34;/src/tremor/ivorbisfile.h&#34;&#34;
+&lt;/code&gt;
+Otherwise, consider replacing it with some of the following statementsthat may be correct alternatives:
+&lt;code&gt;
+#include &#34;/src/tremor/codec_internal.h&#34;
+#include &#34;/work/include/ogg/ogg.h&#34;
+#include &#34;/src/tremor/ivorbisfile.h&#34;
+#include &#34;/work/include/ogg/config_types.h&#34;
+#include &#34;/src/tremor/ivorbiscodec.h&#34;
+&lt;/code&gt;
+
+&lt;/instruction&gt;
+
+Fix code:
+1. Consider possible solutions for the issues listed above.
+2. Choose a solution that can maximize fuzzing result, which is utilizing the function under test and feeding it not null input.
+3. Apply the solutions to the original code.
+It&#39;s important to show the complete code, not only the fixed line.
+&lt;solution&gt;
+</pre>
+
+
+
+<h3>Code #1</h3>
+
+<pre>
+Here is the corrected code:
+
+```C++
+#include &lt;cstddef&gt;
+#include &lt;cstdint&gt;
+#include &lt;cstdio&gt;
+#include &lt;fcntl.h&gt;
+#include &lt;limits.h&gt;
+#include &lt;ogg/ogg.h&gt;
+#include &#34;/src/tremor/ivorbisfile.h&#34;
+#include &lt;stdlib.h&gt;
+#include &lt;unistd.h&gt;
+#include &lt;vorbis/codec.h&gt;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
+  FILE *f;
+  char filename[PATH_MAX];
+  
+  // Create temporary file
+  snprintf(filename, sizeof(filename), &#34;/tmp/ov_test_fuzz.XXXXXX&#34;);
+  int fd = mkstemp(filename);
+  
+  if(fd == -1){
+    return 0;
+  }
+
+  write(fd, data, size);
+  close(fd);
+
+  f = fopen(filename, &#34;rb&#34;);
+
+  if(f == NULL){
+    printf(&#34;File Error\n&#34;);
+    return -1;
+  }
+
+  OggVorbis_File vf;
+  
+  if(ov_test(f, &amp;vf, NULL, 0) == 0)
+  {
+    ov_test_open(&amp;vf);
+    ov_clear(&amp;vf);
+  }
+  
+  // Close and remove file
+  fclose(f);
+  remove(filename);
+
+  return 0;
+}
+```
+The issue was fixed by replacing the non-existent header file &#39;ov-internal.h&#39; with the correct header file &#39;/src/tremor/ivorbisfile.h&#39;.
+</pre>
+
+
+<h3>Fixer prompt #2</h3>
+<pre>
+
+Given the following C++ fuzz harness and its build error message, fix the code to make it build for fuzzing.
+
+If there is undeclared identifier or unknown type name error, fix it by finding and including the related libraries.
+
+MUST RETURN THE FULL CODE, INCLUDING UNCHANGED PARTS.
+
+Below is the code needs to be built:
+&lt;code&gt;
+#include &lt;cstddef&gt;
+#include &lt;cstdint&gt;
+#include &lt;cstdio&gt;
+#include &lt;fcntl.h&gt;
+#include &lt;limits.h&gt;
+#include &lt;ogg/ogg.h&gt;
+#include &#34;/src/tremor/ivorbisfile.h&#34;
+#include &lt;stdlib.h&gt;
+#include &lt;unistd.h&gt;
+#include &lt;vorbis/codec.h&gt;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
+  FILE *f;
+  char filename[PATH_MAX];
+  
+  // Create temporary file
+  snprintf(filename, sizeof(filename), &#34;/tmp/ov_test_fuzz.XXXXXX&#34;);
+  int fd = mkstemp(filename);
+  
+  if(fd == -1){
+    return 0;
+  }
+
+  write(fd, data, size);
+  close(fd);
+
+  f = fopen(filename, &#34;rb&#34;);
+
+  if(f == NULL){
+    printf(&#34;File Error\n&#34;);
+    return -1;
+  }
+
+  OggVorbis_File vf;
+  
+  if(ov_test(f, &amp;vf, NULL, 0) == 0)
+  {
+    ov_test_open(&amp;vf);
+    ov_clear(&amp;vf);
+  }
+  
+  // Close and remove file
+  fclose(f);
+  remove(filename);
+
+  return 0;
+}
+&lt;/code&gt;
+
+Below is the error to fix:
+The code has the following build issues:
+&lt;error&gt;
+decode_fuzzer.cc:10:10: fatal error: &#39;vorbis/codec.h&#39; file not found
+   10 | #include &lt;vorbis/codec.h&gt;
+      |          ^~~~~~~~~~~~~~~~
+&lt;/error&gt;
+
+
+Below are instructions to assist you in fixing the error.
+&lt;instruction&gt;
+IMPORTANT: DO NOT include the header file vorbis/codec.h in the generated fuzz target again, the file does not exist in the project-under-test.
+If the non-existent &lt;filepath&gt;vorbis/codec.h&lt;/filepath&gt; was included for the declaration of &lt;code&gt;int ov_test(FILE *, OggVorbis_File *, const char *, long)&lt;/code&gt;, you must replace it with the EXACT path of the actual file &lt;filepath&gt;#include &#34;/src/tremor/ivorbisfile.h&#34;&lt;/filepath&gt;. For example:
+&lt;code&gt;
+#include &#34;#include &#34;/src/tremor/ivorbisfile.h&#34;&#34;
+&lt;/code&gt;
+Otherwise, consider replacing it with some of the following statementsthat may be correct alternatives:
+&lt;code&gt;
+#include &#34;/src/tremor/ivorbiscodec.h&#34;
+#include &#34;/src/tremor/codebook.h&#34;
+#include &#34;/src/tremor/codec_internal.h&#34;
+#include &#34;/src/tremor/ivorbisfile.h&#34;
+#include &#34;/src/tremor/misc.h&#34;
+&lt;/code&gt;
+
+&lt;/instruction&gt;
+
+Fix code:
+1. Consider possible solutions for the issues listed above.
+2. Choose a solution that can maximize fuzzing result, which is utilizing the function under test and feeding it not null input.
+3. Apply the solutions to the original code.
+It&#39;s important to show the complete code, not only the fixed line.
+&lt;solution&gt;
+</pre>
+
+
+
+<h3>Code #2</h3>
+
+<pre>
+#include &lt;cstddef&gt;
+#include &lt;cstdint&gt;
+#include &lt;cstdio&gt;
+#include &lt;fcntl.h&gt;
+#include &lt;limits.h&gt;
+#include &lt;ogg/ogg.h&gt;
+#include &#34;/src/tremor/ivorbisfile.h&#34;
+#include &lt;stdlib.h&gt;
+#include &lt;unistd.h&gt;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
+  FILE *f;
+  char filename[PATH_MAX];
+  
+  // Create temporary file
+  snprintf(filename, sizeof(filename), &#34;/tmp/ov_test_fuzz.XXXXXX&#34;);
+  int fd = mkstemp(filename);
+  
+  if(fd == -1){
+    return 0;
+  }
+
+  write(fd, data, size);
+  close(fd);
+
+  f = fopen(filename, &#34;rb&#34;);
+
+  if(f == NULL){
+    printf(&#34;File Error\n&#34;);
+    return -1;
+  }
+
+  OggVorbis_File vf;
+  
+  if(ov_test(f, &amp;vf, NULL, 0) == 0)
+  {
+    ov_test_open(&amp;vf);
+    ov_clear(&amp;vf);
+  }
+  
+  // Close and remove file
+  fclose(f);
+  remove(filename);
+
+  return 0;
+}
+</pre>
+
+
+<h2>Logs</h2>
+<pre>
+Fixing /home/chyun/oss-fuzz-gen2/results1/output-tremor-ov_test/fixed_targets/01.cc with gpt-4, attempt 1.
+Fixing /home/chyun/oss-fuzz-gen2/results1/output-tremor-ov_test/fixed_targets/01.cc with gpt-4, attempt 2.
+Successfully built /home/chyun/oss-fuzz-gen2/results1/output-tremor-ov_test/fixed_targets/01.cc with gpt-4 in 2 iterations of fixing.
+Triaging the crash related to /home/chyun/oss-fuzz-gen2/results1/output-tremor-ov_test/fixed_targets/01.cc with gpt-4.
+Warning: no crash info in tremor-ov_test-01.
+Result for tremor-ov_test-01: crashes=False, coverage=0.07836117740652347 (197/2514), coverage diff=0.0033208800332088003 (16/4818)
+
+</pre>
+
+<h2>Run logs</h2>
+<pre>
+INFO:__main__:Running: docker run --privileged --shm-size=2g --platform linux/amd64 --rm -e FUZZING_ENGINE=libfuzzer -e SANITIZER=address -e RUN_FUZZER_MODE=interactive -e HELPER=True -v /home/chyun/oss-fuzz-gen2/results1/output-tremor-ov_test/corpora/01.cc:/tmp/decode_fuzzer_corpus -v /tmp/tmpy7f20uoh/build/out/tremor-ov_test-01:/out -t gcr.io/oss-fuzz-base/base-runner run_fuzzer decode_fuzzer -print_final_stats=1 -max_total_time=30 -len_control=0 -timeout=30.
+vm.mmap_rnd_bits = 28
+rm: cannot remove &#39;/tmp/decode_fuzzer_corpus&#39;: Device or resource busy
+/out/decode_fuzzer -rss_limit_mb=2560 -timeout=25 -print_final_stats=1 -max_total_time=30 -len_control=0 -timeout=30 /tmp/decode_fuzzer_corpus &lt; /dev/null
+INFO: Running with entropic power schedule (0xFF, 100).
+INFO: Seed: 172959526
+INFO: Loaded 1 modules   (2514 inline 8-bit counters): 2514 [0x55e97f6b5b60, 0x55e97f6b6532), 
+INFO: Loaded 1 PC tables (2514 PCs): 2514 [0x55e97f6b6538,0x55e97f6c0258), 
+INFO:        0 files found in /tmp/decode_fuzzer_corpus
+INFO: -max_len is not provided; libFuzzer will not generate inputs larger than 4096 bytes
+INFO: A corpus is not provided, starting from an empty corpus
+#2	INITED cov: 70 ft: 71 corp: 1/1b exec/s: 0 rss: 30Mb
+#12	NEW    cov: 74 ft: 79 corp: 2/67b lim: 4096 exec/s: 0 rss: 31Mb L: 66/66 MS: 5 InsertByte-EraseBytes-CopyPart-ChangeByte-InsertRepeatedBytes-
+#80	REDUCE cov: 74 ft: 79 corp: 2/65b lim: 4096 exec/s: 0 rss: 34Mb L: 64/64 MS: 3 CopyPart-ShuffleBytes-EraseBytes-
+	NEW_FUNC[1/4]: 0x55e97f616780 in vorbis_comment_init /src/tremor/info.c:40
+	NEW_FUNC[2/4]: 0x55e97f6171f0 in vorbis_info_init /src/tremor/info.c:114
+#100	REDUCE cov: 100 ft: 113 corp: 3/133b lim: 4096 exec/s: 0 rss: 35Mb L: 68/68 MS: 5 ChangeBit-CMP-ChangeBinInt-ChangeBinInt-CMP- DE: &#34;\000\000\000\000\000\000\000\325&#34;-&#34;OggS&#34;-
+#110	REDUCE cov: 101 ft: 114 corp: 4/202b lim: 4096 exec/s: 0 rss: 36Mb L: 69/69 MS: 5 ChangeBinInt-ShuffleBytes-InsertByte-CopyPart-PersAutoDict- DE: &#34;OggS&#34;-
+#111	REDUCE cov: 101 ft: 114 corp: 4/176b lim: 4096 exec/s: 0 rss: 36Mb L: 38/69 MS: 1 EraseBytes-
+#112	NEW    cov: 102 ft: 115 corp: 5/249b lim: 4096 exec/s: 0 rss: 36Mb L: 73/73 MS: 1 PersAutoDict- DE: &#34;OggS&#34;-
+#114	NEW    cov: 105 ft: 118 corp: 6/395b lim: 4096 exec/s: 0 rss: 36Mb L: 146/146 MS: 2 ChangeByte-CrossOver-
+#135	NEW    cov: 105 ft: 123 corp: 7/513b lim: 4096 exec/s: 0 rss: 37Mb L: 118/146 MS: 1 CopyPart-
+#142	NEW    cov: 105 ft: 124 corp: 8/587b lim: 4096 exec/s: 0 rss: 37Mb L: 74/146 MS: 2 ChangeBinInt-CrossOver-
+#145	REDUCE cov: 105 ft: 124 corp: 8/570b lim: 4096 exec/s: 0 rss: 37Mb L: 56/146 MS: 3 ChangeByte-ChangeBit-EraseBytes-
+#168	REDUCE cov: 105 ft: 124 corp: 8/550b lim: 4096 exec/s: 0 rss: 38Mb L: 49/146 MS: 3 InsertByte-ShuffleBytes-EraseBytes-
+#194	REDUCE cov: 105 ft: 124 corp: 8/541b lim: 4096 exec/s: 0 rss: 39Mb L: 29/146 MS: 1 EraseBytes-
+#236	REDUCE cov: 105 ft: 124 corp: 8/521b lim: 4096 exec/s: 0 rss: 41Mb L: 98/146 MS: 2 CopyPart-EraseBytes-
+#268	REDUCE cov: 105 ft: 124 corp: 8/512b lim: 4096 exec/s: 0 rss: 43Mb L: 47/146 MS: 2 EraseBytes-PersAutoDict- DE: &#34;OggS&#34;-
+#285	REDUCE cov: 105 ft: 125 corp: 9/566b lim: 4096 exec/s: 0 rss: 43Mb L: 54/146 MS: 2 CrossOver-InsertRepeatedBytes-
+#369	NEW    cov: 105 ft: 129 corp: 10/691b lim: 4096 exec/s: 0 rss: 43Mb L: 125/146 MS: 4 ShuffleBytes-EraseBytes-ChangeByte-CopyPart-
+#391	NEW    cov: 105 ft: 132 corp: 11/914b lim: 4096 exec/s: 0 rss: 43Mb L: 223/223 MS: 2 CMP-CrossOver- DE: &#34;\001\000\000\000&#34;-
+#412	REDUCE cov: 105 ft: 132 corp: 11/909b lim: 4096 exec/s: 0 rss: 43Mb L: 42/223 MS: 1 EraseBytes-
+#478	REDUCE cov: 105 ft: 132 corp: 11/894b lim: 4096 exec/s: 0 rss: 43Mb L: 34/223 MS: 1 EraseBytes-
+#480	REDUCE cov: 105 ft: 132 corp: 11/891b lim: 4096 exec/s: 0 rss: 43Mb L: 65/223 MS: 2 EraseBytes-PersAutoDict- DE: &#34;OggS&#34;-
+#517	REDUCE cov: 105 ft: 132 corp: 11/868b lim: 4096 exec/s: 0 rss: 43Mb L: 102/223 MS: 2 ChangeByte-EraseBytes-
+#566	REDUCE cov: 105 ft: 132 corp: 11/853b lim: 4096 exec/s: 0 rss: 43Mb L: 39/223 MS: 4 CrossOver-CopyPart-ShuffleBytes-EraseBytes-
+	NEW_FUNC[1/5]: 0x55e97f631ef0 in ogg_page_serialno /src/ogg/src/framing.c:62
+	NEW_FUNC[2/5]: 0x55e97f636470 in ogg_stream_pagein /src/ogg/src/framing.c:775
+#616	REDUCE cov: 126 ft: 156 corp: 12/926b lim: 4096 exec/s: 0 rss: 43Mb L: 73/223 MS: 5 ChangeBinInt-PersAutoDict-CopyPart-ChangeBinInt-PersAutoDict- DE: &#34;OggS&#34;-&#34;OggS&#34;-
+#669	REDUCE cov: 126 ft: 156 corp: 12/886b lim: 4096 exec/s: 0 rss: 43Mb L: 183/183 MS: 3 ChangeByte-InsertByte-EraseBytes-
+#670	REDUCE cov: 126 ft: 156 corp: 12/884b lim: 4096 exec/s: 0 rss: 43Mb L: 27/183 MS: 1 EraseBytes-
+#746	NEW    cov: 130 ft: 174 corp: 13/1014b lim: 4096 exec/s: 0 rss: 43Mb L: 130/183 MS: 1 CopyPart-
+#899	REDUCE cov: 130 ft: 174 corp: 13/997b lim: 4096 exec/s: 0 rss: 43Mb L: 81/183 MS: 3 ChangeBinInt-ChangeBinInt-EraseBytes-
+#936	NEW    cov: 130 ft: 176 corp: 14/1218b lim: 4096 exec/s: 0 rss: 43Mb L: 221/221 MS: 2 ChangeByte-InsertRepeatedBytes-
+#939	REDUCE cov: 130 ft: 178 corp: 15/1528b lim: 4096 exec/s: 0 rss: 43Mb L: 310/310 MS: 3 CMP-InsertByte-CopyPart- DE: &#34;\001\200&#34;-
+#956	NEW    cov: 130 ft: 179 corp: 16/1750b lim: 4096 exec/s: 0 rss: 43Mb L: 222/310 MS: 2 InsertByte-CopyPart-
+#960	REDUCE cov: 130 ft: 180 corp: 17/2287b lim: 4096 exec/s: 0 rss: 43Mb L: 537/537 MS: 4 CrossOver-CopyPart-InsertRepeatedBytes-InsertRepeatedBytes-
+#1023	REDUCE cov: 130 ft: 180 corp: 17/2247b lim: 4096 exec/s: 0 rss: 43Mb L: 143/537 MS: 3 ShuffleBytes-CrossOver-EraseBytes-
+#1033	REDUCE cov: 130 ft: 186 corp: 18/2481b lim: 4096 exec/s: 0 rss: 43Mb L: 234/537 MS: 5 InsertRepeatedBytes-ChangeBit-CopyPart-ShuffleBytes-InsertRepeatedBytes-
+#1041	NEW    cov: 132 ft: 206 corp: 19/2613b lim: 4096 exec/s: 0 rss: 43Mb L: 132/537 MS: 3 ChangeByte-CMP-PersAutoDict- DE: &#34;\203\000&#34;-&#34;\001\200&#34;-
+#1050	NEW    cov: 133 ft: 239 corp: 20/2840b lim: 4096 exec/s: 0 rss: 43Mb L: 227/537 MS: 4 InsertByte-InsertByte-CopyPart-PersAutoDict- DE: &#34;\001\000\000\000&#34;-
+#1118	REDUCE cov: 133 ft: 239 corp: 20/2837b lim: 4096 exec/s: 0 rss: 43Mb L: 31/537 MS: 3 PersAutoDict-ChangeByte-EraseBytes- DE: &#34;\000\000\000\000\000\000\000\325&#34;-
+#1171	NEW    cov: 133 ft: 240 corp: 21/2963b lim: 4096 exec/s: 0 rss: 43Mb L: 126/537 MS: 3 ChangeByte-CMP-EraseBytes- DE: &#34;\324\000\000\000&#34;-
+#1176	REDUCE cov: 133 ft: 240 corp: 21/2862b lim: 4096 exec/s: 0 rss: 43Mb L: 436/436 MS: 5 ShuffleBytes-CopyPart-ChangeBit-EraseBytes-PersAutoDict- DE: &#34;OggS&#34;-
+#1248	REDUCE cov: 133 ft: 240 corp: 21/2854b lim: 4096 exec/s: 0 rss: 43Mb L: 135/436 MS: 2 ChangeByte-EraseBytes-
+#1270	REDUCE cov: 133 ft: 240 corp: 21/2836b lim: 4096 exec/s: 0 rss: 43Mb L: 203/436 MS: 2 CMP-EraseBytes- DE: &#34;\307M\3539&#34;-
+#1292	NEW    cov: 133 ft: 241 corp: 22/3192b lim: 4096 exec/s: 0 rss: 43Mb L: 356/436 MS: 2 CopyPart-CrossOver-
+#1314	REDUCE cov: 133 ft: 241 corp: 22/3051b lim: 4096 exec/s: 0 rss: 43Mb L: 215/436 MS: 2 ChangeByte-EraseBytes-
+#1324	REDUCE cov: 133 ft: 242 corp: 23/3376b lim: 4096 exec/s: 0 rss: 43Mb L: 325/436 MS: 5 InsertByte-CMP-InsertByte-ChangeByte-InsertRepeatedBytes- DE: &#34;\000\000\000\000\000\000\377\377&#34;-
+#1357	NEW    cov: 133 ft: 246 corp: 24/3870b lim: 4096 exec/s: 0 rss: 43Mb L: 494/494 MS: 3 EraseBytes-CrossOver-CrossOver-
+#1463	REDUCE cov: 133 ft: 246 corp: 24/3815b lim: 4096 exec/s: 0 rss: 43Mb L: 381/494 MS: 1 EraseBytes-
+#1482	REDUCE cov: 133 ft: 246 corp: 24/3745b lim: 4096 exec/s: 0 rss: 43Mb L: 145/494 MS: 4 EraseBytes-ShuffleBytes-CopyPart-EraseBytes-
+#1488	REDUCE cov: 133 ft: 246 corp: 24/3728b lim: 4096 exec/s: 0 rss: 43Mb L: 118/494 MS: 1 EraseBytes-
+#1509	REDUCE cov: 133 ft: 247 corp: 25/3970b lim: 4096 exec/s: 0 rss: 43Mb L: 242/494 MS: 1 CopyPart-
+#1510	REDUCE cov: 133 ft: 247 corp: 25/3948b lim: 4096 exec/s: 0 rss: 43Mb L: 51/494 MS: 1 EraseBytes-
+#1523	REDUCE cov: 133 ft: 247 corp: 25/3883b lim: 4096 exec/s: 0 rss: 43Mb L: 429/429 MS: 3 ChangeBit-EraseBytes-CopyPart-
+#1550	REDUCE cov: 133 ft: 247 corp: 25/3849b lim: 4096 exec/s: 0 rss: 43Mb L: 47/429 MS: 2 ShuffleBytes-EraseBytes-
+#1563	NEW    cov: 133 ft: 261 corp: 26/4385b lim: 4096 exec/s: 0 rss: 43Mb L: 536/536 MS: 3 ChangeBinInt-InsertRepeatedBytes-CopyPart-
+#1573	NEW    cov: 134 ft: 271 corp: 27/5410b lim: 4096 exec/s: 0 rss
+...truncated...
+88	REDUCE cov: 197 ft: 677 corp: 150/95Kb lim: 4096 exec/s: 5665 rss: 46Mb L: 1484/3484 MS: 3 ChangeBinInt-ChangeByte-EraseBytes-
+#164397	REDUCE cov: 197 ft: 677 corp: 150/95Kb lim: 4096 exec/s: 5668 rss: 46Mb L: 373/3484 MS: 4 ChangeBit-ChangeBit-ChangeBit-EraseBytes-
+#164419	REDUCE cov: 197 ft: 677 corp: 150/95Kb lim: 4096 exec/s: 5669 rss: 46Mb L: 500/3484 MS: 2 EraseBytes-CopyPart-
+#164475	REDUCE cov: 197 ft: 677 corp: 150/95Kb lim: 4096 exec/s: 5671 rss: 46Mb L: 198/3484 MS: 1 EraseBytes-
+#164608	REDUCE cov: 197 ft: 677 corp: 150/95Kb lim: 4096 exec/s: 5676 rss: 46Mb L: 800/3484 MS: 3 InsertRepeatedBytes-CMP-EraseBytes- DE: &#34;,\202\256t&#34;-
+#165445	REDUCE cov: 197 ft: 677 corp: 150/95Kb lim: 4096 exec/s: 5705 rss: 46Mb L: 3411/3411 MS: 2 ChangeBit-EraseBytes-
+#165714	REDUCE cov: 197 ft: 677 corp: 150/94Kb lim: 4096 exec/s: 5714 rss: 46Mb L: 933/3411 MS: 4 ChangeByte-CrossOver-ChangeBit-EraseBytes-
+#166415	REDUCE cov: 197 ft: 677 corp: 150/94Kb lim: 4096 exec/s: 5547 rss: 46Mb L: 238/3411 MS: 1 EraseBytes-
+#166452	REDUCE cov: 197 ft: 677 corp: 150/94Kb lim: 4096 exec/s: 5548 rss: 46Mb L: 715/3411 MS: 2 CMP-EraseBytes- DE: &#34;O&#39;OO&#34;-
+#166486	REDUCE cov: 197 ft: 677 corp: 150/94Kb lim: 4096 exec/s: 5549 rss: 46Mb L: 658/3411 MS: 4 PersAutoDict-CopyPart-InsertByte-EraseBytes- DE: &#34;\002\365&#34;-
+#166977	REDUCE cov: 197 ft: 677 corp: 150/94Kb lim: 4096 exec/s: 5565 rss: 46Mb L: 645/3411 MS: 1 EraseBytes-
+#167068	REDUCE cov: 197 ft: 677 corp: 150/94Kb lim: 4096 exec/s: 5568 rss: 46Mb L: 108/3411 MS: 1 EraseBytes-
+#167271	REDUCE cov: 197 ft: 677 corp: 150/94Kb lim: 4096 exec/s: 5575 rss: 46Mb L: 136/3411 MS: 3 ChangeBit-CMP-EraseBytes- DE: &#34;\001\000\000\000\000\000\000M&#34;-
+#167367	REDUCE cov: 197 ft: 677 corp: 150/94Kb lim: 4096 exec/s: 5578 rss: 46Mb L: 1036/3411 MS: 1 EraseBytes-
+#167461	REDUCE cov: 197 ft: 678 corp: 151/94Kb lim: 4096 exec/s: 5582 rss: 46Mb L: 205/3411 MS: 4 ChangeBit-EraseBytes-ChangeByte-ChangeByte-
+#167477	REDUCE cov: 197 ft: 678 corp: 151/94Kb lim: 4096 exec/s: 5582 rss: 46Mb L: 106/3411 MS: 1 EraseBytes-
+#167994	REDUCE cov: 197 ft: 678 corp: 151/94Kb lim: 4096 exec/s: 5599 rss: 46Mb L: 67/3411 MS: 2 ShuffleBytes-EraseBytes-
+#168023	REDUCE cov: 197 ft: 678 corp: 151/94Kb lim: 4096 exec/s: 5600 rss: 46Mb L: 197/3411 MS: 4 ChangeByte-ChangeByte-CrossOver-EraseBytes-
+#168236	REDUCE cov: 197 ft: 678 corp: 151/94Kb lim: 4096 exec/s: 5607 rss: 46Mb L: 1095/3411 MS: 3 ChangeBit-CopyPart-EraseBytes-
+#168406	REDUCE cov: 197 ft: 678 corp: 151/94Kb lim: 4096 exec/s: 5613 rss: 46Mb L: 458/3411 MS: 5 InsertByte-ShuffleBytes-CrossOver-ShuffleBytes-EraseBytes-
+#168473	REDUCE cov: 197 ft: 678 corp: 151/94Kb lim: 4096 exec/s: 5615 rss: 46Mb L: 181/3411 MS: 2 ChangeByte-EraseBytes-
+#168929	REDUCE cov: 197 ft: 678 corp: 151/94Kb lim: 4096 exec/s: 5630 rss: 46Mb L: 94/3411 MS: 1 EraseBytes-
+#169758	REDUCE cov: 197 ft: 678 corp: 151/94Kb lim: 4096 exec/s: 5658 rss: 46Mb L: 194/3411 MS: 4 CrossOver-InsertByte-PersAutoDict-InsertRepeatedBytes- DE: &#34;\310\262\364}&#34;-
+#170082	REDUCE cov: 197 ft: 678 corp: 151/94Kb lim: 4096 exec/s: 5669 rss: 46Mb L: 2929/3411 MS: 4 ChangeByte-ChangeBit-ShuffleBytes-EraseBytes-
+#170285	REDUCE cov: 197 ft: 678 corp: 151/94Kb lim: 4096 exec/s: 5676 rss: 46Mb L: 168/3411 MS: 3 ChangeASCIIInt-ChangeBinInt-EraseBytes-
+#170557	REDUCE cov: 197 ft: 678 corp: 151/94Kb lim: 4096 exec/s: 5685 rss: 46Mb L: 1374/3411 MS: 2 PersAutoDict-EraseBytes- DE: &#34;\012\012\012\012&#34;-
+#171493	REDUCE cov: 197 ft: 678 corp: 151/94Kb lim: 4096 exec/s: 5716 rss: 46Mb L: 348/3411 MS: 1 EraseBytes-
+#171697	REDUCE cov: 197 ft: 678 corp: 151/94Kb lim: 4096 exec/s: 5723 rss: 46Mb L: 225/3411 MS: 4 ShuffleBytes-ShuffleBytes-ChangeBinInt-EraseBytes-
+#171847	DONE   cov: 197 ft: 678 corp: 151/94Kb lim: 4096 exec/s: 5543 rss: 46Mb
+###### Recommended dictionary. ######
+&#34;\000\000\000\000\000\000\000\325&#34; # Uses: 347
+&#34;OggS&#34; # Uses: 382
+&#34;\001\000\000\000&#34; # Uses: 310
+&#34;\001\200&#34; # Uses: 340
+&#34;\203\000&#34; # Uses: 334
+&#34;\324\000\000\000&#34; # Uses: 288
+&#34;\307M\3539&#34; # Uses: 338
+&#34;\000\000\000\000\000\000\377\377&#34; # Uses: 341
+&#34;\001\004\000\000\000\000\000\000&#34; # Uses: 301
+&#34;\000\000\000\351&#34; # Uses: 321
+&#34;\000\000\000\000\000\000\000\323&#34; # Uses: 286
+&#34;\377\377\377\032&#34; # Uses: 298
+&#34;\001\000\000\033&#34; # Uses: 272
+&#34;\001\000\000\001&#34; # Uses: 294
+&#34;\376\377\377\377\377\377\377\377&#34; # Uses: 251
+&#34;\000m&#34; # Uses: 291
+&#34;\311\001\000\000\000\000\000\000&#34; # Uses: 292
+&#34;\017\017\017\017&#34; # Uses: 284
+&#34;\377\377\377\377\377\377\377\&#34;&#34; # Uses: 240
+&#34;n\001\000\000&#34; # Uses: 236
+&#34;\377\377\377\377\377\377\377\312&#34; # Uses: 259
+&#34;\001\346&#34; # Uses: 236
+&#34;\242\002\000\000\000\000\000\000&#34; # Uses: 216
+&#34;.\000\000\000\000\000\000\000&#34; # Uses: 229
+&#34;\015K\324`&#34; # Uses: 232
+&#34;\377\377\377\312&#34; # Uses: 219
+&#34;\0011&#34; # Uses: 195
+&#34;\000\000\000\000&#34; # Uses: 225
+&#34;\322\011\322[&#34; # Uses: 190
+&#34;\343\240\340F&#34; # Uses: 185
+&#34;\004\004\004m&#34; # Uses: 198
+&#34;\377\377\377\377\377\000\000\205&#34; # Uses: 156
+&#34;\310\262\364}&#34; # Uses: 167
+&#34;\000\000\000\000\000\000\000\000&#34; # Uses: 154
+&#34;\313\377\377\377\377\377\377\377&#34; # Uses: 137
+&#34;\212\000\000\000&#34; # Uses: 151
+&#34;\013\001\000\000\000\000\000\000&#34; # Uses: 156
+&#34;\366\313\326r&#34; # Uses: 170
+&#34;\000\000\000\033&#34; # Uses: 142
+&#34;\001\255&#34; # Uses: 147
+&#34;l\366e\016&#34; # Uses: 147
+&#34;\007\014\210\300&#34; # Uses: 146
+&#34;\377\377\377\377\377\377\377\323&#34; # Uses: 151
+&#34;\033\000\000\000&#34; # Uses: 144
+&#34;\001\000&#34; # Uses: 114
+&#34;:\000\001\000\000\000\000\000&#34; # Uses: 109
+&#34;^\001&#34; # Uses: 121
+&#34;\000\001gS&#34; # Uses: 130
+&#34;\254\257\217\272&#34; # Uses: 129
+&#34;\000\000\000\000\000\001\000k&#34; # Uses: 104
+&#34;\035\000\000\000&#34; # Uses: 112
+&#34;Y\001\001\000\000\000\000\000&#34; # Uses: 112
+&#34;\000\001\000\000&#34; # Uses: 106
+&#34;\312\375\010\322&#34; # Uses: 103
+&#34;\000\000\002\225&#34; # Uses: 103
+&#34;\360w\3203&#34; # Uses: 125
+&#34;\377\377\377\377\377\000\001=&#34; # Uses: 139
+&#34;\000\000\001\000\000\000\000\000&#34; # Uses: 120
+&#34;\004\004\004\004&#34; # Uses: 133
+&#34;\024\310\015\022&#34; # Uses: 94
+&#34;\012\012\012\012&#34; # Uses: 95
+&#34;\351\006\211\010&#34; # Uses: 101
+&#34;\000\004\004\004&#34; # Uses: 93
+&#34;\377\\&#34; # Uses: 88
+&#34;gS\000\377\377\377&#34; # Uses: 79
+&#34; \000\000\000&#34; # Uses: 64
+&#34;\377\377\377\377\377\377\377\376&#34; # Uses: 69
+&#34;\356\023\000\000\000\000\000\000&#34; # Uses: 77
+&#34;I\000\001\000\000\000\000\000&#34; # Uses: 76
+&#34;\377\377&#34; # Uses: 92
+&#34;v\002&#34; # Uses: 80
+&#34;\000\000A\000&#34; # Uses: 68
+&#34;\255\001\001\000\000\000\000\000&#34; # Uses: 74
+&#34;J\000&#34; # Uses: 88
+&#34;\361\251L\374&#34; # Uses: 80
+&#34;,g\000\000&#34; # Uses: 80
+&#34;\002\365&#34; # Uses: 91
+&#34;\377\377\377\377\377\377\377\354&#34; # Uses: 82
+&#34;\221-;v&#34; # Uses: 72
+&#34;\001\000\000\000\000\000\001w&#34; # Uses: 69
+&#34;\377\377\377\377\377\377\004H&#34; # Uses: 63
+&#34;*\002\002\002&#34; # Uses: 85
+&#34;2&#39;\340B&#34; # Uses: 70
+&#34;\312\000\000\000\000\000\000\000&#34; # Uses: 74
+&#34;\377\377\377\377\377\377\000\336&#34; # Uses: 68
+&#34;qppp\000\000\000\000&#34; # Uses: 53
+&#34;Y\001\000\000\000\000\000\000&#34; # Uses: 54
+&#34;\377\377\377\377\377\000\000&amp;&#34; # Uses: 47
+&#34;\000\005\315[&#34; # Uses: 35
+&#34;\333]\377\272&#34; # Uses: 52
+&#34;;\002\000\000\000\000\000\000&#34; # Uses: 36
+&#34;\002ppp&#34; # Uses: 45
+&#34;8rZ\350&#34; # Uses: 35
+&#34;\000\000\000\000\000\000\002\322&#34; # Uses: 41
+&#34;98\376\025&#34; # Uses: 41
+&#34;H\272\013N&#34; # Uses: 50
+&#34;\001\000\000\000\000\001\0010&#34; # Uses: 33
+&#34;\016\006\000\000\000\000\000\000&#34; # Uses: 35
+&#34;vorbis&#34; # Uses: 35
+&#34;\274\001\000\000\000\000\000\000&#34; # Uses: 44
+&#34;]&amp;(\023&#34; # Uses: 36
+&#34;\376\000\000\000&#34; # Uses: 33
+&#34;\377\377\377\377\377\000\000A&#34; # Uses: 26
+&#34;L\005\001\000\000\000\000\000&#34; # Uses: 31
+&#34;\307\302\034\022&#34; # Uses: 25
+&#34;p\000\000\000&#34; # Uses: 38
+&#34;K\000&#34; # Uses: 36
+&#34;\263\001\210\012&#34; # Uses: 22
+&#34;\203\355\364\036&#34; # Uses: 17
+&#34;q\000\000\000&#34; # Uses: 19
+&#34;\001\354&#34; # Uses: 15
+&#34;\226\366\372|&#34; # Uses: 16
+&#34;\000\000\000\000\000\000\000\330&#34; # Uses: 15
+&#34;\366\003\000\000\000\000\000\000&#34; # Uses: 17
+&#34;\000\033&#34; # Uses: 10
+&#34;\022\034\302\307&#34; # Uses: 15
+&#34;\377\377\377\377\377\000\001\037&#34; # Uses: 8
+&#34;,\202\256t&#34; # Uses: 7
+&#34;O&#39;OO&#34; # Uses: 5
+&#34;\001\000\000\000\000\000\000M&#34; # Uses: 6
+###### End of recommended dictionary. ######
+Done 171847 runs in 31 second(s)
+stat::number_of_executed_units: 171847
+stat::average_exec_per_sec:     5543
+stat::new_units_added:          1125
+stat::slowest_unit_time_sec:    0
+stat::peak_rss_mb:              46
+
+</pre>
+
+
+</body>

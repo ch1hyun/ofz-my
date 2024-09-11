@@ -1,0 +1,403 @@
+<!doctype html>
+
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Experiment results</title>
+<style>
+* {
+    box-sizing: border-box;
+}
+
+html {
+    line-height: 1.15;
+}
+
+body {
+    font-family: sans-serif;
+    font-size: 16px;
+}
+
+table {
+    border-collapse: collapse;
+    border-spacing: 0;
+}
+
+td, th {
+    border-right: 1px #dedede solid;
+    border-bottom: 1px #dedede solid;
+    padding: 5px;
+    text-align: left;
+}
+td:first-child, th:first-child {
+    border-left: 1px #dedede solid;
+}
+th {
+    border-top: 1px #dedede solid;
+}
+
+tbody tr:nth-child(odd) {
+    background-color: #f4f5ff;
+}
+</style>
+<body>
+    LLM: 
+    
+<h1>output-tremor-ov_pcm_seek / 02</h1>
+Bug: False
+<br>
+Crash reason: NO_SEMANTIC_ERR
+<br>
+<br>
+
+<h2>Triage</h2>
+<pre>
+
+</pre>
+<br>
+
+
+
+
+
+<h3>Final code</h3>
+
+<pre>
+#include &#34;ivorbisfile.h&#34;
+#include &lt;cstddef&gt;
+#include &lt;cstdint&gt;
+#include &lt;cstdio&gt;
+#include &lt;cstdlib&gt;
+#include &lt;cstring&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+#define INPUT_LIMIT 16384
+
+struct vorbis_data {
+  const uint8_t *current;
+  const uint8_t *data;
+  size_t size;
+};
+
+size_t read_func(void *ptr, size_t size1, size_t size2, void *datasource) {
+  vorbis_data *vd = (vorbis_data *)(datasource);
+  size_t len = size1 * size2;
+  if (vd-&gt;current + len &gt; vd-&gt;data + vd-&gt;size) {
+    len = vd-&gt;data + vd-&gt;size - vd-&gt;current;
+  }
+  memcpy(ptr, vd-&gt;current, len);
+  vd-&gt;current += len;
+  return len;
+}
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  FuzzedDataProvider stream(data, size);
+  
+  ov_callbacks memory_callbacks = {0};
+  memory_callbacks.read_func = read_func;
+  vorbis_data data_st;
+  data_st.size = size &gt; INPUT_LIMIT ? INPUT_LIMIT : size;
+  data_st.current = data;
+  data_st.data = data;
+  OggVorbis_File vf;
+  int result = ov_open_callbacks(&amp;data_st, &amp;vf, nullptr, 0, memory_callbacks);
+  if (result &lt; 0) {
+    return 0;
+  }
+
+  ogg_int64_t offset = stream.ConsumeIntegral&lt;uint32_t&gt;(); 
+  result = ov_pcm_seek(&amp;vf, offset);
+  if (result &lt; 0) {
+    ov_clear(&amp;vf);
+    return 0;
+  }
+
+  ov_clear(&amp;vf);
+  return 0;
+}
+</pre>
+
+
+<h2>Logs</h2>
+<pre>
+Successfully built /home/chyun/oss-fuzz-gen2/results1/output-tremor-ov_pcm_seek/fixed_targets/02.cc with gpt-4 in 0 iterations of fixing.
+Triaging the crash related to /home/chyun/oss-fuzz-gen2/results1/output-tremor-ov_pcm_seek/fixed_targets/02.cc with gpt-4.
+Warning: no crash info in tremor-ov_pcm_seek-02.
+Result for tremor-ov_pcm_seek-02: crashes=False, coverage=0.08531746031746032 (215/2520), coverage diff=0.0 (0/4818)
+
+</pre>
+
+<h2>Run logs</h2>
+<pre>
+INFO:__main__:Running: docker run --privileged --shm-size=2g --platform linux/amd64 --rm -e FUZZING_ENGINE=libfuzzer -e SANITIZER=address -e RUN_FUZZER_MODE=interactive -e HELPER=True -v /home/chyun/oss-fuzz-gen2/results1/output-tremor-ov_pcm_seek/corpora/02.cc:/tmp/decode_fuzzer_corpus -v /tmp/tmpy7f20uoh/build/out/tremor-ov_pcm_seek-02:/out -t gcr.io/oss-fuzz-base/base-runner run_fuzzer decode_fuzzer -print_final_stats=1 -max_total_time=30 -len_control=0 -timeout=30.
+vm.mmap_rnd_bits = 28
+rm: cannot remove &#39;/tmp/decode_fuzzer_corpus&#39;: Device or resource busy
+/out/decode_fuzzer -rss_limit_mb=2560 -timeout=25 -print_final_stats=1 -max_total_time=30 -len_control=0 -timeout=30 /tmp/decode_fuzzer_corpus &lt; /dev/null
+INFO: Running with entropic power schedule (0xFF, 100).
+INFO: Seed: 934366051
+INFO: Loaded 1 modules   (2520 inline 8-bit counters): 2520 [0x55b0e89d3a80, 0x55b0e89d4458), 
+INFO: Loaded 1 PC tables (2520 PCs): 2520 [0x55b0e89d4458,0x55b0e89de1d8), 
+INFO:        0 files found in /tmp/decode_fuzzer_corpus
+INFO: -max_len is not provided; libFuzzer will not generate inputs larger than 4096 bytes
+INFO: A corpus is not provided, starting from an empty corpus
+#2	INITED cov: 72 ft: 73 corp: 1/1b exec/s: 0 rss: 30Mb
+#6	NEW    cov: 76 ft: 81 corp: 2/82b lim: 4096 exec/s: 0 rss: 31Mb L: 81/81 MS: 4 CopyPart-ChangeBit-EraseBytes-InsertRepeatedBytes-
+#97	REDUCE cov: 76 ft: 81 corp: 2/74b lim: 4096 exec/s: 0 rss: 34Mb L: 73/73 MS: 1 EraseBytes-
+#103	REDUCE cov: 76 ft: 81 corp: 2/43b lim: 4096 exec/s: 0 rss: 34Mb L: 42/42 MS: 1 EraseBytes-
+#115	REDUCE cov: 76 ft: 81 corp: 2/35b lim: 4096 exec/s: 0 rss: 35Mb L: 34/34 MS: 2 ChangeBinInt-EraseBytes-
+#168	REDUCE cov: 78 ft: 83 corp: 3/63b lim: 4096 exec/s: 0 rss: 36Mb L: 28/34 MS: 3 CrossOver-EraseBytes-CMP- DE: &#34;OggS&#34;-
+#171	NEW    cov: 79 ft: 85 corp: 4/102b lim: 4096 exec/s: 0 rss: 36Mb L: 39/39 MS: 3 CrossOver-ChangeByte-CopyPart-
+	NEW_FUNC[1/9]: 0x55b0e89348d0 in vorbis_comment_init /src/tremor/info.c:40
+	NEW_FUNC[2/9]: 0x55b0e8935340 in vorbis_info_init /src/tremor/info.c:114
+#173	REDUCE cov: 123 ft: 139 corp: 5/136b lim: 4096 exec/s: 0 rss: 37Mb L: 34/39 MS: 2 PersAutoDict-PersAutoDict- DE: &#34;OggS&#34;-&#34;OggS&#34;-
+#176	NEW    cov: 123 ft: 142 corp: 6/268b lim: 4096 exec/s: 0 rss: 37Mb L: 132/132 MS: 3 EraseBytes-PersAutoDict-InsertRepeatedBytes- DE: &#34;OggS&#34;-
+#177	NEW    cov: 126 ft: 146 corp: 7/390b lim: 4096 exec/s: 0 rss: 37Mb L: 122/132 MS: 1 InsertRepeatedBytes-
+#187	NEW    cov: 126 ft: 147 corp: 8/433b lim: 4096 exec/s: 0 rss: 37Mb L: 43/132 MS: 5 ChangeBit-ShuffleBytes-ShuffleBytes-ChangeBinInt-PersAutoDict- DE: &#34;OggS&#34;-
+#210	NEW    cov: 126 ft: 150 corp: 9/577b lim: 4096 exec/s: 0 rss: 38Mb L: 144/144 MS: 3 CopyPart-EraseBytes-CrossOver-
+#235	NEW    cov: 128 ft: 155 corp: 10/792b lim: 4096 exec/s: 0 rss: 39Mb L: 215/215 MS: 5 ShuffleBytes-InsertRepeatedBytes-ChangeBinInt-ChangeBinInt-PersAutoDict- DE: &#34;OggS&#34;-
+#239	NEW    cov: 128 ft: 159 corp: 11/918b lim: 4096 exec/s: 0 rss: 39Mb L: 126/215 MS: 4 ChangeByte-ShuffleBytes-PersAutoDict-ChangeBinInt- DE: &#34;OggS&#34;-
+#259	REDUCE cov: 128 ft: 162 corp: 12/1191b lim: 4096 exec/s: 0 rss: 40Mb L: 273/273 MS: 5 CrossOver-CMP-CrossOver-CMP-CopyPart- DE: &#34;\001\&#34;&#34;-&#34;\000\000\000\000\000\000\000\000&#34;-
+#265	NEW    cov: 128 ft: 165 corp: 13/1669b lim: 4096 exec/s: 0 rss: 40Mb L: 478/478 MS: 1 CopyPart-
+#280	NEW    cov: 128 ft: 166 corp: 14/2045b lim: 4096 exec/s: 0 rss: 40Mb L: 376/478 MS: 5 CopyPart-CMP-InsertRepeatedBytes-CopyPart-InsertRepeatedBytes- DE: &#34;\000\000\000\000\000\000\000\250&#34;-
+#304	NEW    cov: 132 ft: 203 corp: 15/2760b lim: 4096 exec/s: 0 rss: 41Mb L: 715/715 MS: 4 InsertRepeatedBytes-CrossOver-InsertRepeatedBytes-CrossOver-
+#328	REDUCE cov: 132 ft: 203 corp: 15/2715b lim: 4096 exec/s: 0 rss: 41Mb L: 77/715 MS: 4 InsertByte-ChangeByte-InsertByte-EraseBytes-
+#345	REDUCE cov: 132 ft: 203 corp: 15/2711b lim: 4096 exec/s: 0 rss: 41Mb L: 122/715 MS: 2 ShuffleBytes-EraseBytes-
+#346	NEW    cov: 132 ft: 204 corp: 16/2886b lim: 4096 exec/s: 0 rss: 41Mb L: 175/715 MS: 1 CrossOver-
+#396	REDUCE cov: 132 ft: 204 corp: 16/2860b lim: 4096 exec/s: 0 rss: 42Mb L: 106/715 MS: 5 ShuffleBytes-CrossOver-CrossOver-CrossOver-EraseBytes-
+#402	REDUCE cov: 132 ft: 204 corp: 16/2850b lim: 4096 exec/s: 0 rss: 42Mb L: 67/715 MS: 1 EraseBytes-
+#433	NEW    cov: 132 ft: 205 corp: 17/3395b lim: 4096 exec/s: 0 rss: 42Mb L: 545/715 MS: 1 CopyPart-
+#439	NEW    cov: 132 ft: 206 corp: 18/3779b lim: 4096 exec/s: 0 rss: 42Mb L: 384/715 MS: 1 PersAutoDict- DE: &#34;\000\000\000\000\000\000\000\250&#34;-
+#448	NEW    cov: 133 ft: 207 corp: 19/4867b lim: 4096 exec/s: 0 rss: 42Mb L: 1088/1088 MS: 4 CopyPart-ShuffleBytes-InsertByte-CrossOver-
+#472	NEW    cov: 135 ft: 211 corp: 20/5696b lim: 4096 exec/s: 0 rss: 42Mb L: 829/1088 MS: 4 CopyPart-PersAutoDict-PersAutoDict-CrossOver- DE: &#34;OggS&#34;-&#34;\000\000\000\000\000\000\000\250&#34;-
+#526	REDUCE cov: 135 ft: 211 corp: 20/5694b lim: 4096 exec/s: 0 rss: 42Mb L: 213/1088 MS: 4 ShuffleBytes-ChangeBinInt-ChangeBit-EraseBytes-
+#589	NEW    cov: 136 ft: 222 corp: 21/6861b lim: 4096 exec/s: 0 rss: 42Mb L: 1167/1167 MS: 3 CopyPart-CrossOver-CopyPart-
+#606	NEW    cov: 136 ft: 224 corp: 22/7278b lim: 4096 exec/s: 0 rss: 42Mb L: 417/1167 MS: 2 CMP-CrossOver- DE: &#34;\000\000\000\343&#34;-
+#653	REDUCE cov: 136 ft: 224 corp: 22/7243b lim: 4096 exec/s: 0 rss: 42Mb L: 71/1167 MS: 2 ChangeBit-EraseBytes-
+#679	REDUCE cov: 136 ft: 224 corp: 22/7220b lim: 4096 exec/s: 0 rss: 42Mb L: 121/1167 MS: 1 EraseBytes-
+#688	NEW    cov: 136 ft: 234 corp: 23/8396b lim: 4096 exec/s: 0 rss: 42Mb L: 1176/1176 MS: 4 ChangeBit-InsertRepeatedBytes-CrossOver-CrossOver-
+#714	REDUCE cov: 136 ft: 234 corp: 23/8287b lim: 4096 exec/s: 0 rss: 42Mb L: 369/1176 MS: 1 EraseBytes-
+#773	NEW    cov: 136 ft: 235 corp: 24/9643b lim: 4096 exec/s: 0 rss: 42Mb L: 1356/1356 MS: 4 EraseBytes-PersAutoDict-CopyPart-CrossOver- DE: &#34;\001\&#34;&#34;-
+#775	NEW    cov: 136 ft: 236 corp: 25/10772b lim: 4096 exec/s: 0 rss: 42Mb L: 1129/1356 MS: 2 InsertRepeatedBytes-CrossOver-
+#816	REDUCE cov: 136 ft: 236 corp: 25/10734b lim: 4096 exec/s: 0 rss: 42Mb L: 83/1356 MS: 1 EraseBytes-
+#897	REDUCE cov: 136 ft: 236 corp: 25/10641b lim: 4096 exec/s: 0 rss: 42Mb L: 1263/1263 MS: 1 EraseBytes-
+#929	REDUCE cov: 136 ft: 236 corp: 25/10580b lim: 4096 exec/s: 0 rss: 42Mb L: 152/1263 MS: 2 ChangeBit-EraseBytes-
+#937	REDUCE cov: 136 ft: 236 corp: 25/10548b lim: 4096 exec/s: 0 rss: 42Mb L: 344/1263 MS: 3 PersAutoDict-CopyPart-EraseBytes- DE: &#34;\001\&#34;&#34;-
+#1094	NEW    cov: 136 ft: 237 corp: 26/11644b lim: 4096 exec/s: 0 rss: 42Mb L: 1096/1263 MS: 2 InsertRepeatedBytes-EraseBytes-
+#1165	REDUCE cov: 136 ft: 238 corp: 27/13324b lim: 4096 exec/s: 0 rss: 42Mb L: 1680/1680 MS: 1 CrossOver-
+#1206	REDUCE cov: 136 ft: 238 corp: 27/13301b lim: 4096 exec/s: 0 rss: 42Mb L: 129/1680 MS: 1 EraseBytes-
+#1214	REDUCE cov: 136 ft: 238 corp: 27/12962b lim: 4096 exec/s: 0 rss: 42Mb L: 837/1680 MS: 3 InsertRepeatedBytes-CrossOver-EraseBytes-
+#1226	NEW    cov: 137 ft: 239 corp: 28/13983b lim: 4096 exec/s: 0 rss: 42Mb L: 1021/1680 MS: 2 ShuffleBytes-CrossOver-
+#1282	REDUCE cov: 137 ft: 242 corp: 29/14820b lim: 4096 exec/s: 0 rss: 42Mb L: 837/1680 MS: 1 ChangeByte-
+#1293	REDUCE cov: 137 ft: 242 corp: 29/14810b lim: 4096 exec/s: 0 rss: 42Mb L: 61/1680 MS: 1 EraseBytes-
+#1331	REDUCE cov: 137 ft: 264 corp: 30/15739b lim: 4096 exec/s: 0 rss: 42Mb L: 929/1680 MS: 3 InsertRepeatedBytes-InsertByte-CrossOver-
+#1364	REDUCE cov: 137 ft: 264 corp: 30/15369b lim: 4096 exec/s: 0 rss: 42Mb L: 726/1680 MS: 3 ChangeByte-ChangeBinInt-EraseBytes-
+#1421	REDUCE cov: 137 ft: 264 corp: 30/15333b lim: 4096 exec/s: 0 rss: 42Mb L: 47/1680 MS: 2 ChangeByte-EraseBytes-
+#1442	NEW    cov: 137 ft: 277 corp: 31/17Kb lim: 4096 exec/s: 0 rss: 42Mb L: 2596/2596 MS: 1 CopyPart-
+#1485	REDUCE cov: 137 ft: 277 corp: 31/17Kb lim: 4096 exec/s: 0 rss: 43Mb L: 43/2596 MS: 3 ChangeByte-CMP-EraseBytes- DE: &#34;\016\016\016\016&#34;-
+#1556	REDUCE cov: 137 ft: 277 corp: 31/17Kb lim: 4096 exec/s: 0 rss: 43Mb L: 2525/2525 MS: 1 EraseBytes-
+#1612	REDUCE cov: 137 ft: 277 corp: 31/17Kb lim: 4096 exec/s: 0 rss: 43Mb L: 62/2525 MS: 1 EraseBytes-
+#1626	REDUCE cov: 137 ft: 277 corp: 31/17Kb lim: 4096 exec/s: 0 rss: 43Mb L: 270/2525 MS: 4 InsertByte
+...truncated...
+-InsertByte-
+#516257	REDUCE cov: 215 ft: 728 corp: 169/117Kb lim: 4096 exec/s: 17208 rss: 45Mb L: 864/4096 MS: 3 ChangeBit-ShuffleBytes-EraseBytes-
+#517247	REDUCE cov: 215 ft: 728 corp: 169/117Kb lim: 4096 exec/s: 17241 rss: 45Mb L: 167/4096 MS: 5 CrossOver-PersAutoDict-CMP-ShuffleBytes-EraseBytes- DE: &#34;\377\377\377\377\377\377\377\004&#34;-&#34;\000\001&#34;-
+#519270	REDUCE cov: 215 ft: 728 corp: 169/117Kb lim: 4096 exec/s: 17309 rss: 45Mb L: 406/4096 MS: 3 CopyPart-ChangeByte-EraseBytes-
+#519493	REDUCE cov: 215 ft: 728 corp: 169/117Kb lim: 4096 exec/s: 17316 rss: 45Mb L: 896/4096 MS: 3 ChangeBit-ChangeBit-EraseBytes-
+#520487	REDUCE cov: 215 ft: 728 corp: 169/117Kb lim: 4096 exec/s: 17349 rss: 45Mb L: 127/4096 MS: 4 InsertByte-ChangeByte-ChangeByte-EraseBytes-
+#521268	REDUCE cov: 215 ft: 728 corp: 169/117Kb lim: 4096 exec/s: 17375 rss: 45Mb L: 797/4096 MS: 1 EraseBytes-
+#522206	REDUCE cov: 215 ft: 728 corp: 169/117Kb lim: 4096 exec/s: 17406 rss: 45Mb L: 184/4096 MS: 3 PersAutoDict-PersAutoDict-EraseBytes- DE: &#34;V\004\000\000\000\000\000\000&#34;-&#34;\377\377\377\377\377\377\377\002&#34;-
+#522652	REDUCE cov: 215 ft: 728 corp: 169/117Kb lim: 4096 exec/s: 17421 rss: 45Mb L: 270/4096 MS: 1 EraseBytes-
+#522774	REDUCE cov: 215 ft: 728 corp: 169/117Kb lim: 4096 exec/s: 17425 rss: 45Mb L: 3109/4096 MS: 2 CMP-CrossOver- DE: &#34;\001\000\000\000\000\000\000\020&#34;-
+#524288	pulse  cov: 215 ft: 728 corp: 169/117Kb lim: 4096 exec/s: 17476 rss: 45Mb
+#524820	REDUCE cov: 215 ft: 728 corp: 169/117Kb lim: 4096 exec/s: 17494 rss: 45Mb L: 1989/4096 MS: 1 EraseBytes-
+#525777	REDUCE cov: 215 ft: 728 corp: 169/117Kb lim: 4096 exec/s: 17525 rss: 45Mb L: 870/4096 MS: 2 ChangeBit-EraseBytes-
+#525998	REDUCE cov: 215 ft: 728 corp: 169/117Kb lim: 4096 exec/s: 17533 rss: 45Mb L: 39/4096 MS: 1 EraseBytes-
+#526093	DONE   cov: 215 ft: 728 corp: 169/117Kb lim: 4096 exec/s: 16970 rss: 45Mb
+###### Recommended dictionary. ######
+&#34;OggS&#34; # Uses: 501
+&#34;\001\&#34;&#34; # Uses: 512
+&#34;\000\000\000\000\000\000\000\000&#34; # Uses: 472
+&#34;\000\000\000\000\000\000\000\250&#34; # Uses: 488
+&#34;\000\000\000\343&#34; # Uses: 424
+&#34;\016\016\016\016&#34; # Uses: 474
+&#34;\000\000\024\000&#34; # Uses: 417
+&#34;\026\002\001\000\000\000\000\000&#34; # Uses: 488
+&#34;\377\377\377\377\377\000\004\273&#34; # Uses: 412
+&#34;\362\254\3400&#34; # Uses: 435
+&#34;\335\377S\210&#34; # Uses: 458
+&#34;gO&#34; # Uses: 437
+&#34;\265\205hs&#34; # Uses: 428
+&#34;\253J\361W&#34; # Uses: 432
+&#34;\3775&#34; # Uses: 444
+&#34;\025\002\000\000&#34; # Uses: 458
+&#34;\010\000\000\000&#34; # Uses: 426
+&#34;\350\034XK&#34; # Uses: 442
+&#34;/l\006\352&#34; # Uses: 395
+&#34;\001Z&#34; # Uses: 395
+&#34;\000\000\000\000\000\000\000W&#34; # Uses: 411
+&#34;\001\000\000\000\000\000\001\221&#34; # Uses: 378
+&#34;\001}&#34; # Uses: 419
+&#34;\002\015&#34; # Uses: 419
+&#34;\000\000&#34; # Uses: 415
+&#34;\001\336&#34; # Uses: 443
+&#34;\377\377\001\255&#34; # Uses: 446
+&#34;5\0147y&#34; # Uses: 415
+&#34;\203L:\344&#34; # Uses: 367
+&#34;\377\377\000\000\000\000\000\000&#34; # Uses: 412
+&#34;\344\306\005\342&#34; # Uses: 389
+&#34;\017\335*\322&#34; # Uses: 384
+&#34;\265\265\265\016&#34; # Uses: 376
+&#34;\001\000\000\000\000\000\023\320&#34; # Uses: 384
+&#34;\016\004\016\016&#34; # Uses: 379
+&#34;5\002\000\000\000\000\000\000&#34; # Uses: 411
+&#34;\344\331\007\217&#34; # Uses: 355
+&#34;\000\000\000\000\000\000\004\000&#34; # Uses: 376
+&#34;\007\000\000\000&#34; # Uses: 373
+&#34;\000\000\000\000\000\000\000\017&#34; # Uses: 368
+&#34;\000\214&#34; # Uses: 396
+&#34;4\272X@&#34; # Uses: 334
+&#34;\361\377\377\377\377\377\377\377&#34; # Uses: 330
+&#34;W\377\377\377\377\377\377\377&#34; # Uses: 382
+&#34;\312\322Is&#34; # Uses: 373
+&#34;\352\000&#34; # Uses: 353
+&#34;\001\000\000\000\000\000\004\000&#34; # Uses: 388
+&#34;\323\002&#34; # Uses: 383
+&#34;\000\000\000\000\000\000\001\375&#34; # Uses: 366
+&#34;u\002&#34; # Uses: 308
+&#34;vorbis&#34; # Uses: 346
+&#34;\001\000\000\000\000\000\000\000&#34; # Uses: 346
+&#34;\000\365&#34; # Uses: 325
+&#34;L:\344\000&#34; # Uses: 315
+&#34;\274.&amp;\334&#34; # Uses: 330
+&#34;\000\000\000\033&#34; # Uses: 350
+&#34;P\003&#34; # Uses: 367
+&#34;\000\000\000\000\000\000\000\024&#34; # Uses: 356
+&#34;\001\000&#34; # Uses: 340
+&#34;\034\000&#34; # Uses: 347
+&#34;\001P&#34; # Uses: 390
+&#34;\001\026&#34; # Uses: 322
+&#34;\001\000\000\000\000\000\001_&#34; # Uses: 312
+&#34;Z\275V\376&#34; # Uses: 348
+&#34;\377\377\002\211&#34; # Uses: 347
+&#34;\314\000\001\000\000\000\000\000&#34; # Uses: 334
+&#34;\351\377\377\377\377\377\377\377&#34; # Uses: 340
+&#34;\377\377\377\377\377\377\377\002&#34; # Uses: 320
+&#34;\201ao\017&#34; # Uses: 334
+&#34;;m&lt;\221&#34; # Uses: 308
+&#34;\256\000\000\000\000\000\000\000&#34; # Uses: 338
+&#34;%\000\001\000\000\000\000\000&#34; # Uses: 296
+&#34;\032\000&#34; # Uses: 342
+&#34;\377\377\377\377\377\377\377\034&#34; # Uses: 312
+&#34;T\002&#34; # Uses: 314
+&#34;\000\000\000\000\000\000\377\377&#34; # Uses: 345
+&#34;K\367\031\010&#34; # Uses: 309
+&#34;\000\000\000\000&#34; # Uses: 323
+&#34;\377\377\377\377\377\377\023\000&#34; # Uses: 318
+&#34;\002\000\000\000&#34; # Uses: 341
+&#34;\\\007\001\000\000\000\000\000&#34; # Uses: 281
+&#34;\000\030&#34; # Uses: 322
+&#34;\001\000\000\000\000\000\000h&#34; # Uses: 321
+&#34;\270\222\314\312&#34; # Uses: 281
+&#34;\377\377\365\377&#34; # Uses: 279
+&#34;\377\377\377\377\377\377\007e&#34; # Uses: 323
+&#34;Og\001\000&#34; # Uses: 279
+&#34;\003\000\000\000\000\000\000\000&#34; # Uses: 291
+&#34;\030\006\001\000\000\000\000\000&#34; # Uses: 280
+&#34;\000\000\000\000\000\000\000\376&#34; # Uses: 281
+&#34;\010\000\000\000\000\000\000\000&#34; # Uses: 301
+&#34;\216\000\000\000\000\000\000\000&#34; # Uses: 247
+&#34;6\377\377\377\377\377\377\377&#34; # Uses: 288
+&#34;\000\000\000\006&#34; # Uses: 298
+&#34;\000\000\000\000\000\000\000\365&#34; # Uses: 272
+&#34;\001\011&#34; # Uses: 305
+&#34;\213\223\364\246&#34; # Uses: 266
+&#34;wo{\007&#34; # Uses: 258
+&#34;\016\016\004\016&#34; # Uses: 273
+&#34;\000\000\000\007&#34; # Uses: 245
+&#34;I\002\000\000&#34; # Uses: 214
+&#34;\377\377\377\377\377\377\000\012&#34; # Uses: 269
+&#34;\001\000\000\000\000\000\000E&#34; # Uses: 243
+&#34;n\002\000\000\000\000\000\000&#34; # Uses: 266
+&#34;\035\027?\322&#34; # Uses: 278
+&#34;OcS\016&#34; # Uses: 242
+&#34;7\006\000\000\000\000\000\000&#34; # Uses: 255
+&#34;\001\000\000\000&#34; # Uses: 266
+&#34;OgwS&#34; # Uses: 251
+&#34;\254\000\000\000&#34; # Uses: 224
+&#34;\377)&#34; # Uses: 212
+&#34;|\377\377\377&#34; # Uses: 230
+&#34;=\000\001\000\000\000\000\000&#34; # Uses: 218
+&#34;\006\000\000\000\000\000\000\000&#34; # Uses: 237
+&#34;\222\000\001\000\000\000\000\000&#34; # Uses: 218
+&#34;\001\033&#34; # Uses: 219
+&#34;\034\000\000\000&#34; # Uses: 197
+&#34;\021\230j\267&#34; # Uses: 186
+&#34;*\377\377O\377\377&#34; # Uses: 182
+&#34;.\002&#34; # Uses: 202
+&#34;r\000\022\247&#34; # Uses: 178
+&#34;\377\377\377\377\377\377\005\345&#34; # Uses: 160
+&#34;\377\377\377|&#34; # Uses: 208
+&#34;O\000\000\000&#34; # Uses: 164
+&#34;\037\244\030\271&#34; # Uses: 203
+&#34;\036\000\001\000\000\000\000\000&#34; # Uses: 181
+&#34;\377\377\000\260&#34; # Uses: 191
+&#34;\323\002\000\000&#34; # Uses: 162
+&#34;\000|&#34; # Uses: 129
+&#34;\001\000\000)&#34; # Uses: 164
+&#34;OO\377\000&#34; # Uses: 137
+&#34;\001\331&#34; # Uses: 151
+&#34;\210\005\005\005&#34; # Uses: 155
+&#34;\376\377\377\377\377\377\377\377&#34; # Uses: 155
+&#34;\000\000\001\217&#34; # Uses: 145
+&#34;ggS\377&#34; # Uses: 143
+&#34;\255\005\005\001*\377&#34; # Uses: 129
+&#34;\234\207\276^&#34; # Uses: 129
+&#34;\341\002&#34; # Uses: 150
+&#34;Og\000\000&#34; # Uses: 137
+&#34;\377\377\377\377\377\377\377\004&#34; # Uses: 139
+&#34;\001\000\000\000\000\000\007\322&#34; # Uses: 132
+&#34;\377\377\377\377\377\377\377T&#34; # Uses: 136
+&#34;\377\377\377\004&#34; # Uses: 151
+&#34;\001\000\000\003&#34; # Uses: 128
+&#34;\253=\000\000\000\000\000\000&#34; # Uses: 146
+&#34;\000\342&#34; # Uses: 117
+&#34;\000\000\000\000\000\000\000\001&#34; # Uses: 114
+&#34;T\274\312y&#34; # Uses: 113
+&#34;\377\377\377\377\377\377\377\030&#34; # Uses: 103
+&#34;V\004\000\000\000\000\000\000&#34; # Uses: 113
+&#34;R\377\377\377\377\377\377\377&#34; # Uses: 115
+&#34;5\261\314\375&#34; # Uses: 120
+&#34;\335&lt;}\207&#34; # Uses: 101
+&#34;\340|\367\374&#34; # Uses: 117
+&#34;\247\270sv&#34; # Uses: 112
+&#34;\000\000\003&amp;&#34; # Uses: 86
+&#34;\372\231\221\330&#34; # Uses: 75
+&#34;\377\377\377\377\377\377\377\377&#34; # Uses: 46
+&#34;R,:~&#34; # Uses: 66
+&#34;\377\377\377\377\377\377\377\374&#34; # Uses: 38
+&#34;\000\000\000\000\000\000\000\367&#34; # Uses: 41
+&#34;\377\377\377\377\377\377\000\011&#34; # Uses: 42
+&#34;{\377\377\377&#34; # Uses: 38
+&#34;#\213\300\011&#34; # Uses: 29
+&#34;\004\000\000\000\000\000\000\000&#34; # Uses: 21
+&#34;Ogg\255&#34; # Uses: 24
+&#34;\240\0214\257&#34; # Uses: 21
+&#34;$\220e\311&#34; # Uses: 22
+&#34;B\004\000\000\000\000\000\000&#34; # Uses: 16
+&#34;\247\000\001\000\000\000\000\000&#34; # Uses: 20
+&#34;\005\005\005\005\000\000\000\000&#34; # Uses: 3
+&#34;&#39;\377\032j&#34; # Uses: 7
+&#34;l&gt;\312\265&#34; # Uses: 5
+&#34;\000\001&#34; # Uses: 0
+&#34;\001\000\000\000\000\000\000\020&#34; # Uses: 4
+###### End of recommended dictionary. ######
+Done 526093 runs in 31 second(s)
+stat::number_of_executed_units: 526093
+stat::average_exec_per_sec:     16970
+stat::new_units_added:          1778
+stat::slowest_unit_time_sec:    0
+stat::peak_rss_mb:              45
+
+</pre>
+
+
+</body>

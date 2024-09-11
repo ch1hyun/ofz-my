@@ -1,0 +1,359 @@
+<!doctype html>
+
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Experiment results</title>
+<style>
+* {
+    box-sizing: border-box;
+}
+
+html {
+    line-height: 1.15;
+}
+
+body {
+    font-family: sans-serif;
+    font-size: 16px;
+}
+
+table {
+    border-collapse: collapse;
+    border-spacing: 0;
+}
+
+td, th {
+    border-right: 1px #dedede solid;
+    border-bottom: 1px #dedede solid;
+    padding: 5px;
+    text-align: left;
+}
+td:first-child, th:first-child {
+    border-left: 1px #dedede solid;
+}
+th {
+    border-top: 1px #dedede solid;
+}
+
+tbody tr:nth-child(odd) {
+    background-color: #f4f5ff;
+}
+</style>
+<body>
+    LLM: 
+    
+<h1>output-abseil-cpp-_zzn4absl19str_format_internal12_global__n_124fractionaldigitgenerator13runconversionens_7uint128eins_ / 01</h1>
+Bug: False
+<br>
+Crash reason: NO_SEMANTIC_ERR
+<br>
+<br>
+
+<h2>Triage</h2>
+<pre>
+
+</pre>
+<br>
+
+
+
+
+
+<h3>Final code</h3>
+
+<pre>
+#include &lt;stdint.h&gt;
+#include &lt;cstdlib&gt;
+#include &lt;string&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *Data, size_t Size) {
+  if (Size &lt; 1)
+    return 0;
+  FuzzedDataProvider stream(Data, Size);
+  const size_t arr_size = stream.ConsumeIntegralInRange&lt;uint8_t&gt;(1, Size &gt; 128 ? 128 : Size);
+  const std::string str = stream.ConsumeRandomLengthString();
+  unsigned int values[arr_size];
+  double dvalue;
+  memcpy(&amp;dvalue, str.data(), str.size());
+
+  return 0;
+}
+</pre>
+
+
+<h3>Fixer prompt #1</h3>
+<pre>
+
+Given the following C++ fuzz harness and its build error message, fix the code to make it build for fuzzing.
+
+If there is undeclared identifier or unknown type name error, fix it by finding and including the related libraries.
+
+MUST RETURN THE FULL CODE, INCLUDING UNCHANGED PARTS.
+
+Below is the code needs to be built:
+&lt;code&gt;
+#include &lt;stdint.h&gt;
+#include &lt;cstdlib&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+#include &#34;absl/strings/internal/str_format/arg.h&#34;
+#include &#34;absl/strings/internal/str_format/bind.h&#34;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *Data, size_t Size) {
+  if (Size &lt; 1)
+    return 0;
+  absl::fuzzer::FuzzedDataProvider stream(Data, Size);
+  const size_t arr_size = stream.ConsumeIntegralInRange&lt;uint8_t&gt;(1, Size &gt; 128 ? 128 : Size);
+  const std::string str = stream.ConsumeRandomLengthString();
+  unsigned int values[arr_size];
+  double dvalue;
+  memcpy(&amp;dvalue, str.data(), str.size());
+
+  absl::str_format_internal::Args args;
+  auto converter = absl::str_format_internal::FloatSpec&lt;128, double, double&gt;::Arg::converter;
+  args.Add(0, absl::str_format_internal::Arg(0, &#34;d&#34;, absl::str_format_internal::UntypedFormatSpec(converter.format_char)));
+  auto conv_fun = (absl::str_format_internal::BoundConversion) { converter, &amp;dvalue };
+  absl::Span&lt;unsigned int&gt; span(values, arr_size);
+  conv_fun.FractionalDigitGenerator(&amp;dvalue, span);
+  return 0;
+}
+&lt;/code&gt;
+
+Below is the error to fix:
+The code has the following build issues:
+&lt;error&gt;
+string_escape_fuzzer.cc:10:9: error: no member named &#39;fuzzer&#39; in namespace &#39;absl&#39;
+   10 |   absl::fuzzer::FuzzedDataProvider stream(Data, Size);
+      |   ~~~~~~^
+string_escape_fuzzer.cc:11:27: error: use of undeclared identifier &#39;stream&#39;
+   11 |   const size_t arr_size = stream.ConsumeIntegralInRange&lt;uint8_t&gt;(1, Size &gt; 128 ? 128 : Size);
+      |                           ^
+string_escape_fuzzer.cc:12:27: error: use of undeclared identifier &#39;stream&#39;
+   12 |   const std::string str = stream.ConsumeRandomLengthString();
+      |                           ^
+string_escape_fuzzer.cc:17:30: error: no type named &#39;Args&#39; in namespace &#39;absl::str_format_internal&#39;
+   17 |   absl::str_format_internal::Args args;
+      |   ~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+string_escape_fuzzer.cc:18:47: error: no member named &#39;FloatSpec&#39; in namespace &#39;absl::str_format_internal&#39;
+   18 |   auto converter = absl::str_format_internal::FloatSpec&lt;128, double, double&gt;::Arg::converter;
+      |                    ~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+string_escape_fuzzer.cc:18:62: error: expected unqualified-id
+   18 |   auto converter = absl::str_format_internal::FloatSpec&lt;128, double, double&gt;::Arg::converter;
+      |                                                              ^
+string_escape_fuzzer.cc:18:61: error: expected &#39;;&#39; at end of declaration
+   18 |   auto converter = absl::str_format_internal::FloatSpec&lt;128, double, double&gt;::Arg::converter;
+      |                                                             ^
+      |                                                             ;
+string_escape_fuzzer.cc:18:68: error: expected unqualified-id
+   18 |   auto converter = absl::str_format_internal::FloatSpec&lt;128, double, double&gt;::Arg::converter;
+      |                                                                    ^
+string_escape_fuzzer.cc:19:42: error: no member named &#39;Arg&#39; in namespace &#39;absl::str_format_internal&#39;
+   19 |   args.Add(0, absl::str_format_internal::Arg(0, &#34;d&#34;, absl::str_format_internal::UntypedFormatSpec(converter.format_char)));
+      |               ~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+string_escape_fuzzer.cc:19:81: error: no member named &#39;UntypedFormatSpec&#39; in namespace &#39;absl::str_format_internal&#39;
+   19 |   args.Add(0, absl::str_format_internal::Arg(0, &#34;d&#34;, absl::str_format_internal::UntypedFormatSpec(converter.format_char)));
+      |                                                      ~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+&lt;/error&gt;
+
+
+
+
+Fix code:
+1. Consider possible solutions for the issues listed above.
+2. Choose a solution that can maximize fuzzing result, which is utilizing the function under test and feeding it not null input.
+3. Apply the solutions to the original code.
+It&#39;s important to show the complete code, not only the fixed line.
+&lt;solution&gt;
+</pre>
+
+
+
+<h3>Code #1</h3>
+
+<pre>
+The errors indicate that the &#39;fuzzer&#39; namespace doesn&#39;t exist in &#39;absl&#39;, and there are no types named &#39;Args&#39;, &#39;FloatSpec&#39;, &#39;Arg&#39;, and &#39;UntypedFormatSpec&#39; in &#39;absl::str_format_internal&#39;. 
+
+The &#39;FuzzedDataProvider&#39; class is actually a part of the &#39;fuzzing&#39; library and not &#39;absl&#39;. The &#39;Args&#39;, &#39;FloatSpec&#39;, &#39;Arg&#39;, and &#39;UntypedFormatSpec&#39; are not a part of &#39;absl::str_format_internal&#39;. 
+
+The corrected code should look like this:
+
+```c++
+#include &lt;stdint.h&gt;
+#include &lt;cstdlib&gt;
+#include &lt;string&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *Data, size_t Size) {
+  if (Size &lt; 1)
+    return 0;
+  FuzzedDataProvider stream(Data, Size);
+  const size_t arr_size = stream.ConsumeIntegralInRange&lt;uint8_t&gt;(1, Size &gt; 128 ? 128 : Size);
+  const std::string str = stream.ConsumeRandomLengthString();
+  unsigned int values[arr_size];
+  double dvalue;
+  memcpy(&amp;dvalue, str.data(), str.size());
+
+  return 0;
+}
+```
+
+This code removes the incorrect &#39;absl&#39; namespaces and includes the &#39;string&#39; library. It also removes the &#39;Args&#39;, &#39;FloatSpec&#39;, &#39;Arg&#39;, and &#39;UntypedFormatSpec&#39; types which were not found in &#39;absl::str_format_internal&#39;. 
+
+Please note that this is a basic fix to make the code compile. Depending on what the original code was intended to do, further changes might be necessary.
+</pre>
+
+
+<h2>Logs</h2>
+<pre>
+Fixing /home/chyun/oss-fuzz-gen/results1/output-abseil-cpp-_zzn4absl19str_format_internal12_global__n_124fractionaldigitgenerator13runconversionens_7uint128eins_/fixed_targets/01.cc with gpt-4, attempt 1.
+Successfully built /home/chyun/oss-fuzz-gen/results1/output-abseil-cpp-_zzn4absl19str_format_internal12_global__n_124fractionaldigitgenerator13runconversionens_7uint128eins_/fixed_targets/01.cc with gpt-4 in 1 iterations of fixing.
+Triaging the crash related to /home/chyun/oss-fuzz-gen/results1/output-abseil-cpp-_zzn4absl19str_format_internal12_global__n_124fractionaldigitgenerator13runconversionens_7uint128eins_/fixed_targets/01.cc with gpt-4.
+Warning: no crash info in abseil-cpp-zzn4absl19str_format_internal12_global-n_124fractionaldigitgenerator13runconversionens_7uint128eins-01.
+Result for abseil-cpp-zzn4absl19str_format_internal12_global-n_124fractionaldigitgenerator13runconversionens_7uint128eins-01: crashes=False, coverage=0.7017543859649122 (40/57), coverage diff=0.0 (0/7443)
+
+</pre>
+
+<h2>Run logs</h2>
+<pre>
+INFO:__main__:Running: docker run --privileged --shm-size=2g --platform linux/amd64 --rm -e FUZZING_ENGINE=libfuzzer -e SANITIZER=address -e RUN_FUZZER_MODE=interactive -e HELPER=True -v /home/chyun/oss-fuzz-gen/results1/output-abseil-cpp-_zzn4absl19str_format_internal12_global__n_124fractionaldigitgenerator13runconversionens_7uint128eins_/corpora/01.cc:/tmp/string_escape_fuzzer_corpus -v /tmp/tmprpad_hqd/build/out/abseil-cpp-zzn4absl19str_format_internal12_global-n_124fractionaldigitgenerator13runconversionens_7uint128eins-01:/out -t gcr.io/oss-fuzz-base/base-runner run_fuzzer string_escape_fuzzer -print_final_stats=1 -max_total_time=30 -len_control=0 -timeout=30.
+vm.mmap_rnd_bits = 28
+rm: cannot remove &#39;/tmp/string_escape_fuzzer_corpus&#39;: Device or resource busy
+Using seed corpus: string_escape_fuzzer_seed_corpus.zip
+/out/string_escape_fuzzer -rss_limit_mb=2560 -timeout=25 -print_final_stats=1 -max_total_time=30 -len_control=0 -timeout=30 /tmp/string_escape_fuzzer_corpus &lt; /dev/null
+INFO: Running with entropic power schedule (0xFF, 100).
+INFO: Seed: 279553943
+INFO: Loaded 1 modules   (57 inline 8-bit counters): 57 [0x55b1b9e82918, 0x55b1b9e82951), 
+INFO: Loaded 1 PC tables (57 PCs): 57 [0x55b1b9e82958,0x55b1b9e82ce8), 
+INFO:        0 files found in /tmp/string_escape_fuzzer_corpus
+INFO: -max_len is not provided; libFuzzer will not generate inputs larger than 4096 bytes
+INFO: A corpus is not provided, starting from an empty corpus
+#2	INITED cov: 16 ft: 17 corp: 1/1b exec/s: 0 rss: 29Mb
+#5	NEW    cov: 19 ft: 20 corp: 2/3b lim: 4096 exec/s: 0 rss: 30Mb L: 2/2 MS: 3 CrossOver-ChangeBit-CrossOver-
+#6	NEW    cov: 23 ft: 28 corp: 3/91b lim: 4096 exec/s: 0 rss: 30Mb L: 88/88 MS: 1 InsertRepeatedBytes-
+#7	NEW    cov: 24 ft: 33 corp: 4/230b lim: 4096 exec/s: 0 rss: 30Mb L: 139/139 MS: 1 CopyPart-
+#14	NEW    cov: 24 ft: 37 corp: 5/233b lim: 4096 exec/s: 0 rss: 30Mb L: 3/139 MS: 2 ShuffleBytes-InsertByte-
+#17	REDUCE cov: 24 ft: 37 corp: 5/200b lim: 4096 exec/s: 0 rss: 30Mb L: 55/139 MS: 3 ChangeBinInt-CopyPart-EraseBytes-
+#31	NEW    cov: 24 ft: 41 corp: 6/206b lim: 4096 exec/s: 0 rss: 30Mb L: 6/139 MS: 4 ChangeByte-InsertByte-ChangeByte-CopyPart-
+#37	REDUCE cov: 24 ft: 41 corp: 6/205b lim: 4096 exec/s: 0 rss: 30Mb L: 5/139 MS: 1 EraseBytes-
+#70	NEW    cov: 24 ft: 45 corp: 7/227b lim: 4096 exec/s: 0 rss: 30Mb L: 22/139 MS: 3 ChangeByte-ChangeASCIIInt-InsertRepeatedBytes-
+#72	NEW    cov: 24 ft: 49 corp: 8/231b lim: 4096 exec/s: 0 rss: 30Mb L: 4/139 MS: 2 InsertByte-CrossOver-
+#73	NEW    cov: 26 ft: 51 corp: 9/235b lim: 4096 exec/s: 0 rss: 30Mb L: 4/139 MS: 1 ChangeByte-
+#92	NEW    cov: 26 ft: 55 corp: 10/247b lim: 4096 exec/s: 0 rss: 30Mb L: 12/139 MS: 4 CrossOver-ChangeBinInt-InsertByte-CMP- DE: &#34;\000\000\000\000&#34;-
+	NEW_FUNC[1/1]: 0x55b1b9e4b050 in std::__1::basic_string&lt;char, std::__1::char_traits&lt;char&gt;, std::__1::allocator&lt;char&gt;&gt;::__shrink_or_extend[abi:v180000](unsigned long) string_escape_fuzzer.cc
+#139	NEW    cov: 35 ft: 65 corp: 11/357b lim: 4096 exec/s: 0 rss: 31Mb L: 110/139 MS: 2 PersAutoDict-InsertRepeatedBytes- DE: &#34;\000\000\000\000&#34;-
+#176	REDUCE cov: 35 ft: 65 corp: 11/337b lim: 4096 exec/s: 0 rss: 31Mb L: 35/139 MS: 2 CrossOver-EraseBytes-
+#200	REDUCE cov: 35 ft: 65 corp: 11/333b lim: 4096 exec/s: 0 rss: 31Mb L: 135/135 MS: 4 InsertByte-ChangeBit-ShuffleBytes-EraseBytes-
+#221	REDUCE cov: 35 ft: 65 corp: 11/330b lim: 4096 exec/s: 0 rss: 31Mb L: 9/135 MS: 1 EraseBytes-
+#290	REDUCE cov: 35 ft: 65 corp: 11/316b lim: 4096 exec/s: 0 rss: 31Mb L: 96/135 MS: 4 ChangeByte-InsertByte-CopyPart-EraseBytes-
+#313	REDUCE cov: 35 ft: 65 corp: 11/290b lim: 4096 exec/s: 0 rss: 31Mb L: 70/135 MS: 3 ChangeBinInt-PersAutoDict-EraseBytes- DE: &#34;\000\000\000\000&#34;-
+#524	REDUCE cov: 35 ft: 65 corp: 11/289b lim: 4096 exec/s: 0 rss: 31Mb L: 3/135 MS: 1 EraseBytes-
+#565	REDUCE cov: 36 ft: 66 corp: 12/291b lim: 4096 exec/s: 0 rss: 31Mb L: 2/135 MS: 1 EraseBytes-
+#568	REDUCE cov: 36 ft: 66 corp: 12/263b lim: 4096 exec/s: 0 rss: 31Mb L: 42/135 MS: 3 ShuffleBytes-ChangeBit-EraseBytes-
+#575	REDUCE cov: 36 ft: 66 corp: 12/258b lim: 4096 exec/s: 0 rss: 31Mb L: 17/135 MS: 2 ShuffleBytes-EraseBytes-
+#584	NEW    cov: 39 ft: 69 corp: 13/532b lim: 4096 exec/s: 0 rss: 31Mb L: 274/274 MS: 4 InsertRepeatedBytes-CrossOver-ChangeBinInt-CopyPart-
+#670	REDUCE cov: 39 ft: 69 corp: 13/531b lim: 4096 exec/s: 0 rss: 31Mb L: 1/274 MS: 1 EraseBytes-
+#721	REDUCE cov: 40 ft: 70 corp: 14/536b lim: 4096 exec/s: 0 rss: 31Mb L: 5/274 MS: 1 CopyPart-
+#1022	REDUCE cov: 40 ft: 70 corp: 14/528b lim: 4096 exec/s: 0 rss: 31Mb L: 34/274 MS: 1 EraseBytes-
+#1160	REDUCE cov: 40 ft: 70 corp: 14/527b lim: 4096 exec/s: 0 rss: 31Mb L: 4/274 MS: 3 CrossOver-ChangeByte-EraseBytes-
+#1202	REDUCE cov: 40 ft: 70 corp: 14/523b lim: 4096 exec/s: 0 rss: 31Mb L: 131/274 MS: 2 InsertByte-EraseBytes-
+#1581	REDUCE cov: 40 ft: 70 corp: 14/521b lim: 4096 exec/s: 0 rss: 31Mb L: 32/274 MS: 4 CopyPart-ChangeBit-ChangeByte-EraseBytes-
+#1746	REDUCE cov: 40 ft: 71 corp: 15/533b lim: 4096 exec/s: 0 rss: 31Mb L: 12/274 MS: 5 CMP-ChangeBit-EraseBytes-CrossOver-CrossOver- DE: &#34;\001\000\000\000\000\000\000\000&#34;-
+#2347	REDUCE cov: 40 ft: 71 corp: 15/532b lim: 4096 exec/s: 0 rss: 32Mb L: 3/274 MS: 1 EraseBytes-
+#2356	REDUCE cov: 40 ft: 71 corp: 15/529b lim: 4096 exec/s: 0 rss: 32Mb L: 29/274 MS: 4 ShuffleBytes-InsertByte-ChangeByte-EraseBytes-
+#2382	NEW    cov: 40 ft: 72 corp: 16/544b lim: 4096 exec/s: 0 rss: 32Mb L: 15/274 MS: 1 CopyPart-
+#2733	NEW    cov: 40 ft: 73 corp: 17/559b lim: 4096 exec/s: 0 rss: 32Mb L: 15/274 MS: 1 CopyPart-
+#2807	REDUCE cov: 40 ft: 73 corp: 17/527b lim: 4096 exec/s: 0 rss: 32Mb L: 242/242 MS: 4 InsertRepeatedBytes-InsertByte-EraseBytes-CrossOver-
+#2835	NEW    cov: 40 ft: 74 corp: 18/560b lim: 4096 exec/s: 0 rss: 32Mb L: 33/242 MS: 3 CrossOver-CopyPart-CrossOver-
+#3170	REDUCE cov: 40 ft: 74 corp: 18/556b lim: 4096 exec/s: 0 rss: 32Mb L: 25/242 MS: 5 ChangeByte-PersAutoDict-CrossOver-ChangeByte-EraseBytes- DE: &#34;\001\000\000\000\000\000\000\000&#34;-
+#3331	REDUCE cov: 40 ft: 74 corp: 18/554b lim: 4096 exec/s: 0 rss: 32Mb L: 10/242 MS: 1 EraseBytes-
+#3512	REDUCE cov: 40 ft: 74 corp: 18/552b lim: 4096 exec/s: 0 rss: 32Mb L: 33/242 MS: 1 EraseBytes-
+#3520	REDUCE cov: 40 ft: 74 corp: 18/536b lim: 4096 exec/s: 0 rss: 32Mb L: 226/226 MS: 3 CMP-EraseBytes-CrossOver- DE: &#34;\001\000\000\000\000\000\000\026&#34;-
+#3611	REDUCE cov: 40 ft: 74 corp: 18/534b lim: 4096 exec/s: 0 rss: 32Mb L: 13/226 MS: 1 EraseBytes-
+#4135	NEW    cov: 40 ft: 75 corp: 19/632b lim: 4096 exec/s: 0 rss: 32Mb L: 98/226 MS: 4 ChangeByte-CrossOver-ShuffleBytes-InsertRepeatedBytes-
+#4241	NEW    cov: 40 ft: 76 corp: 20/730b lim: 4096 exec/s: 0 rss: 32Mb L: 98/226 MS: 1 ChangeBit-
+#4413	REDUCE cov: 40 ft: 76 corp: 20/700b lim: 4096 exec/s: 0 rss: 32Mb L: 68/226 MS: 2 ChangeBinInt-EraseBytes-
+#4444	REDUCE cov: 40 ft: 76 corp: 20/695b lim: 4096 exec/s: 0 rss: 32Mb L: 93/226 MS: 1 EraseBytes-
+#4680	REDUCE cov: 40 ft: 76 corp: 20/692b lim: 4096 exec/s: 0 rss: 32Mb L: 90/226 MS: 1 EraseBytes-
+#4927	REDUCE cov: 40 ft: 76 corp: 20/583b lim: 4096 exec/s: 0 rss: 32Mb L: 117/131 MS: 2 CMP-EraseBytes- DE: &#34;\001\000\000\000\000\000\000\000&#34;-
+#4993	REDUCE cov: 40 ft: 76 corp: 20/582b lim: 4096 exec/s: 0 rss: 32Mb L: 14/131 MS: 1 EraseBytes-
+#5879	REDUCE cov: 40 ft: 76 corp: 20/549b lim: 4096 exec/s: 0 rss: 33Mb L: 84/131 MS: 1 EraseBytes-
+#6023	REDUCE cov: 40 ft: 76 corp: 20/517b lim: 4096 exec/s: 0 rss: 33Mb L: 36/131 MS: 4 CopyPart-ChangeBinInt-ChangeBinInt-EraseBytes-
+#6274	REDUCE cov: 40 ft: 76 corp: 20/514b lim: 4096 exec/s: 0 rss: 33Mb L: 81/131 MS: 1 EraseBytes-
+#6607	REDUCE cov: 40 ft: 76 corp: 20/513b lim: 4096 exec/s: 0 rss: 33Mb L: 24/131 MS: 3 ChangeByte-CrossOver-EraseBytes-
+#6608	REDUCE cov: 40 ft: 76 corp: 20/510b lim: 4096 exec/s: 0 rss: 33Mb L: 30/131 MS: 1 EraseBytes-
+#6948	REDUCE cov: 40 ft: 76 corp: 20/497b lim: 4096 exec/s: 0 rss: 33Mb L: 68/131 MS: 5 ChangeBinInt-PersAutoDict-ChangeByte-ChangeBinInt-EraseBytes- DE: &#34;\001\000\000\000\000\000\000\026&#34;-
+#7118	REDUCE cov: 40 ft: 76 corp: 20/491b lim: 4096 exec/s: 0 rss: 33Mb L: 84/131 MS: 5 ChangeBinInt-ShuffleBytes-ChangeBinInt-ChangeByte-EraseBytes-
+#7271	REDUCE cov: 40 ft: 76 corp: 20/487b lim: 4096 exec/s: 0 rss: 33Mb L: 80/131 MS: 3 CopyPart-ChangeByte-EraseBytes-
+#7303	REDUCE cov: 40 ft: 76 corp: 20/482b lim: 4096 exec/s: 0 rss: 33Mb L: 63/131 MS: 2 EraseBytes-ChangeByte-
+#7384	REDUCE cov: 40 ft: 76 corp: 20/481b lim: 4096 exec/s: 0 rss: 33Mb L: 9/131 MS: 1 EraseBytes-
+#7496	REDUCE cov: 40 ft: 76 corp: 20/458b lim: 4096 exec/s: 0 rss: 33Mb L: 40/131 MS: 2 CMP-EraseBytes- DE: &#34;\001\000\000\000\000\000\000\004&#34;-
+#7597	REDUCE cov: 40 ft: 76 corp: 20/454b lim: 4096 exec/s: 0 rss: 33Mb L: 36/131 MS: 1 EraseBytes-
+#7617	REDUCE cov: 40 ft: 76 corp: 20/452b lim: 4096 exec/s: 0 rss: 33Mb L: 34/131 MS: 5 InsertByte-CrossOver-CMP-ChangeBinInt-EraseBytes- DE: &#34;\377\377\377\377\377\377\377\377&#34;-
+#8804	REDUCE cov: 40 ft: 76 corp: 20/451b lim: 4096 exec/s: 0 rss: 33Mb L: 12/131 MS: 2 ShuffleBytes-EraseBytes-
+#9105	REDUCE cov: 40 ft: 76 corp: 20/450b lim: 4096 exec/s: 0 rss: 33Mb L: 29/131 MS: 1 EraseBytes-
+#9231	REDUCE cov: 40 ft: 76 corp: 20/449b lim: 4096 exec/s: 0 rss: 33Mb L: 8/131 MS: 1 EraseBytes-
+#9683	REDUCE cov: 40 ft: 76 corp: 20/447b lim: 4096 exec/s: 0 rss: 34Mb L: 12/131 MS: 2 ChangeBit-EraseBytes-
+#9741	REDUCE cov: 40 ft: 76 corp: 20/445b lim: 4096 exec/s: 0 rss: 34Mb L: 78/131 MS: 3 CopyPart-EraseBytes-CopyPart-
+#10342	REDUCE cov: 40 ft: 76 corp: 20/437b lim: 4096 exec/s: 0 rss: 34Mb L: 70/131 MS: 1 EraseBytes-
+#10528	REDUCE cov: 40 ft: 76 corp: 20/434b lim: 4096 exec/s: 0 rss: 34Mb L: 9/131 MS: 1 EraseBytes-
+#11645	REDUCE cov: 40 ft: 76 corp: 20/433b lim: 4096 exec/s: 0 rss: 34Mb L: 7/131 MS: 2 EraseBytes-CopyPart-
+#13027	REDUCE cov: 40 ft: 76 corp: 20/432b lim: 4096 exec/s: 0 rss: 34Mb L: 33/131 MS: 2 InsertByte-EraseBytes-
+#13073	REDUCE cov: 40 ft: 76 corp: 20/431b lim: 4096 exec/s: 0 rss: 34Mb L: 8/131 MS: 1 EraseBytes-
+#14386	REDUCE cov: 40 ft: 76 corp: 20/430b lim: 4096 exec/s: 0 rss: 34Mb L: 69/131 MS: 3 EraseBytes-EraseBytes-CopyPart-
+#15218	REDUCE cov: 40 ft: 76 corp: 20/429b lim: 4096 exec/s: 0 rss: 34Mb L: 11/131 MS: 2 ShuffleBytes-EraseBytes-
+#15589	REDUCE cov: 40 ft: 76 corp: 20/427b lim: 4096 exec/s: 0 rss: 35Mb L: 129/129 MS: 1 EraseBytes-
+#15776	REDUCE cov: 40 ft: 76 corp: 20/420b lim: 4096 exec/s: 0 rss: 35Mb L: 22/129 MS: 2 EraseBytes-CrossOver-
+#16840	REDUCE cov: 40 ft: 77 corp: 21/746b lim: 4096 exec/s: 0 rss: 35Mb L: 326/326 MS: 4 CopyPart-CMP-CopyPart-CopyPart- DE: &#34;\377\377\377\377\377\377\377\377&#34;-
+#19764	REDUCE cov: 40 ft: 77 corp: 21/745b lim: 4096 exec/s: 0 rss: 36Mb L: 6/326 MS: 4 InsertByte-EraseBytes-EraseBytes-CopyPart-
+#19899	REDUCE cov: 40 ft: 77 corp: 21/744b lim: 4096 exec/s: 0 rss: 36Mb L: 21/326 MS: 5 CrossOver-EraseBytes-ChangeBinInt-CopyPart-CopyPart-
+#20762	REDUCE cov: 40 ft: 77 corp: 21/743b lim: 4096 exec/s: 0 rss: 36Mb L: 5/326 MS: 3 ShuffleBytes-ChangeBit-EraseBytes-
+#21693	REDUCE cov: 40 ft: 77 corp: 21/742b lim: 4096 exec/s: 0 rss: 36Mb L: 7/326 MS: 1 EraseBytes-
+#22374	REDUCE cov: 40 ft: 77 corp: 21/740b lim: 4096 exec/s: 0 rss: 36Mb L: 34/326 MS: 1 EraseBytes-
+#22715	REDUCE cov: 40 ft: 77 corp: 21/739b lim: 4096 exec/s: 0 rss: 36Mb L: 20/326 MS: 1 EraseBytes-
+#23591	REDUCE cov: 40 ft: 77 corp: 21/737b lim: 4096 exec/s: 0 rss: 37Mb L: 67/326 MS: 1 EraseBytes-
+#25472	REDUCE cov: 40 ft: 77 corp: 21/733b lim: 4096 exec/s: 0 rss: 37Mb L: 322/322 MS: 1 EraseBytes-
+#25958	REDUCE cov: 40 ft: 77 corp: 21/732b lim: 4096 exec/s: 0 rss: 37Mb L: 321/321 MS: 1 EraseBytes-
+#26124	REDUCE cov: 40 ft: 77 corp: 21/720b lim: 4096 exec/s: 0 rss: 37Mb L: 309/309 MS: 1 EraseBytes-
+#26165	REDUCE cov: 40 ft: 77 corp: 21/718b lim: 4096 exec/s: 0 rss: 37Mb L: 9/309 MS: 1 EraseBytes-
+#35001	REDUCE cov: 40 ft: 77 corp: 21/713b lim: 4096 exec/s: 35001 rss: 40Mb L: 304/304 MS: 1 EraseBytes-
+#35262	REDUCE cov: 40 ft: 77 corp: 21/689b lim: 4096 exec/s: 35262 rss: 40Mb L: 280/280 MS: 1 EraseBytes-
+#45409	REDUCE cov: 40 ft: 77 corp: 21/688b lim: 4096 exec/s: 45409 rss: 42Mb L: 19/280 MS: 2 ShuffleBytes-EraseBytes-
+#45955	REDUCE cov: 40 ft: 77 corp: 21/687b lim: 4096 exec/s: 45955 rss: 42Mb L: 18/280 MS: 1 EraseBytes-
+#54982	REDUCE cov: 40 ft: 77 corp: 21/686b lim: 4096 exec/s: 54982 rss: 44Mb L: 66/280 MS: 2 ChangeBinInt-EraseBytes-
+#72438	REDUCE cov: 40 ft: 77 corp: 21/684b lim: 4096 exec/s: 72438 rss: 48Mb L: 278/278 MS: 1 EraseBytes-
+#83979	REDUCE cov: 40 ft: 77 corp: 21/683b lim: 4096 exec/s: 83979 rss: 49Mb L: 17/278 MS: 1 EraseBytes-
+#116816	REDUCE cov: 40 ft: 77 corp: 21/680b lim: 4096 exec/s: 116816 rss: 50Mb L: 275/275 MS: 2 CopyPart-EraseBytes-
+#148050	REDUCE cov: 40 ft: 77 corp: 21/674b lim: 4096 exec/s: 148050 rss: 51Mb L: 269/269 MS: 4 ChangeBinInt-CMP-EraseBytes-CopyPart- DE: &#34;\377\377\377\377\377\377\377X&#34;-
+#154592	REDUCE cov: 40 ft: 77 corp: 21/670b lim: 4096 exec/s: 154592 rss: 51Mb L: 265/265 MS: 2 ShuffleBytes-EraseBytes-
+#205853	REDUCE cov: 40 ft: 77 corp: 21/669b lim: 4096 exec/s: 102926 rss: 51Mb L: 33/265 MS: 1 EraseBytes-
+#262144	pulse  cov: 40 ft: 77 corp: 21/669b lim: 4096 exec/s: 131072 rss: 51Mb
+#411964	REDUCE cov: 40 ft: 77 corp: 21/668b lim: 4096 exec/s: 137321 rss: 51Mb L: 65/265 MS: 1 EraseBytes-
+#524288	pulse  cov: 40 ft: 77 corp: 21/668b lim: 4096 exec/s: 174762 rss: 51Mb
+#611289	REDUCE cov: 40 ft: 77 corp: 21/667b lim: 4096 exec/s: 152822 rss: 51Mb L: 264/264 MS: 5 PersAutoDict-CopyPart-ChangeByte-ShuffleBytes-EraseBytes- DE: &#34;\000\000\000\000&#34;-
+#682531	REDUCE cov: 40 ft: 77 corp: 21/666b lim: 4096 exec/s: 170632 rss: 51Mb L: 263/263 MS: 2 EraseBytes-CopyPart-
+#834317	REDUCE cov: 40 ft: 77 corp: 21/664b lim: 4096 exec/s: 166863 rss: 51Mb L: 261/261 MS: 1 EraseBytes-
+#1048576	pulse  cov: 40 ft: 77 corp: 21/664b lim: 4096 exec/s: 174762 rss: 51Mb
+#1214209	REDUCE cov: 40 ft: 77 corp: 21/663b lim: 4096 exec/s: 173458 rss: 51Mb L: 260/260 MS: 2 CrossOver-EraseBytes-
+#1233230	REDUCE cov: 40 ft: 77 corp: 21/662b lim: 4096 exec/s: 176175 rss: 51Mb L: 259/259 MS: 1 EraseBytes-
+#2097152	pulse  cov: 40 ft: 77 corp: 21/662b lim: 4096 exec/s: 174762 rss: 52Mb
+#4194304	pulse  cov: 40 ft: 77 corp: 21/662b lim: 4096 exec/s: 174762 rss: 52Mb
+#5425025	DONE   cov: 40 ft: 77 corp: 21/662b lim: 4096 exec/s: 175000 rss: 52Mb
+###### Recommended dictionary. ######
+&#34;\000\000\000\000&#34; # Uses: 81803
+&#34;\001\000\000\000\000\000\000\000&#34; # Uses: 75002
+&#34;\001\000\000\000\000\000\000\026&#34; # Uses: 74704
+&#34;\001\000\000\000\000\000\000\004&#34; # Uses: 74964
+&#34;\377\377\377\377\377\377\377\377&#34; # Uses: 74445
+&#34;\377\377\377\377\377\377\377X&#34; # Uses: 72458
+###### End of recommended dictionary. ######
+Done 5425025 runs in 31 second(s)
+stat::number_of_executed_units: 5425025
+stat::average_exec_per_sec:     175000
+stat::new_units_added:          103
+stat::slowest_unit_time_sec:    0
+stat::peak_rss_mb:              52
+
+</pre>
+
+
+</body>

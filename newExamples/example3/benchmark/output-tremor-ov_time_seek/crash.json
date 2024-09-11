@@ -1,0 +1,43 @@
+{
+    "samples": [
+
+    {
+        "benchmark": "output-tremor-ov_time_seek",
+        "sample": "01",
+        "status": "Done",
+        "compiles": "True",
+        "crashes": "False",
+        "crash_reason": "NO_SEMANTIC_ERR",
+        "bug": "True",
+        "coverage": "7.78",
+        "coverage_diff": "0.0",
+        "coverage_report": "#",
+        "stacktrace": "/stacktrace",
+        "target_binary": "/target_binary",
+        "reproducer": "/artifacts",
+        "run_log": "run.log",
+        "source_code": "#include \"ivorbisfile.h\"\\n#include <cstdint>\\n#include <fuzzer/FuzzedDataProvider.h>\\n\\nstruct vorbis_data {\\n  const uint8_t *current;\\n  const uint8_t *data;\\n  size_t size;\\n};\\n\\nsize_t read_func(void *ptr, size_t size1, size_t size2, void *datasource) {\\n  vorbis_data *vd = (vorbis_data *)(datasource);\\n  size_t len = size1 * size2;\\n  if (vd->current + len > vd->data + vd->size) {\\n    len = vd->data + vd->size - vd->current;\\n  }\\n  memcpy(ptr, vd->current, len);\\n  vd->current += len;\\n  return len;\\n}\\n\\nextern \"C\" int LLVMFuzzerTestOneInput(const uint8_t *Data, size_t Size) {\\n  ov_callbacks memory_callbacks = {\\n      read_func, NULL, NULL, NULL  // Exactly follows the second example from: \\n                                   // https://xiph.org/vorbis/doc/vorbisfile/callbacks.html.\\n  };\\n  vorbis_data data_st;\\n  data_st.size = Size;\\n  data_st.current = Data;\\n  data_st.data = Data;\\n  OggVorbis_File vf;\\n  int result = ov_open_callbacks(&data_st, &vf, NULL, 0, memory_callbacks);\\n  if (result < 0) {\\n    return 0;\\n  }\\n\\n  FuzzedDataProvider provider(Data, Size);\\n\\n  while (provider.remaining_bytes() > 0) {\\n    auto random_time = provider.ConsumeIntegral<ogg_int64_t>();\\n    ov_time_seek(&vf, random_time);  // Ignore the return code, it doesn't matter if seeking fails.\\n  }\\n\\n  ov_clear(&vf);\\n  return 0;\\n}",
+        "model": ""
+    },
+
+    {
+        "benchmark": "output-tremor-ov_time_seek",
+        "sample": "02",
+        "status": "Done",
+        "compiles": "True",
+        "crashes": "True",
+        "crash_reason": "NO_SEMANTIC_ERR",
+        "bug": "True",
+        "coverage": "0.35",
+        "coverage_diff": "0.0",
+        "coverage_report": "#",
+        "stacktrace": "/stacktrace",
+        "target_binary": "/target_binary",
+        "reproducer": "/artifacts",
+        "run_log": "run.log",
+        "source_code": "#include \"ivorbisfile.h\"\\n#include <cstddef>\\n#include <cstdint>\\n#include <fuzzer/FuzzedDataProvider.h>\\n#include <cstring>\\n#include <vector>\\n\\n#define INPUT_LIMIT 16384\\n\\nstruct vorbis_data {\\n  const uint8_t *current;\\n  const uint8_t *data;\\n  size_t size;\\n};\\n\\nsize_t read_func(void *ptr, size_t size1, size_t size2, void *datasource) {\\n  vorbis_data *vd = (vorbis_data *)(datasource);\\n  size_t len = size1 * size2;\\n  if (vd->current + len > vd->data + vd->size) {\\n    len = vd->data + vd->size - vd->current;\\n  }\\n  if (len > 0) {\\n    memcpy(ptr, vd->current, len);\\n    vd->current += len;\\n  }\\n  return len;\\n}\\n\\nextern \"C\" int LLVMFuzzerTestOneInput(const uint8_t *Data, size_t Size) {\\n  if (Size == 0) {\\n    return 0;\\n  }\\n  \\n  FuzzedDataProvider fdp(Data, Size);\\n  \\n  ov_callbacks memory_callbacks = {0};\\n  memory_callbacks.read_func = read_func;\\n  vorbis_data data_st;\\n\\n  data_st.size = fdp.ConsumeIntegralInRange<size_t>(0, INPUT_LIMIT);\\n  std::vector<uint8_t> data = fdp.ConsumeRemainingBytes<uint8_t>();\\n  if (data.empty()) {\\n    return 0;\\n  }\\n  data_st.current = data.data();\\n  data_st.data = data_st.current;\\n  \\n  OggVorbis_File vf;\\n  int result = ov_open_callbacks(&data_st, &vf, NULL, 0, memory_callbacks);\\n  \\n  if (result < 0) {\\n    return 0;\\n  }\\n\\n  ogg_int64_t seek_position = fdp.ConsumeIntegral<ogg_int64_t>();\\n  ov_time_seek(&vf, seek_position);\\n  \\n  ov_clear(&vf);\\n  \\n  return 0;\\n}",
+        "model": ""
+    }
+
+    ]
+}
