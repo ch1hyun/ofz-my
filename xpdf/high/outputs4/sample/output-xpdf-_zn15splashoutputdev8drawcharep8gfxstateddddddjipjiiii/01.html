@@ -1,0 +1,1060 @@
+<!doctype html>
+
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Experiment results</title>
+<style>
+* {
+    box-sizing: border-box;
+}
+
+html {
+    line-height: 1.15;
+}
+
+body {
+    font-family: sans-serif;
+    font-size: 16px;
+}
+
+table {
+    border-collapse: collapse;
+    border-spacing: 0;
+}
+
+td, th {
+    border-right: 1px #dedede solid;
+    border-bottom: 1px #dedede solid;
+    padding: 5px;
+    text-align: left;
+}
+td:first-child, th:first-child {
+    border-left: 1px #dedede solid;
+}
+th {
+    border-top: 1px #dedede solid;
+}
+
+tbody tr:nth-child(odd) {
+    background-color: #f4f5ff;
+}
+</style>
+<body>
+    LLM: 
+    
+<h1>output-xpdf-_zn15splashoutputdev8drawcharep8gfxstateddddddjipjiiii / 01</h1>
+Bug: False
+<br>
+Crash reason: FP_NEAR_INIT_CRASH
+<br>
+<br>
+
+<h2>Triage</h2>
+<pre>
+Crash is caused by bug in fuzz driver.
+
+The crash is caused by a use-after-free error. The heap memory for the PDFDoc object &#39;doc&#39; is freed by calling &#39;delete doc&#39; in the fuzz driver code. However, the &#39;doc&#39; object is still being accessed after it has been deleted, specifically when calling &#39;splashOut-&gt;startDoc(doc-&gt;getXRef());&#39;. This results in a heap-use-after-free error. To fix the issue, the &#39;delete doc&#39; statement should be moved to a location in the code after all accesses to &#39;doc&#39; have been made.
+</pre>
+<br>
+
+
+
+
+
+<h3>Final code</h3>
+
+<pre>
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+#include &lt;stddef.h&gt;
+#include &lt;stdint.h&gt;
+
+#include &#34;GfxState.h&#34;
+#include &#34;GlobalParams.h&#34;
+#include &#34;Object.h&#34;
+#include &#34;PDFDoc.h&#34;
+#include &#34;Splash.h&#34;
+#include &#34;SplashBitmap.h&#34;
+#include &#34;SplashOutputDev.h&#34;
+#include &#34;GString.h&#34;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  FuzzedDataProvider fdp(data, size);
+
+  double hdpi = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  double vdpi = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  int rotate = fdp.ConsumeIntegral&lt;int&gt;();
+  GBool useMediaBox = fdp.ConsumeBool();
+  GBool crop = fdp.ConsumeBool();
+  GBool printing = fdp.ConsumeBool();
+  std::vector&lt;char&gt; buf = fdp.ConsumeRemainingBytes&lt;char&gt;();
+
+  Object obj;
+  obj.initNull();
+  MemStream *str = new MemStream(buf.data(), 0, buf.size(), &amp;obj);
+
+  PDFDoc *doc = new PDFDoc(str, NULL, NULL, NULL);
+
+  if (doc-&gt;isOk()) {
+    PDFRectangle pageBox(0, 0, size, size);
+    GfxState *state = new GfxState(hdpi, vdpi, &amp;pageBox, rotate, gFalse);
+
+    SplashColor paperColor = {0xff, 0xff, 0xff};
+    SplashOutputDev *splashOut = new SplashOutputDev(splashModeMono1, 1, gFalse, paperColor);
+    splashOut-&gt;startDoc(doc-&gt;getXRef());
+
+    CharCode charCode = fdp.ConsumeIntegral&lt;CharCode&gt;();
+    Unicode unicode = fdp.ConsumeIntegral&lt;Unicode&gt;();
+
+    splashOut-&gt;drawChar(state, 0, 0, 0, 0, 0, 0, charCode, 1, &amp;unicode, 1, gTrue, gTrue, gFalse);
+
+    delete splashOut;
+    delete state;
+  }
+
+  delete doc;
+  delete str;
+
+  return 0;
+}
+</pre>
+
+
+<h3>Fixer prompt #1</h3>
+<pre>
+
+Given the following C++ fuzz harness and its build error message, fix the code to make it build for fuzzing.
+
+If there is undeclared identifier or unknown type name error, fix it by finding and including the related libraries.
+
+MUST RETURN THE FULL CODE, INCLUDING UNCHANGED PARTS.
+
+Below is the code needs to be built:
+&lt;code&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+#include &lt;stddef.h&gt;
+#include &lt;stdint.h&gt;
+
+#include &#34;GfxState.h&#34;
+#include &#34;GlobalParams.h&#34;
+#include &#34;Object.h&#34;
+#include &#34;PDFDoc.h&#34;
+#include &#34;Splash.h&#34;
+#include &#34;SplashBitmap.h&#34;
+#include &#34;SplashOutputDev.h&#34;
+#include &#34;GString.h&#34;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  FuzzedDataProvider fdp(data, size);
+
+  double hdpi = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  double vdpi = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  int rotate = fdp.ConsumeIntegral&lt;int&gt;();
+  GBool useMediaBox = fdp.ConsumeBool();
+  GBool crop = fdp.ConsumeBool();
+  GBool printing = fdp.ConsumeBool();
+  std::vector&lt;char&gt; buf = fdp.ConsumeRemainingBytes&lt;char&gt;();
+
+  Object obj;
+  obj.initNull();
+  MemStream *str = new MemStream(buf.data(), 0, buf.size(), &amp;obj);
+
+  PDFDoc *doc = new PDFDoc(str, NULL, NULL, NULL);
+
+  if (doc-&gt;isOk()) {
+    PDFRectangle pageBox(0, 0, size, size);
+    GfxState *state = new GfxState(hdpi, vdpi, &amp;pageBox, rotate, gFalse);
+
+    SplashColor paperColor = {0xff, 0xff, 0xff};
+    SplashOutputDev *splashOut = new SplashOutputDev(splashModeMono1, 1, gFalse, paperColor);
+    splashOut-&gt;startDoc(doc-&gt;getXRef());
+
+    CharCode charCode = fdp.ConsumeIntegral&lt;CharCode&gt;();
+    Unicode unicode = fdp.ConsumeIntegral&lt;Unicode&gt;();
+
+    splashOut-&gt;drawChar(state, 0, 0, 0, 0, 0, 0, charCode,
+&lt;/code&gt;
+
+Below is the error to fix:
+The code has the following build issues:
+&lt;error&gt;
+fuzz_JBIG2.cc:43:59: error: expected expression
+   43 |     splashOut-&gt;drawChar(state, 0, 0, 0, 0, 0, 0, charCode,
+      |                                                           ^
+fuzz_JBIG2.cc:43:59: error: expected &#39;}&#39;
+fuzz_JBIG2.cc:32:20: note: to match this &#39;{&#39;
+   32 |   if (doc-&gt;isOk()) {
+      |                    ^
+fuzz_JBIG2.cc:43:59: error: expected &#39;}&#39;
+   43 |     splashOut-&gt;drawChar(state, 0, 0, 0, 0, 0, 0, charCode,
+      |                                                           ^
+fuzz_JBIG2.cc:15:73: note: to match this &#39;{&#39;
+   15 | extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+      |                                                                         ^
+&lt;/error&gt;
+
+
+
+
+Fix code:
+1. Consider possible solutions for the issues listed above.
+2. Choose a solution that can maximize fuzzing result, which is utilizing the function under test and feeding it not null input.
+3. Apply the solutions to the original code.
+It&#39;s important to show the complete code, not only the fixed line.
+&lt;solution&gt;
+</pre>
+
+
+
+<h3>Code #1</h3>
+
+<pre>
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+#include &lt;stddef.h&gt;
+#include &lt;stdint.h&gt;
+
+#include &#34;GfxState.h&#34;
+#include &#34;GlobalParams.h&#34;
+#include &#34;Object.h&#34;
+#include &#34;PDFDoc.h&#34;
+#include &#34;Splash.h&#34;
+#include &#34;SplashBitmap.h&#34;
+#include &#34;SplashOutputDev.h&#34;
+#include &#34;GString.h&#34;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  FuzzedDataProvider fdp(data, size);
+
+  double hdpi = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  double vdpi = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  int rotate = fdp.ConsumeIntegral&lt;int&gt;();
+  GBool useMediaBox = fdp.ConsumeBool();
+  GBool crop = fdp.ConsumeBool();
+  GBool printing = fdp.ConsumeBool();
+  std::vector&lt;char&gt; buf = fdp.ConsumeRemainingBytes&lt;char&gt;();
+
+  Object obj;
+  obj.initNull();
+  MemStream *str = new MemStream(buf.data(), 0, buf.size(), &amp;obj);
+
+  PDFDoc *doc = new PDFDoc(str, NULL, NULL, NULL);
+
+  if (doc-&gt;isOk()) {
+    PDFRectangle pageBox(0, 0, size, size);
+    GfxState *state = new GfxState(hdpi, vdpi, &amp;pageBox, rotate, gFalse);
+
+    SplashColor paperColor = {0xff, 0xff, 0xff};
+    SplashOutputDev *splashOut = new SplashOutputDev(splashModeMono1, 1, gFalse, paperColor);
+    splashOut-&gt;startDoc(doc-&gt;getXRef());
+
+    CharCode charCode = fdp.ConsumeIntegral&lt;CharCode&gt;();
+    Unicode unicode = fdp.ConsumeIntegral&lt;Unicode&gt;();
+
+    splashOut-&gt;drawChar(state, 0, 0, 0, 0, 0, 0, charCode, unicode, nullptr, 0);
+  }
+
+  delete doc;
+  delete str;
+
+  return 0;
+}
+</pre>
+
+
+<h3>Fixer prompt #2</h3>
+<pre>
+
+Given the following C++ fuzz harness and its build error message, fix the code to make it build for fuzzing.
+
+If there is undeclared identifier or unknown type name error, fix it by finding and including the related libraries.
+
+MUST RETURN THE FULL CODE, INCLUDING UNCHANGED PARTS.
+
+Below is the code needs to be built:
+&lt;code&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+#include &lt;stddef.h&gt;
+#include &lt;stdint.h&gt;
+
+#include &#34;GfxState.h&#34;
+#include &#34;GlobalParams.h&#34;
+#include &#34;Object.h&#34;
+#include &#34;PDFDoc.h&#34;
+#include &#34;Splash.h&#34;
+#include &#34;SplashBitmap.h&#34;
+#include &#34;SplashOutputDev.h&#34;
+#include &#34;GString.h&#34;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  FuzzedDataProvider fdp(data, size);
+
+  double hdpi = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  double vdpi = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  int rotate = fdp.ConsumeIntegral&lt;int&gt;();
+  GBool useMediaBox = fdp.ConsumeBool();
+  GBool crop = fdp.ConsumeBool();
+  GBool printing = fdp.ConsumeBool();
+  std::vector&lt;char&gt; buf = fdp.ConsumeRemainingBytes&lt;char&gt;();
+
+  Object obj;
+  obj.initNull();
+  MemStream *str = new MemStream(buf.data(), 0, buf.size(), &amp;obj);
+
+  PDFDoc *doc = new PDFDoc(str, NULL, NULL, NULL);
+
+  if (doc-&gt;isOk()) {
+    PDFRectangle pageBox(0, 0, size, size);
+    GfxState *state = new GfxState(hdpi, vdpi, &amp;pageBox, rotate, gFalse);
+
+    SplashColor paperColor = {0xff, 0xff, 0xff};
+    SplashOutputDev *splashOut = new SplashOutputDev(splashModeMono1, 1, gFalse, paperColor);
+    splashOut-&gt;startDoc(doc-&gt;getXRef());
+
+    CharCode charCode = fdp.ConsumeIntegral&lt;CharCode&gt;();
+    Unicode unicode = fdp.ConsumeIntegral&lt;Unicode&gt;();
+
+    splashOut-&gt;drawChar(state, 0, 0, 0, 0, 0, 0, charCode, unicode, nullptr, 0);
+  }
+
+  delete doc;
+  delete str;
+
+  return 0;
+}
+&lt;/code&gt;
+
+Below is the error to fix:
+The code has the following build issues:
+&lt;error&gt;
+fuzz_JBIG2.cc:43:79: error: too few arguments to function call, expected 14, have 11
+   43 |     splashOut-&gt;drawChar(state, 0, 0, 0, 0, 0, 0, charCode, unicode, nullptr, 0);
+      |     ~~~~~~~~~~~~~~~~~~~                                                       ^
+../xpdf/SplashOutputDev.h:125:16: note: &#39;drawChar&#39; declared here
+  125 |   virtual void drawChar(GfxState *state, double x, double y,
+      |                ^        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  126 |                         double dx, double dy,
+      |                         ~~~~~~~~~~~~~~~~~~~~~
+  127 |                         double originX, double originY,
+      |                         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  128 |                         CharCode code, int nBytes, Unicode *u, int uLen,
+      |                         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  129 |                         GBool fill, GBool stroke, GBool makePath);
+      |                         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+&lt;/error&gt;
+
+
+
+
+Fix code:
+1. Consider possible solutions for the issues listed above.
+2. Choose a solution that can maximize fuzzing result, which is utilizing the function under test and feeding it not null input.
+3. Apply the solutions to the original code.
+It&#39;s important to show the complete code, not only the fixed line.
+&lt;solution&gt;
+</pre>
+
+
+
+<h3>Code #2</h3>
+
+<pre>
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+#include &lt;stddef.h&gt;
+#include &lt;stdint.h&gt;
+
+#include &#34;GfxState.h&#34;
+#include &#34;GlobalParams.h&#34;
+#include &#34;Object.h&#34;
+#include &#34;PDFDoc.h&#34;
+#include &#34;Splash.h&#34;
+#include &#34;SplashBitmap.h&#34;
+#include &#34;SplashOutputDev.h&#34;
+#include &#34;GString.h&#34;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  FuzzedDataProvider fdp(data, size);
+
+  double hdpi = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  double vdpi = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  int rotate = fdp.ConsumeIntegral&lt;int&gt;();
+  GBool useMediaBox = fdp.ConsumeBool();
+  GBool crop = fdp.ConsumeBool();
+  GBool printing = fdp.ConsumeBool();
+  std::vector&lt;char&gt; buf = fdp.ConsumeRemainingBytes&lt;char&gt;();
+
+  Object obj;
+  obj.initNull();
+  MemStream *str = new MemStream(buf.data(), 0, buf.size(), &amp;obj);
+
+  PDFDoc *doc = new PDFDoc(str, NULL, NULL, NULL);
+
+  if (doc-&gt;isOk()) {
+    PDFRectangle pageBox(0, 0, size, size);
+    GfxState *state = new GfxState(hdpi, vdpi, &amp;pageBox, rotate, gFalse);
+
+    SplashColor paperColor = {0xff, 0xff, 0xff};
+    SplashOutputDev *splashOut = new SplashOutputDev(splashModeMono1, 1, gFalse, paperColor);
+    splashOut-&gt;startDoc(doc-&gt;getXRef());
+
+    CharCode charCode = fdp.ConsumeIntegral&lt;CharCode&gt;();
+    Unicode unicode = fdp.ConsumeIntegral&lt;Unicode&gt;();
+
+    splashOut-&gt;drawChar(state, 0, 0, 0, 0, 0, 0, charCode, 1, &amp;unicode, 1, gTrue, gTrue, gFalse);
+  }
+
+  delete doc;
+  delete str;
+
+  return 0;
+}
+</pre>
+
+
+<h3>Fixer prompt #3</h3>
+<pre>
+
+Given the following C++ fuzz harness and its build error message, fix the code to make it build for fuzzing.
+
+If there is undeclared identifier or unknown type name error, fix it by finding and including the related libraries.
+
+MUST RETURN THE FULL CODE, INCLUDING UNCHANGED PARTS.
+
+Below is the code needs to be built:
+&lt;code&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+#include &lt;stddef.h&gt;
+#include &lt;stdint.h&gt;
+
+#include &#34;GfxState.h&#34;
+#include &#34;GlobalParams.h&#34;
+#include &#34;Object.h&#34;
+#include &#34;PDFDoc.h&#34;
+#include &#34;Splash.h&#34;
+#include &#34;SplashBitmap.h&#34;
+#include &#34;SplashOutputDev.h&#34;
+#include &#34;GString.h&#34;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  FuzzedDataProvider fdp(data, size);
+
+  double hdpi = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  double vdpi = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  int rotate = fdp.ConsumeIntegral&lt;int&gt;();
+  GBool useMediaBox = fdp.ConsumeBool();
+  GBool crop = fdp.ConsumeBool();
+  GBool printing = fdp.ConsumeBool();
+  std::vector&lt;char&gt; buf = fdp.ConsumeRemainingBytes&lt;char&gt;();
+
+  Object obj;
+  obj.initNull();
+  MemStream *str = new MemStream(buf.data(), 0, buf.size(), &amp;obj);
+
+  PDFDoc *doc = new PDFDoc(str, NULL, NULL, NULL);
+
+  if (doc-&gt;isOk()) {
+    PDFRectangle pageBox(0, 0, size, size);
+    GfxState *state = new GfxState(hdpi, vdpi, &amp;pageBox, rotate, gFalse);
+
+    SplashColor paperColor = {0xff, 0xff, 0xff};
+    SplashOutputDev *splashOut = new SplashOutputDev(splashModeMono1, 1, gFalse, paperColor);
+    splashOut-&gt;startDoc(doc-&gt;getXRef());
+
+    CharCode charCode = fdp.ConsumeIntegral&lt;CharCode&gt;();
+    Unicode unicode = fdp.ConsumeIntegral&lt;Unicode&gt;();
+
+    splashOut-&gt;drawChar(state, 0, 0, 0, 0, 0, 0, charCode, 1, &amp;unicode, 1, gTrue, gTrue, gFalse);
+  }
+
+  delete doc;
+  delete str;
+
+  return 0;
+}
+&lt;/code&gt;
+
+Below is the error to fix:
+The code can build successfully but has a runtime issue: Fuzzing crashed immediately at runtime (ASAN-ERROR: AddressSanitizer: heap-use-after-free on address 0x5060000000e0 at pc 0x56164d91c9ee bp 0x7fff3b8bfe50 sp 0x7fff3b8bfe48), indicating fuzz target code for invoking the function under test is incorrect or unrobust.
+&lt;error&gt;
+Crash stacks:
+Stack 0:
+#0 0x56164d91c9ed in LLVMFuzzerTestOneInput /src/xpdf-4.05/build/fuzz_JBIG2.cc:47:3
+#1 0x56164d7ce660 in fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:614:13
+#2 0x56164d7cfb61 in fuzzer::Fuzzer::ReadAndExecuteSeedCorpora(std::__Fuzzer::vector&lt;fuzzer::SizedFile, std::__Fuzzer::allocator&lt;fuzzer::SizedFile&gt;&gt;&amp;) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:807:3
+#3 0x56164d7d0147 in fuzzer::Fuzzer::Loop(std::__Fuzzer::vector&lt;fuzzer::SizedFile, std::__Fuzzer::allocator&lt;fuzzer::SizedFile&gt;&gt;&amp;) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:867:3
+#4 0x56164d7be756 in fuzzer::FuzzerDriver(int*, char***, int (*)(unsigned char const*, unsigned long)) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:914:6
+#5 0x56164d7eac82 in main /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMain.cpp:20:10
+#6 0x7f56f29e7082 in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x24082) (BuildId: 0702430aef5fa3dda43986563e9ffcc47efbd75e)
+#7 0x56164d7af8cd in _start (/out/fuzz_JBIG2+0x29f8cd)
+Stack 1:
+#0 0x56164d91a1ed in operator delete(void*) /src/llvm-project/compiler-rt/lib/asan/asan_new_delete.cpp:152:3
+#1 0x56164d95c1df in PDFDoc::~PDFDoc() /src/xpdf-4.05/xpdf/PDFDoc.cc:352:5
+#2 0x56164d91c83e in LLVMFuzzerTestOneInput /src/xpdf-4.05/build/fuzz_JBIG2.cc:46:3
+#3 0x56164d7ce660 in fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:614:13
+#4 0x56164d7cfb61 in fuzzer::Fuzzer::ReadAndExecuteSeedCorpora(std::__Fuzzer::vector&lt;fuzzer::SizedFile, std::__Fuzzer::allocator&lt;fuzzer::SizedFile&gt;&gt;&amp;) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:807:3
+#5 0x56164d7d0147 in fuzzer::Fuzzer::Loop(std::__Fuzzer::vector&lt;fuzzer::SizedFile, std::__Fuzzer::allocator&lt;fuzzer::SizedFile&gt;&gt;&amp;) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:867:3
+#6 0x56164d7be756 in fuzzer::FuzzerDriver(int*, char***, int (*)(unsigned char const*, unsigned long)) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:914:6
+#7 0x56164d7eac82 in main /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMain.cpp:20:10
+#8 0x7f56f29e7082 in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x24082) (BuildId: 0702430aef5fa3dda43986563e9ffcc47efbd75e)
+Stack 2:
+#0 0x56164d91998d in operator new(unsigned long) /src/llvm-project/compiler-rt/lib/asan/asan_new_delete.cpp:95:3
+#1 0x56164d91c3e3 in LLVMFuzzerTestOneInput /src/xpdf-4.05/build/fuzz_JBIG2.cc:28:20
+#2 0x56164d7ce660 in fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:614:13
+#3 0x56164d7cfb61 in fuzzer::Fuzzer::ReadAndExecuteSeedCorpora(std::__Fuzzer::vector&lt;fuzzer::SizedFile, std::__Fuzzer::allocator&lt;fuzzer::SizedFile&gt;&gt;&amp;) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:807:3
+#4 0x56164d7d0147 in fuzzer::Fuzzer::Loop(std::__Fuzzer::vector&lt;fuzzer::SizedFile, std::__Fuzzer::allocator&lt;fuzzer::SizedFile&gt;&gt;&amp;) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:867:3
+#5 0x56164d7be756 in fuzzer::FuzzerDriver(int*, char***, int (*)(unsigned char const*, unsigned long)) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:914:6
+#6 0x56164d7eac82 in main /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMain.cpp:20:10
+#7 0x7f56f29e7082 in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x24082) (BuildId: 0702430aef5fa3dda43986563e9ffcc47efbd75e)
+&lt;/error&gt;
+
+
+
+
+Fix code:
+1. Consider possible solutions for the issues listed above.
+2. Choose a solution that can maximize fuzzing result, which is utilizing the function under test and feeding it not null input.
+3. Apply the solutions to the original code.
+It&#39;s important to show the complete code, not only the fixed line.
+&lt;solution&gt;
+</pre>
+
+
+
+<h3>Code #3</h3>
+
+<pre>
+The error message suggests that the program is trying to access memory that has been freed. This is happening because the `str` object is being deleted before `doc` object which still holds a reference to `str`. 
+
+The solution is to change the order of deletion. Delete `doc` before `str`.
+
+Here is the fixed code:
+
+```cpp
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+#include &lt;stddef.h&gt;
+#include &lt;stdint.h&gt;
+
+#include &#34;GfxState.h&#34;
+#include &#34;GlobalParams.h&#34;
+#include &#34;Object.h&#34;
+#include &#34;PDFDoc.h&#34;
+#include &#34;Splash.h&#34;
+#include &#34;SplashBitmap.h&#34;
+#include &#34;SplashOutputDev.h&#34;
+#include &#34;GString.h&#34;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  FuzzedDataProvider fdp(data, size);
+
+  double hdpi = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  double vdpi = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  int rotate = fdp.ConsumeIntegral&lt;int&gt;();
+  GBool useMediaBox = fdp.ConsumeBool();
+  GBool crop = fdp.ConsumeBool();
+  GBool printing = fdp.ConsumeBool();
+  std::vector&lt;char&gt; buf = fdp.ConsumeRemainingBytes&lt;char&gt;();
+
+  Object obj;
+  obj.initNull();
+  MemStream *str = new MemStream(buf.data(), 0, buf.size(), &amp;obj);
+
+  PDFDoc *doc = new PDFDoc(str, NULL, NULL, NULL);
+
+  if (doc-&gt;isOk()) {
+    PDFRectangle pageBox(0, 0, size, size);
+    GfxState *state = new GfxState(hdpi, vdpi, &amp;pageBox, rotate, gFalse);
+
+    SplashColor paperColor = {0xff, 0xff, 0xff};
+    SplashOutputDev *splashOut = new SplashOutputDev(splashModeMono1, 1, gFalse, paperColor);
+    splashOut-&gt;startDoc(doc-&gt;getXRef());
+
+    CharCode charCode = fdp.ConsumeIntegral&lt;CharCode&gt;();
+    Unicode unicode = fdp.ConsumeIntegral&lt;Unicode&gt;();
+
+    splashOut-&gt;drawChar(state, 0, 0, 0, 0, 0, 0, charCode, 1, &amp;unicode, 1, gTrue, gTrue, gFalse);
+  }
+
+  delete doc;
+  delete str;
+
+  return 0;
+}
+```
+The only change is in the order of deletion of `doc` and `str`.
+</pre>
+
+
+<h3>Fixer prompt #4</h3>
+<pre>
+
+Given the following C++ fuzz harness and its build error message, fix the code to make it build for fuzzing.
+
+If there is undeclared identifier or unknown type name error, fix it by finding and including the related libraries.
+
+MUST RETURN THE FULL CODE, INCLUDING UNCHANGED PARTS.
+
+Below is the code needs to be built:
+&lt;code&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+#include &lt;stddef.h&gt;
+#include &lt;stdint.h&gt;
+
+#include &#34;GfxState.h&#34;
+#include &#34;GlobalParams.h&#34;
+#include &#34;Object.h&#34;
+#include &#34;PDFDoc.h&#34;
+#include &#34;Splash.h&#34;
+#include &#34;SplashBitmap.h&#34;
+#include &#34;SplashOutputDev.h&#34;
+#include &#34;GString.h&#34;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  FuzzedDataProvider fdp(data, size);
+
+  double hdpi = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  double vdpi = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  int rotate = fdp.ConsumeIntegral&lt;int&gt;();
+  GBool useMediaBox = fdp.ConsumeBool();
+  GBool crop = fdp.ConsumeBool();
+  GBool printing = fdp.ConsumeBool();
+  std::vector&lt;char&gt; buf = fdp.ConsumeRemainingBytes&lt;char&gt;();
+
+  Object obj;
+  obj.initNull();
+  MemStream *str = new MemStream(buf.data(), 0, buf.size(), &amp;obj);
+
+  PDFDoc *doc = new PDFDoc(str, NULL, NULL, NULL);
+
+  if (doc-&gt;isOk()) {
+    PDFRectangle pageBox(0, 0, size, size);
+    GfxState *state = new GfxState(hdpi, vdpi, &amp;pageBox, rotate, gFalse);
+
+    SplashColor paperColor = {0xff, 0xff, 0xff};
+    SplashOutputDev *splashOut = new SplashOutputDev(splashModeMono1, 1, gFalse, paperColor);
+    splashOut-&gt;startDoc(doc-&gt;getXRef());
+
+    CharCode charCode = fdp.ConsumeIntegral&lt;CharCode&gt;();
+    Unicode unicode = fdp.ConsumeIntegral&lt;Unicode&gt;();
+
+    splashOut-&gt;drawChar(state, 0, 0, 0, 0, 0, 0, charCode, 1, &amp;unicode, 1, gTrue, gTrue, gFalse);
+  }
+
+  delete doc;
+  delete str;
+
+  return 0;
+}
+&lt;/code&gt;
+
+Below is the error to fix:
+The code can build successfully but has a runtime issue: Fuzzing crashed immediately at runtime (ASAN-ERROR: AddressSanitizer: heap-use-after-free on address 0x5060000000e0 at pc 0x55b891b109ee bp 0x7ffc172ecad0 sp 0x7ffc172ecac8), indicating fuzz target code for invoking the function under test is incorrect or unrobust.
+&lt;error&gt;
+Crash stacks:
+Stack 0:
+#0 0x55b891b109ed in LLVMFuzzerTestOneInput /src/xpdf-4.05/build/fuzz_JBIG2.cc:47:3
+#1 0x55b8919c2660 in fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:614:13
+#2 0x55b8919c3b61 in fuzzer::Fuzzer::ReadAndExecuteSeedCorpora(std::__Fuzzer::vector&lt;fuzzer::SizedFile, std::__Fuzzer::allocator&lt;fuzzer::SizedFile&gt;&gt;&amp;) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:807:3
+#3 0x55b8919c4147 in fuzzer::Fuzzer::Loop(std::__Fuzzer::vector&lt;fuzzer::SizedFile, std::__Fuzzer::allocator&lt;fuzzer::SizedFile&gt;&gt;&amp;) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:867:3
+#4 0x55b8919b2756 in fuzzer::FuzzerDriver(int*, char***, int (*)(unsigned char const*, unsigned long)) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:914:6
+#5 0x55b8919dec82 in main /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMain.cpp:20:10
+#6 0x7f95da304082 in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x24082) (BuildId: 0702430aef5fa3dda43986563e9ffcc47efbd75e)
+#7 0x55b8919a38cd in _start (/out/fuzz_JBIG2+0x29f8cd)
+Stack 1:
+#0 0x55b891b0e1ed in operator delete(void*) /src/llvm-project/compiler-rt/lib/asan/asan_new_delete.cpp:152:3
+#1 0x55b891b501df in PDFDoc::~PDFDoc() /src/xpdf-4.05/xpdf/PDFDoc.cc:352:5
+#2 0x55b891b1083e in LLVMFuzzerTestOneInput /src/xpdf-4.05/build/fuzz_JBIG2.cc:46:3
+#3 0x55b8919c2660 in fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:614:13
+#4 0x55b8919c3b61 in fuzzer::Fuzzer::ReadAndExecuteSeedCorpora(std::__Fuzzer::vector&lt;fuzzer::SizedFile, std::__Fuzzer::allocator&lt;fuzzer::SizedFile&gt;&gt;&amp;) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:807:3
+#5 0x55b8919c4147 in fuzzer::Fuzzer::Loop(std::__Fuzzer::vector&lt;fuzzer::SizedFile, std::__Fuzzer::allocator&lt;fuzzer::SizedFile&gt;&gt;&amp;) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:867:3
+#6 0x55b8919b2756 in fuzzer::FuzzerDriver(int*, char***, int (*)(unsigned char const*, unsigned long)) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:914:6
+#7 0x55b8919dec82 in main /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMain.cpp:20:10
+#8 0x7f95da304082 in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x24082) (BuildId: 0702430aef5fa3dda43986563e9ffcc47efbd75e)
+Stack 2:
+#0 0x55b891b0d98d in operator new(unsigned long) /src/llvm-project/compiler-rt/lib/asan/asan_new_delete.cpp:95:3
+#1 0x55b891b103e3 in LLVMFuzzerTestOneInput /src/xpdf-4.05/build/fuzz_JBIG2.cc:28:20
+#2 0x55b8919c2660 in fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:614:13
+#3 0x55b8919c3b61 in fuzzer::Fuzzer::ReadAndExecuteSeedCorpora(std::__Fuzzer::vector&lt;fuzzer::SizedFile, std::__Fuzzer::allocator&lt;fuzzer::SizedFile&gt;&gt;&amp;) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:807:3
+#4 0x55b8919c4147 in fuzzer::Fuzzer::Loop(std::__Fuzzer::vector&lt;fuzzer::SizedFile, std::__Fuzzer::allocator&lt;fuzzer::SizedFile&gt;&gt;&amp;) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:867:3
+#5 0x55b8919b2756 in fuzzer::FuzzerDriver(int*, char***, int (*)(unsigned char const*, unsigned long)) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:914:6
+#6 0x55b8919dec82 in main /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMain.cpp:20:10
+#7 0x7f95da304082 in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x24082) (BuildId: 0702430aef5fa3dda43986563e9ffcc47efbd75e)
+&lt;/error&gt;
+
+
+
+
+Fix code:
+1. Consider possible solutions for the issues listed above.
+2. Choose a solution that can maximize fuzzing result, which is utilizing the function under test and feeding it not null input.
+3. Apply the solutions to the original code.
+It&#39;s important to show the complete code, not only the fixed line.
+&lt;solution&gt;
+</pre>
+
+
+
+<h3>Code #4</h3>
+
+<pre>
+&lt;code&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+#include &lt;stddef.h&gt;
+#include &lt;stdint.h&gt;
+
+#include &#34;GfxState.h&#34;
+#include &#34;GlobalParams.h&#34;
+#include &#34;Object.h&#34;
+#include &#34;PDFDoc.h&#34;
+#include &#34;Splash.h&#34;
+#include &#34;SplashBitmap.h&#34;
+#include &#34;SplashOutputDev.h&#34;
+#include &#34;GString.h&#34;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  FuzzedDataProvider fdp(data, size);
+
+  double hdpi = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  double vdpi = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  int rotate = fdp.ConsumeIntegral&lt;int&gt;();
+  GBool useMediaBox = fdp.ConsumeBool();
+  GBool crop = fdp.ConsumeBool();
+  GBool printing = fdp.ConsumeBool();
+  std::vector&lt;char&gt; buf = fdp.ConsumeRemainingBytes&lt;char&gt;();
+
+  Object obj;
+  obj.initNull();
+  MemStream *str = new MemStream(buf.data(), 0, buf.size(), &amp;obj);
+
+  PDFDoc *doc = new PDFDoc(str, NULL, NULL, NULL);
+
+  if (doc-&gt;isOk()) {
+    PDFRectangle pageBox(0, 0, size, size);
+    GfxState *state = new GfxState(hdpi, vdpi, &amp;pageBox, rotate, gFalse);
+
+    SplashColor paperColor = {0xff, 0xff, 0xff};
+    SplashOutputDev *splashOut = new SplashOutputDev(splashModeMono1, 1, gFalse, paperColor);
+    splashOut-&gt;startDoc(doc-&gt;getXRef());
+
+    CharCode charCode = fdp.ConsumeIntegral&lt;CharCode&gt;();
+    Unicode unicode = fdp.ConsumeIntegral&lt;Unicode&gt;();
+
+    splashOut-&gt;drawChar(state, 0, 0, 0, 0, 0, 0, charCode, 1, &amp;unicode, 1, gTrue, gTrue, gFalse);
+
+    delete splashOut;
+    delete state;
+  }
+
+  delete doc;
+  delete str;
+
+  return 0;
+}
+&lt;/code&gt;
+The fix is to delete the `splashOut` and `state` objects after they are used. This is because the `PDFDoc` destructor deletes the `XRef` object, which is used by `splashOut`. If `splashOut` is not deleted before `doc`, it will try to access the deleted `XRef` object, causing a use-after-free error. Similarly, `state` must be deleted after it is used by `splashOut`.
+</pre>
+
+
+<h3>Fixer prompt #5</h3>
+<pre>
+
+Given the following C++ fuzz harness and its build error message, fix the code to make it build for fuzzing.
+
+If there is undeclared identifier or unknown type name error, fix it by finding and including the related libraries.
+
+MUST RETURN THE FULL CODE, INCLUDING UNCHANGED PARTS.
+
+Below is the code needs to be built:
+&lt;code&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+#include &lt;stddef.h&gt;
+#include &lt;stdint.h&gt;
+
+#include &#34;GfxState.h&#34;
+#include &#34;GlobalParams.h&#34;
+#include &#34;Object.h&#34;
+#include &#34;PDFDoc.h&#34;
+#include &#34;Splash.h&#34;
+#include &#34;SplashBitmap.h&#34;
+#include &#34;SplashOutputDev.h&#34;
+#include &#34;GString.h&#34;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  FuzzedDataProvider fdp(data, size);
+
+  double hdpi = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  double vdpi = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  int rotate = fdp.ConsumeIntegral&lt;int&gt;();
+  GBool useMediaBox = fdp.ConsumeBool();
+  GBool crop = fdp.ConsumeBool();
+  GBool printing = fdp.ConsumeBool();
+  std::vector&lt;char&gt; buf = fdp.ConsumeRemainingBytes&lt;char&gt;();
+
+  Object obj;
+  obj.initNull();
+  MemStream *str = new MemStream(buf.data(), 0, buf.size(), &amp;obj);
+
+  PDFDoc *doc = new PDFDoc(str, NULL, NULL, NULL);
+
+  if (doc-&gt;isOk()) {
+    PDFRectangle pageBox(0, 0, size, size);
+    GfxState *state = new GfxState(hdpi, vdpi, &amp;pageBox, rotate, gFalse);
+
+    SplashColor paperColor = {0xff, 0xff, 0xff};
+    SplashOutputDev *splashOut = new SplashOutputDev(splashModeMono1, 1, gFalse, paperColor);
+    splashOut-&gt;startDoc(doc-&gt;getXRef());
+
+    CharCode charCode = fdp.ConsumeIntegral&lt;CharCode&gt;();
+    Unicode unicode = fdp.ConsumeIntegral&lt;Unicode&gt;();
+
+    splashOut-&gt;drawChar(state, 0, 0, 0, 0, 0, 0, charCode, 1, &amp;unicode, 1, gTrue, gTrue, gFalse);
+
+    delete splashOut;
+    delete state;
+  }
+
+  delete doc;
+  delete str;
+
+  return 0;
+}
+&lt;/code&gt;
+
+Below is the error to fix:
+The code can build successfully but has a runtime issue: Fuzzing crashed immediately at runtime (ASAN-ERROR: AddressSanitizer: heap-use-after-free on address 0x5060000000e0 at pc 0x5590238f5a22 bp 0x7ffe4d2e8710 sp 0x7ffe4d2e8708), indicating fuzz target code for invoking the function under test is incorrect or unrobust.
+&lt;error&gt;
+Crash stacks:
+Stack 0:
+#0 0x5590238f5a21 in LLVMFuzzerTestOneInput /src/xpdf-4.05/build/fuzz_JBIG2.cc:50:3
+#1 0x5590237a7660 in fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:614:13
+#2 0x5590237a8b61 in fuzzer::Fuzzer::ReadAndExecuteSeedCorpora(std::__Fuzzer::vector&lt;fuzzer::SizedFile, std::__Fuzzer::allocator&lt;fuzzer::SizedFile&gt;&gt;&amp;) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:807:3
+#3 0x5590237a9147 in fuzzer::Fuzzer::Loop(std::__Fuzzer::vector&lt;fuzzer::SizedFile, std::__Fuzzer::allocator&lt;fuzzer::SizedFile&gt;&gt;&amp;) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:867:3
+#4 0x559023797756 in fuzzer::FuzzerDriver(int*, char***, int (*)(unsigned char const*, unsigned long)) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:914:6
+#5 0x5590237c3c82 in main /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMain.cpp:20:10
+#6 0x7f5d593b9082 in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x24082) (BuildId: 0702430aef5fa3dda43986563e9ffcc47efbd75e)
+#7 0x5590237888cd in _start (/out/fuzz_JBIG2+0x29f8cd)
+Stack 1:
+#0 0x5590238f31ed in operator delete(void*) /src/llvm-project/compiler-rt/lib/asan/asan_new_delete.cpp:152:3
+#1 0x55902393520f in PDFDoc::~PDFDoc() /src/xpdf-4.05/xpdf/PDFDoc.cc:352:5
+#2 0x5590238f586c in LLVMFuzzerTestOneInput /src/xpdf-4.05/build/fuzz_JBIG2.cc:49:3
+#3 0x5590237a7660 in fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:614:13
+#4 0x5590237a8b61 in fuzzer::Fuzzer::ReadAndExecuteSeedCorpora(std::__Fuzzer::vector&lt;fuzzer::SizedFile, std::__Fuzzer::allocator&lt;fuzzer::SizedFile&gt;&gt;&amp;) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:807:3
+#5 0x5590237a9147 in fuzzer::Fuzzer::Loop(std::__Fuzzer::vector&lt;fuzzer::SizedFile, std::__Fuzzer::allocator&lt;fuzzer::SizedFile&gt;&gt;&amp;) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:867:3
+#6 0x559023797756 in fuzzer::FuzzerDriver(int*, char***, int (*)(unsigned char const*, unsigned long)) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:914:6
+#7 0x5590237c3c82 in main /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMain.cpp:20:10
+#8 0x7f5d593b9082 in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x24082) (BuildId: 0702430aef5fa3dda43986563e9ffcc47efbd75e)
+Stack 2:
+#0 0x5590238f298d in operator new(unsigned long) /src/llvm-project/compiler-rt/lib/asan/asan_new_delete.cpp:95:3
+#1 0x5590238f53dd in LLVMFuzzerTestOneInput /src/xpdf-4.05/build/fuzz_JBIG2.cc:28:20
+#2 0x5590237a7660 in fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:614:13
+#3 0x5590237a8b61 in fuzzer::Fuzzer::ReadAndExecuteSeedCorpora(std::__Fuzzer::vector&lt;fuzzer::SizedFile, std::__Fuzzer::allocator&lt;fuzzer::SizedFile&gt;&gt;&amp;) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:807:3
+#4 0x5590237a9147 in fuzzer::Fuzzer::Loop(std::__Fuzzer::vector&lt;fuzzer::SizedFile, std::__Fuzzer::allocator&lt;fuzzer::SizedFile&gt;&gt;&amp;) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:867:3
+#5 0x559023797756 in fuzzer::FuzzerDriver(int*, char***, int (*)(unsigned char const*, unsigned long)) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:914:6
+#6 0x5590237c3c82 in main /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMain.cpp:20:10
+#7 0x7f5d593b9082 in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x24082) (BuildId: 0702430aef5fa3dda43986563e9ffcc47efbd75e)
+&lt;/error&gt;
+
+
+
+
+Fix code:
+1. Consider possible solutions for the issues listed above.
+2. Choose a solution that can maximize fuzzing result, which is utilizing the function under test and feeding it not null input.
+3. Apply the solutions to the original code.
+It&#39;s important to show the complete code, not only the fixed line.
+&lt;solution&gt;
+</pre>
+
+
+
+<h3>Code #5</h3>
+
+<pre>
+The error is a heap-use-after-free error, which means that the program is trying to access memory that has already been freed. This is often caused by deleting an object while still holding a pointer to it, and then trying to use that pointer.
+
+In this case, the error is likely caused by the deletion of `doc` and `str` at the end of the function. These objects are passed to other objects (`state` and `splashOut`), which might still be using them when they are deleted.
+
+To fix this, we should delete `state` and `splashOut` before deleting `doc` and `str`. Here is the corrected code:
+
+```cpp
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+#include &lt;stddef.h&gt;
+#include &lt;stdint.h&gt;
+
+#include &#34;GfxState.h&#34;
+#include &#34;GlobalParams.h&#34;
+#include &#34;Object.h&#34;
+#include &#34;PDFDoc.h&#34;
+#include &#34;Splash.h&#34;
+#include &#34;SplashBitmap.h&#34;
+#include &#34;SplashOutputDev.h&#34;
+#include &#34;GString.h&#34;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  FuzzedDataProvider fdp(data, size);
+
+  double hdpi = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  double vdpi = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  int rotate = fdp.ConsumeIntegral&lt;int&gt;();
+  GBool useMediaBox = fdp.ConsumeBool();
+  GBool crop = fdp.ConsumeBool();
+  GBool printing = fdp.ConsumeBool();
+  std::vector&lt;char&gt; buf = fdp.ConsumeRemainingBytes&lt;char&gt;();
+
+  Object obj;
+  obj.initNull();
+  MemStream *str = new MemStream(buf.data(), 0, buf.size(), &amp;obj);
+
+  PDFDoc *doc = new PDFDoc(str, NULL, NULL, NULL);
+
+  if (doc-&gt;isOk()) {
+    PDFRectangle pageBox(0, 0, size, size);
+    GfxState *state = new GfxState(hdpi, vdpi, &amp;pageBox, rotate, gFalse);
+
+    SplashColor paperColor = {0xff, 0xff, 0xff};
+    SplashOutputDev *splashOut = new SplashOutputDev(splashModeMono1, 1, gFalse, paperColor);
+    splashOut-&gt;startDoc(doc-&gt;getXRef());
+
+    CharCode charCode = fdp.ConsumeIntegral&lt;CharCode&gt;();
+    Unicode unicode = fdp.ConsumeIntegral&lt;Unicode&gt;();
+
+    splashOut-&gt;drawChar(state, 0, 0, 0, 0, 0, 0, charCode, 1, &amp;unicode, 1, gTrue, gTrue, gFalse);
+
+    delete splashOut;
+    delete state;
+  }
+
+  delete doc;
+  delete str;
+
+  return 0;
+}
+```
+This should fix the heap-use-after-free error and allow the program to run correctly.
+</pre>
+
+
+<h2>Logs</h2>
+<pre>
+Fixing /home/chyun/oss-fuzz-gen/results4/output-xpdf-_zn15splashoutputdev8drawcharep8gfxstateddddddjipjiiii/fixed_targets/01.cc with gpt-4, attempt 1.
+Fixing /home/chyun/oss-fuzz-gen/results4/output-xpdf-_zn15splashoutputdev8drawcharep8gfxstateddddddjipjiiii/fixed_targets/01.cc with gpt-4, attempt 2.
+Fixing /home/chyun/oss-fuzz-gen/results4/output-xpdf-_zn15splashoutputdev8drawcharep8gfxstateddddddjipjiiii/fixed_targets/01.cc with gpt-4, attempt 3.
+Fixing /home/chyun/oss-fuzz-gen/results4/output-xpdf-_zn15splashoutputdev8drawcharep8gfxstateddddddjipjiiii/fixed_targets/01.cc with gpt-4, attempt 4.
+Fixing /home/chyun/oss-fuzz-gen/results4/output-xpdf-_zn15splashoutputdev8drawcharep8gfxstateddddddjipjiiii/fixed_targets/01.cc with gpt-4, attempt 5.
+Successfully built /home/chyun/oss-fuzz-gen/results4/output-xpdf-_zn15splashoutputdev8drawcharep8gfxstateddddddjipjiiii/fixed_targets/01.cc with gpt-4 in 5 iterations of fixing.
+Triaging the crash related to /home/chyun/oss-fuzz-gen/results4/output-xpdf-_zn15splashoutputdev8drawcharep8gfxstateddddddjipjiiii/fixed_targets/01.cc with gpt-4.
+Warning: Failed to fix semantic error FP_NEAR_INIT_CRASH in xpdf-zn15splashoutputdev8drawcharep8gfxstateddddddjipjiiii-01.
+
+</pre>
+
+<h2>Run logs</h2>
+<pre>
+INFO:__main__:Running: docker run --privileged --shm-size=2g --platform linux/amd64 --rm -e FUZZING_ENGINE=libfuzzer -e SANITIZER=address -e RUN_FUZZER_MODE=interactive -e HELPER=True -v /home/chyun/oss-fuzz-gen/results4/output-xpdf-_zn15splashoutputdev8drawcharep8gfxstateddddddjipjiiii/corpora/01.cc:/tmp/fuzz_JBIG2_corpus -v /tmp/tmpoqsshhp3/build/out/xpdf-zn15splashoutputdev8drawcharep8gfxstateddddddjipjiiii-01:/out -t gcr.io/oss-fuzz-base/base-runner run_fuzzer fuzz_JBIG2 -print_final_stats=1 -max_total_time=30 -len_control=0 -timeout=30.
+vm.mmap_rnd_bits = 28
+rm: cannot remove &#39;/tmp/fuzz_JBIG2_corpus&#39;: Device or resource busy
+/out/fuzz_JBIG2 -rss_limit_mb=2560 -timeout=25 -print_final_stats=1 -max_total_time=30 -len_control=0 -timeout=30 /tmp/fuzz_JBIG2_corpus -detect_leaks=0 &lt; /dev/null
+INFO: Running with entropic power schedule (0xFF, 100).
+INFO: Seed: 566345096
+INFO: Loaded 1 modules   (57811 inline 8-bit counters): 57811 [0x56462f053a58, 0x56462f061c2b), 
+INFO: Loaded 1 PC tables (57811 PCs): 57811 [0x56462f061c30,0x56462f143960), 
+INFO:        0 files found in /tmp/fuzz_JBIG2_corpus
+INFO: -max_len is not provided; libFuzzer will not generate inputs larger than 4096 bytes
+Syntax Warning: May not be a PDF file (continuing anyway)
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: PDF file is damaged - attempting to reconstruct xref table...
+Syntax Error: Couldn&#39;t find trailer dictionary
+Syntax Error: Couldn&#39;t read xref table
+=================================================================
+[1m[31m==16==ERROR: AddressSanitizer: heap-use-after-free on address 0x5060000000e0 at pc 0x56462e926a22 bp 0x7fffe8563510 sp 0x7fffe8563508
+[1m[0m[1m[34mREAD of size 8 at 0x5060000000e0 thread T0[1m[0m
+SCARINESS: 51 (8-byte-read-heap-use-after-free)
+    #0 0x56462e926a21 in LLVMFuzzerTestOneInput /src/xpdf-4.05/build/fuzz_JBIG2.cc:50:3
+    #1 0x56462e7d8660 in fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:614:13
+    #2 0x56462e7d9b61 in fuzzer::Fuzzer::ReadAndExecuteSeedCorpora(std::__Fuzzer::vector&lt;fuzzer::SizedFile, std::__Fuzzer::allocator&lt;fuzzer::SizedFile&gt;&gt;&amp;) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:807:3
+    #3 0x56462e7da147 in fuzzer::Fuzzer::Loop(std::__Fuzzer::vector&lt;fuzzer::SizedFile, std::__Fuzzer::allocator&lt;fuzzer::SizedFile&gt;&gt;&amp;) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:867:3
+    #4 0x56462e7c8756 in fuzzer::FuzzerDriver(int*, char***, int (*)(unsigned char const*, unsigned long)) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:914:6
+    #5 0x56462e7f4c82 in main /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMain.cpp:20:10
+    #6 0x7f5085a6c082 in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x24082) (BuildId: 0702430aef5fa3dda43986563e9ffcc47efbd75e)
+    #7 0x56462e7b98cd in _start (/out/fuzz_JBIG2+0x29f8cd)
+
+DEDUP_TOKEN: LLVMFuzzerTestOneInput--fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long)--fuzzer::Fuzzer::ReadAndExecuteSeedCorpora(std::__Fuzzer::vector&lt;fuzzer::SizedFile, std::__Fuzzer::allocator&lt;fuzzer::SizedFile&gt;&gt;&amp;)
+[1m[32m0x5060000000e0 is located 0 bytes inside of 64-byte region [0x5060000000e0,0x506000000120)
+[1m[0m[1m[35mfreed by thread T0 here:[1m[0m
+    #0 0x56462e9241ed in operator delete(void*) /src/llvm-project/compiler-rt/lib/asan/asan_new_delete.cpp:152:3
+    #1 0x56462e96620f in PDFDoc::~PDFDoc() /src/xpdf-4.05/xpdf/PDFDoc.cc:352:5
+    #2 0x56462e92686c in LLVMFuzzerTestOneInput /src/xpdf-4.05/build/fuzz_JBIG2.cc:49:3
+    #3 0x56462e7d8660 in fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:614:13
+    #4 0x56462e7d9b61 in fuzzer::Fuzzer::ReadAndExecuteSeedCorpora(std::__Fuzzer::vector&lt;fuzzer::SizedFile, std::__Fuzzer::allocator&lt;fuzzer::SizedFile&gt;&gt;&amp;) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:807:3
+    #5 0x56462e7da147 in fuzzer::Fuzzer::Loop(std::__Fuzzer::vector&lt;fuzzer::SizedFile, std::__Fuzzer::allocator&lt;fuzzer::SizedFile&gt;&gt;&amp;) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:867:3
+    #6 0x56462e7c8756 in fuzzer::FuzzerDriver(int*, char***, int (*)(unsigned char const*, unsigned long)) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:914:6
+    #7 0x56462e7f4c82 in main /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMain.cpp:20:10
+    #8 0x7f5085a6c082 in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x24082) (BuildId: 0702430aef5fa3dda43986563e9ffcc47efbd75e)
+
+DEDUP_TOKEN: operator delete(void*)--PDFDoc::~PDFDoc()--LLVMFuzzerTestOneInput
+[1m[35mpreviously allocated by thread T0 here:[1m[0m
+    #0 0x56462e92398d in operator new(unsigned long) /src/llvm-project/compiler-rt/lib/asan/asan_new_delete.cpp:95:3
+    #1 0x56462e9263dd in LLVMFuzzerTestOneInput /src/xpdf-4.05/build/fuzz_JBIG2.cc:28:20
+    #2 0x56462e7d8660 in fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:614:13
+    #3 0x56462e7d9b61 in fuzzer::Fuzzer::ReadAndExecuteSeedCorpora(std::__Fuzzer::vector&lt;fuzzer::SizedFile, std::__Fuzzer::allocator&lt;fuzzer::SizedFile&gt;&gt;&amp;) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:807:3
+    #4 0x56462e7da147 in fuzzer::Fuzzer::Loop(std::__Fuzzer::vector&lt;fuzzer::SizedFile, std::__Fuzzer::allocator&lt;fuzzer::SizedFile&gt;&gt;&amp;) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:867:3
+    #5 0x56462e7c8756 in fuzzer::FuzzerDriver(int*, char***, int (*)(unsigned char const*, unsigned long)) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:914:6
+    #6 0x56462e7f4c82 in main /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMain.cpp:20:10
+    #7 0x7f5085a6c082 in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x24082) (BuildId: 0702430aef5fa3dda43986563e9ffcc47efbd75e)
+
+DEDUP_TOKEN: operator new(unsigned long)--LLVMFuzzerTestOneInput--fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long)
+SUMMARY: AddressSanitizer: heap-use-after-free /src/xpdf-4.05/build/fuzz_JBIG2.cc:50:3 in LLVMFuzzerTestOneInput
+Shadow bytes around the buggy address:
+  0x505ffffffe00: [1m[0m00[1m[0m [1m[0m00[1m[0m [1m[0m00[1m[0m [1m[0m00[1m[0m [1m[0m00[1m[0m [1m[0m00[1m[0m [1m[0m00[1m[0m [1m[0m00[1m[0m [1m[0m00[1m[0m [1m[0m00[1m[0m [1m[0m00[1m[0m [1m[0m00[1m[0m [1m[0m00[1m[0m [1m[0m00[1m[0m [1m[0m00[1m[0m [1m[0m00[1m[0m
+  0x505ffffffe80: [1m[0m00[1m[0m [1m[0m00[1m[0m [1m[0m00[1m[0m [1m[0m00[1m[0m [1m[0m00[1m[0m [1m[0m00[1m[0m [1m[0m00[1m[0m [1m[0m00[1m[0m [1m[0m00[1m[0m [1m[0m00[1m[0m [1m[0m00[1m[0m [1m[0m00[1m[0m [1m[0m00[1m[0m [1m[0m00[1m[0m [1m[0m00[1m[0m [1m[0m00[1m[0m
+  0x505fffffff00: [1m[0m00[1m[0m [1m[0m00[1m[0m [1m[0m00[1m[0m [1m[0m00[1m[0m [1m[0m00[1m[0m [1m[0m00[1m[0m [1m[0m00[1m[0m [1m[0m00[1m[0m [1m[0m00[1m[0m [1m[0m00[1m[0m [1m[0m00[1m[0m [1m[0m00[1m[0m [1m[0m00[1m[0m [1m[0m00[1m[0m [1m[0m00[1m[0m [1m[0m00[1m[0m
+  0x505fffffff80: [1m[0m00[1m[0m [1m[0m00[1m[0m [1m[0m00[1m[0m [1m[0m00[1m[0m [1m[0m00[1m[0m [1m[0m00[1m[0m [1m[0m00[1m[0m [1m[0m00[1m[0m [1m[0m00[1m[0m [1m[0m00[1m[0m [1m[0m00[1m[0m [1m[0m00[1m[0m [1m[0m00[1m[0m [1m[0m00[1m[0m [1m[0m00[1m[0m [1m[0m00[1m[0m
+  0x506000000000: [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[35mfd[1m[0m [1m[35mfd[1m[0m [1m[35mfd[1m[0m [1m[35mfd[1m[0m [1m[35mfd[1m[0m [1m[35mfd[1m[0m [1m[35mfd[1m[0m [1m[35mfd[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m
+=&gt;0x506000000080: [1m[0m00[1m[0m [1m[0m00[1m[0m [1m[0m00[1m[0m [1m[0m00[1m[0m [1m[0m00[1m[0m [1m[0m00[1m[0m [1m[0m01[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m[[1m[35mfd[1m[0m][1m[35mfd[1m[0m [1m[35mfd[1m[0m [1m[35mfd[1m[0m
+  0x506000000100: [1m[35mfd[1m[0m [1m[35mfd[1m[0m [1m[35mfd[1m[0m [1m[35mfd[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[35mfd[1m[0m [1m[35mfd[1m[0m [1m[35mfd[1m[0m [1m[35mfd[1m[0m [1m[35mfd[1m[0m [1m[35mfd[1m[0m [1m[35mfd[1m[0m [1m[35mfd[1m[0m
+  0x506000000180: [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[35mfd[1m[0m [1m[35mfd[1m[0m [1m[35mfd[1m[0m [1m[35mfd[1m[0m [1m[35mfd[1m[0m [1m[35mfd[1m[0m [1m[35mfd[1m[0m [1m[35mfd[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m
+  0x506000000200: [1m[35mfd[1m[0m [1m[35mfd[1m[0m [1m[35mfd[1m[0m [1m[35mfd[1m[0m [1m[35mfd[1m[0m [1m[35mfd[1m[0m [1m[35mfd[1m[0m [1m[35mfd[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[35mfd[1m[0m [1m[35mfd[1m[0m [1m[35mfd[1m[0m [1m[35mfd[1m[0m
+  0x506000000280: [1m[35mfd[1m[0m [1m[35mfd[1m[0m [1m[35mfd[1m[0m [1m[35mfd[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[35mfd[1m[0m [1m[35mfd[1m[0m [1m[35mfd[1m[0m [1m[35mfd[1m[0m [1m[35mfd[1m[0m [1m[35mfd[1m[0m [1m[35mfd[1m[0m [1m[35mfd[1m[0m
+  0x506000000300: [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[35mfd[1m[0m [1m[35mfd[1m[0m [1m[35mfd[1m[0m [1m[35mfd[1m[0m [1m[35mfd[1m[0m [1m[35mfd[1m[0m [1m[35mfd[1m[0m [1m[35mfd[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           [1m[0m00[1m[0m
+  Partially addressable: [1m[0m01[1m[0m [1m[0m02[1m[0m [1m[0m03[1m[0m [1m[0m04[1m[0m [1m[0m05[1m[0m [1m[0m06[1m[0m [1m[0m07[1m[0m 
+  Heap left redzone:       [1m[31mfa[1m[0m
+  Freed heap region:       [1m[35mfd[1m[0m
+  Stack left redzone:      [1m[31mf1[1m[0m
+  Stack mid redzone:       [1m[31mf2[1m[0m
+  Stack right redzone:     [1m[31mf3[1m[0m
+  Stack after return:      [1m[35mf5[1m[0m
+  Stack use after scope:   [1m[35mf8[1m[0m
+  Global redzone:          [1m[31mf9[1m[0m
+  Global init order:       [1m[36mf6[1m[0m
+  Poisoned by user:        [1m[34mf7[1m[0m
+  Container overflow:      [1m[34mfc[1m[0m
+  Array cookie:            [1m[31mac[1m[0m
+  Intra object redzone:    [1m[33mbb[1m[0m
+  ASan internal:           [1m[33mfe[1m[0m
+  Left alloca redzone:     [1m[34mca[1m[0m
+  Right alloca redzone:    [1m[34mcb[1m[0m
+==16==ABORTING
+MS: 0 ; base unit: 0000000000000000000000000000000000000000
+
+
+artifact_prefix=&#39;./&#39;; Test unit written to ./crash-da39a3ee5e6b4b0d3255bfef95601890afd80709
+Base64: 
+stat::number_of_executed_units: 1
+stat::average_exec_per_sec:     0
+stat::new_units_added:          0
+stat::slowest_unit_time_sec:    0
+stat::peak_rss_mb:              37
+
+</pre>
+
+
+</body>

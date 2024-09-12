@@ -1,0 +1,473 @@
+<!doctype html>
+
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Experiment results</title>
+<style>
+* {
+    box-sizing: border-box;
+}
+
+html {
+    line-height: 1.15;
+}
+
+body {
+    font-family: sans-serif;
+    font-size: 16px;
+}
+
+table {
+    border-collapse: collapse;
+    border-spacing: 0;
+}
+
+td, th {
+    border-right: 1px #dedede solid;
+    border-bottom: 1px #dedede solid;
+    padding: 5px;
+    text-align: left;
+}
+td:first-child, th:first-child {
+    border-left: 1px #dedede solid;
+}
+th {
+    border-top: 1px #dedede solid;
+}
+
+tbody tr:nth-child(odd) {
+    background-color: #f4f5ff;
+}
+</style>
+<body>
+    LLM: 
+    
+<h1>output-xpdf-_zn6pdfdoc16displaypagesliceep9outputdeviddiiiiiiiipfipves2_ / 01</h1>
+Bug: True
+<br>
+Crash reason: NO_SEMANTIC_ERR
+<br>
+<br>
+
+<h2>Triage</h2>
+<pre>
+Crash is caused by bug in fuzz driver.
+
+The crash was caused by a memory leak in the fuzz driver code. The driver is creating instances of MemStream and PDFDoc using the new operator, but it is not freeing this memory later, resulting in a memory leak. The LeakSanitizer tool has detected these leaks. To fix this issue, the driver code should properly deallocate memory by deleting these objects once they are no longer needed.
+</pre>
+<br>
+
+
+
+
+
+<h3>Final code</h3>
+
+<pre>
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+#include &lt;stddef.h&gt;
+#include &lt;stdint.h&gt;
+#include &lt;string.h&gt;
+#include &lt;vector&gt;
+
+#include &#34;Object.h&#34;
+#include &#34;Stream.h&#34;
+#include &#34;OutputDev.h&#34;
+#include &#34;PDFDoc.h&#34;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  FuzzedDataProvider fdp(data, size);
+  int page = fdp.ConsumeIntegral&lt;int&gt;();
+  double hDPI = fdp.ConsumeFloatingPointInRange&lt;double&gt;(0.0, 1000.0);
+  double vDPI = fdp.ConsumeFloatingPointInRange&lt;double&gt;(0.0, 1000.0);
+  int rotate = fdp.ConsumeIntegral&lt;int&gt;();
+  GBool useMediaBox = fdp.ConsumeIntegral&lt;GBool&gt;();
+  GBool crop = fdp.ConsumeIntegral&lt;GBool&gt;();
+  GBool printing = fdp.ConsumeIntegral&lt;GBool&gt;();
+  int sliceX = fdp.ConsumeIntegral&lt;int&gt;();
+  int sliceY = fdp.ConsumeIntegral&lt;int&gt;();
+  int sliceW = fdp.ConsumeIntegral&lt;int&gt;();
+  int sliceH = fdp.ConsumeIntegral&lt;int&gt;();
+  std::vector&lt;char&gt; payload = fdp.ConsumeRemainingBytes&lt;char&gt;();
+
+  Object obj;
+  obj.initNull();
+  MemStream *stream = new MemStream(payload.data(), 0, payload.size(), &amp;obj);
+
+  PDFDoc *doc = NULL;
+  try {
+    doc = new PDFDoc(stream, NULL, NULL, NULL);
+    if (doc-&gt;isOk() == gTrue) {
+      OutputDev *output_dev = nullptr;
+      doc-&gt;displayPageSlice(output_dev, page, hDPI, vDPI, rotate, useMediaBox, crop, printing, sliceX, sliceY, sliceW, sliceH, NULL, NULL);
+    }
+  }
+  catch (...) {
+    // Handle exception here or simply ignore
+  }
+
+  return 0;
+}
+</pre>
+
+
+<h3>Fixer prompt #1</h3>
+<pre>
+
+Given the following C++ fuzz harness and its build error message, fix the code to make it build for fuzzing.
+
+If there is undeclared identifier or unknown type name error, fix it by finding and including the related libraries.
+
+MUST RETURN THE FULL CODE, INCLUDING UNCHANGED PARTS.
+
+Below is the code needs to be built:
+&lt;code&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+#include &lt;stddef.h&gt;
+#include &lt;stdint.h&gt;
+#include &lt;string.h&gt;
+#include &lt;vector&gt;
+
+#include &#34;Object.h&#34;
+#include &#34;Stream.h&#34;
+#include &#34;OutputDev.h&#34;
+#include &#34;PDFDoc.h&#34;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  FuzzedDataProvider fdp(data, size);
+  int page = fdp.ConsumeIntegral&lt;int&gt;();
+  double hDPI = fdp.ConsumeFloatingPointInRange&lt;double&gt;(0.0, 1000.0);
+  double vDPI = fdp.ConsumeFloatingPointInRange&lt;double&gt;(0.0, 1000.0);
+  int rotate = fdp.ConsumeIntegral&lt;int&gt;();
+  GBool useMediaBox = fdp.ConsumeIntegral&lt;GBool&gt;();
+  GBool crop = fdp.ConsumeIntegral&lt;GBool&gt;();
+  GBool printing = fdp.ConsumeIntegral&lt;GBool&gt;();
+  int sliceX = fdp.ConsumeIntegral&lt;int&gt;();
+  int sliceY = fdp.ConsumeIntegral&lt;int&gt;();
+  int sliceW = fdp.ConsumeIntegral&lt;int&gt;();
+  int sliceH = fdp.ConsumeIntegral&lt;int&gt;();
+  std::vector&lt;char&gt; payload = fdp.ConsumeRemainingBytes&lt;char&gt;();
+
+  Object obj;
+  obj.initNull();
+  MemStream *stream = new MemStream(payload.data(), 0, payload.size(), &amp;obj);
+
+  PDFDoc *doc = NULL;
+  try {
+    doc = new PDFDoc(stream, NULL, NULL, NULL);
+    if (doc-&gt;isOk() == gTrue) {
+      OutputDev *output_dev = nullptr;
+      doc-&gt;displayPageSlice(output_dev, page, hDPI, vDPI, rotate, useMediaBox, crop, printing, sliceX, sliceY, sliceW, sliceH, NULL, NULL);
+    }
+  }
+&lt;/code&gt;
+
+Below is the error to fix:
+The code has the following build issues:
+&lt;error&gt;
+fuzz_JBIG2.cc:39:4: error: expected catch
+   39 |   }
+      |    ^
+fuzz_JBIG2.cc:39:4: error: expected &#39;}&#39;
+fuzz_JBIG2.cc:13:73: note: to match this &#39;{&#39;
+   13 | extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+      |                                                                         ^
+&lt;/error&gt;
+
+
+
+
+Fix code:
+1. Consider possible solutions for the issues listed above.
+2. Choose a solution that can maximize fuzzing result, which is utilizing the function under test and feeding it not null input.
+3. Apply the solutions to the original code.
+It&#39;s important to show the complete code, not only the fixed line.
+&lt;solution&gt;
+</pre>
+
+
+
+<h3>Code #1</h3>
+
+<pre>
+&lt;code&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+#include &lt;stddef.h&gt;
+#include &lt;stdint.h&gt;
+#include &lt;string.h&gt;
+#include &lt;vector&gt;
+
+#include &#34;Object.h&#34;
+#include &#34;Stream.h&#34;
+#include &#34;OutputDev.h&#34;
+#include &#34;PDFDoc.h&#34;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  FuzzedDataProvider fdp(data, size);
+  int page = fdp.ConsumeIntegral&lt;int&gt;();
+  double hDPI = fdp.ConsumeFloatingPointInRange&lt;double&gt;(0.0, 1000.0);
+  double vDPI = fdp.ConsumeFloatingPointInRange&lt;double&gt;(0.0, 1000.0);
+  int rotate = fdp.ConsumeIntegral&lt;int&gt;();
+  GBool useMediaBox = fdp.ConsumeIntegral&lt;GBool&gt;();
+  GBool crop = fdp.ConsumeIntegral&lt;GBool&gt;();
+  GBool printing = fdp.ConsumeIntegral&lt;GBool&gt;();
+  int sliceX = fdp.ConsumeIntegral&lt;int&gt;();
+  int sliceY = fdp.ConsumeIntegral&lt;int&gt;();
+  int sliceW = fdp.ConsumeIntegral&lt;int&gt;();
+  int sliceH = fdp.ConsumeIntegral&lt;int&gt;();
+  std::vector&lt;char&gt; payload = fdp.ConsumeRemainingBytes&lt;char&gt;();
+
+  Object obj;
+  obj.initNull();
+  MemStream *stream = new MemStream(payload.data(), 0, payload.size(), &amp;obj);
+
+  PDFDoc *doc = NULL;
+  try {
+    doc = new PDFDoc(stream, NULL, NULL, NULL);
+    if (doc-&gt;isOk() == gTrue) {
+      OutputDev *output_dev = nullptr;
+      doc-&gt;displayPageSlice(output_dev, page, hDPI, vDPI, rotate, useMediaBox, crop, printing, sliceX, sliceY, sliceW, sliceH, NULL, NULL);
+    }
+  }
+  catch (...) {
+    // Handle exception here or simply ignore
+  }
+
+  return 0;
+}
+&lt;/code&gt;
+</pre>
+
+
+<h2>Logs</h2>
+<pre>
+Fixing /home/chyun/oss-fuzz-gen/results4/output-xpdf-_zn6pdfdoc16displaypagesliceep9outputdeviddiiiiiiiipfipves2_/fixed_targets/01.cc with gpt-4, attempt 1.
+Successfully built /home/chyun/oss-fuzz-gen/results4/output-xpdf-_zn6pdfdoc16displaypagesliceep9outputdeviddiiiiiiiipfipves2_/fixed_targets/01.cc with gpt-4 in 1 iterations of fixing.
+Triaging the crash related to /home/chyun/oss-fuzz-gen/results4/output-xpdf-_zn6pdfdoc16displaypagesliceep9outputdeviddiiiiiiiipfipves2_/fixed_targets/01.cc with gpt-4.
+Result for xpdf-zn6pdfdoc16displaypagesliceep9outputdeviddiiiiiiiipfipves2-01: crashes=True, coverage=0.019609299561761866 (528/26926), coverage diff=0.00032067984126347857 (40/124735)
+
+</pre>
+
+<h2>Run logs</h2>
+<pre>
+INFO:__main__:Running: docker run --privileged --shm-size=2g --platform linux/amd64 --rm -e FUZZING_ENGINE=libfuzzer -e SANITIZER=address -e RUN_FUZZER_MODE=interactive -e HELPER=True -v /home/chyun/oss-fuzz-gen/results4/output-xpdf-_zn6pdfdoc16displaypagesliceep9outputdeviddiiiiiiiipfipves2_/corpora/01.cc:/tmp/fuzz_JBIG2_corpus -v /tmp/tmpoqsshhp3/build/out/xpdf-zn6pdfdoc16displaypagesliceep9outputdeviddiiiiiiiipfipves2-01:/out -t gcr.io/oss-fuzz-base/base-runner run_fuzzer fuzz_JBIG2 -print_final_stats=1 -max_total_time=30 -len_control=0 -timeout=30.
+vm.mmap_rnd_bits = 28
+rm: cannot remove &#39;/tmp/fuzz_JBIG2_corpus&#39;: Device or resource busy
+/out/fuzz_JBIG2 -rss_limit_mb=2560 -timeout=25 -print_final_stats=1 -max_total_time=30 -len_control=0 -timeout=30 /tmp/fuzz_JBIG2_corpus -detect_leaks=0 &lt; /dev/null
+INFO: Running with entropic power schedule (0xFF, 100).
+INFO: Seed: 3745586046
+INFO: Loaded 1 modules   (26926 inline 8-bit counters): 26926 [0x56275bce8458, 0x56275bceed86), 
+INFO: Loaded 1 PC tables (26926 PCs): 26926 [0x56275bceed88,0x56275bd58068), 
+INFO:        0 files found in /tmp/fuzz_JBIG2_corpus
+INFO: -max_len is not provided; libFuzzer will not generate inputs larger than 4096 bytes
+Syntax Warning: May not be a PDF file (continuing anyway)
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: PDF file is damaged - attempting to reconstruct xref table...
+Syntax Error: Couldn&#39;t find trailer dictionary
+Syntax Error: Couldn&#39;t read xref table
+INFO: A corpus is not provided, starting from an empty corpus
+Syntax Warning: May not be a PDF file (continuing anyway)
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: PDF file is damaged - attempting to reconstruct xref table...
+Syntax Error: Couldn&#39;t find trailer dictionary
+Syntax Error: Couldn&#39;t read xref table
+#2	INITED cov: 105 ft: 106 corp: 1/1b exec/s: 0 rss: 34Mb
+Syntax Warning: May not be a PDF file (continuing anyway)
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: PDF file is damaged - attempting to reconstruct xref table...
+Syntax Error: Couldn&#39;t find trailer dictionary
+Syntax Error: Couldn&#39;t read xref table
+#3	NEW    cov: 105 ft: 108 corp: 2/3b lim: 4096 exec/s: 0 rss: 35Mb L: 2/2 MS: 1 CrossOver-
+Syntax Warning: May not be a PDF file (continuing anyway)
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: PDF file is damaged - attempting to reconstruct xref table...
+Syntax Error: Couldn&#39;t find trailer dictionary
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: May not be a PDF file (continuing anyway)
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: PDF file is damaged - attempting to reconstruct xref table...
+Syntax Error: Couldn&#39;t find trailer dictionary
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: May not be a PDF file (continuing anyway)
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: PDF file is damaged - attempting to reconstruct xref table...
+Syntax Error: Couldn&#39;t find trailer dictionary
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: May not be a PDF file (continuing anyway)
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: PDF file is damaged - attempting to reconstruct xref table...
+Syntax Error: Couldn&#39;t find trailer dictionary
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: May not be a PDF file (continuing anyway)
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: PDF file is damaged - attempting to reconstruct xref table...
+Syntax Error: Couldn&#39;t find trailer dictionary
+Syntax Error: Couldn&#39;t read xref table
+#8	NEW    cov: 116 ft: 126 corp: 3/35b lim: 4096 exec/s: 0 rss: 35Mb L: 32/32 MS: 5 ChangeByte-ShuffleBytes-CrossOver-CopyPart-InsertRepeatedBytes-
+Syntax Warning: May not be a PDF file (continuing anyway)
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: PDF file is damaged - attempting to reconstruct xref table...
+Syntax Error: Couldn&#39;t find trailer dictionary
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: May not be a PDF file (continuing anyway)
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: PDF file is damaged - attempting to reconstruct xref table...
+Syntax Error: Couldn&#39;t find trailer dictionary
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: May not be a PDF file (continuing anyway)
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: PDF file is damaged - attempting to reconstruct xref table...
+Syntax Error: Couldn&#39;t find trailer dictionary
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: May not be a PDF file (continuing anyway)
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: PDF file is damaged - attempting to reconstruct xref table...
+Syntax Error: Couldn&#39;t find trailer dictionary
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: May not be a PDF file (continuing anyway)
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: PDF file is damaged - attempting to reconstruct xref table...
+Syntax Error: Couldn&#39;t find trailer dictionary
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: May not be a PDF file (continuing anyway)
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: PDF file is damaged - attempting to reconstruct xref table...
+Syntax Error: Couldn&#39;t find trailer dictionary
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: May not be a PDF file (continuing anyway)
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: PDF file is damaged - attempting to reconstruct xref table...
+Syntax Error: Couldn&#39;t find trailer dictionary
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: May not be a PDF file (continuing anyway)
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: PDF file is damaged - attempting to reconstruct xref table...
+Syntax Error: Couldn&#39;t find trailer dictionary
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: May not be a PDF file (continuing anyway)
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: PDF file is damaged - attempting to reconstruct xref table...
+Syntax Error: Couldn&#39;t find trailer dictionary
+Syntax Error: Couldn&#39;t read xref table
+#17	NEW    cov: 116 ft: 127 corp: 4/38b lim: 4096 exec/s: 0 rss: 35Mb L: 3/32 MS: 4 ChangeByte-ChangeBinInt-ShuffleBytes-CopyPart-
+Syntax Warning: May not be a PDF file (continuing anyway)
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: PDF file is damaged - attempting to reconstruct xref table...
+Syntax Error: Couldn&#39;t find trailer dictionary
+Syntax Error: Couldn&#39;t read xref table
+#18	NEW    cov: 116 ft: 129 corp: 5/43b lim: 4096 exec/s: 0 rss: 35Mb L: 5/32 MS: 1 CMP- DE: &#34;\337\377\377\177&#34;-
+Syntax Warning: May not be a PDF file (continuing anyway)
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: PDF file is damaged - attempting to reconstruct xref table...
+Syntax Error: Couldn&#39;t find trailer dictionary
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: May not be a PDF file (continuing anyway)
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: PDF file is damaged - attempting to reconstruct xref table...
+Syntax Error: Couldn&#39;t find trailer dictionary
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: May not be a PDF file (continuing anyway)
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: PDF file is damaged - attempting to reconstruct xref table...
+Syntax Error: Couldn&#39;t find trailer dictionary
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: May not be a PDF file (continuing anyway)
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: PDF file is damaged - attempting to reconstruct xref table...
+Syntax Error: Couldn&#39;t find trailer dictionary
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: May not be a PDF file (continuing anyway)
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: PDF file is damaged - attempting to reconstruct xref table...
+Syntax Error: Couldn&#39;t find trailer dictionary
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: May not be a PDF file (continuing anyway)
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: PDF file is damaged - attempting to reconstruct xref table...
+Syntax Error: Couldn&#39;t find trailer dictionary
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: May not be a PDF file (continuing anyway)
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: 
+...truncated...
+n.cpp:20:10
+    #8 0x7fe444e78082 in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x24082) (BuildId: 0702430aef5fa3dda43986563e9ffcc47efbd75e)
+
+DEDUP_TOKEN: operator new(unsigned long)--LLVMFuzzerTestOneInput--fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long)
+[1m[34mDirect leak of 88 byte(s) in 1 object(s) allocated from:
+[1m[0m    #0 0x56275b8cd92d in operator new(unsigned long) /src/llvm-project/compiler-rt/lib/asan/asan_new_delete.cpp:95:3
+    #1 0x56275b8d058f in LLVMFuzzerTestOneInput /src/xpdf-4.05/build/fuzz_JBIG2.cc:34:11
+    #2 0x56275b782600 in fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:614:13
+    #3 0x56275b783b01 in fuzzer::Fuzzer::ReadAndExecuteSeedCorpora(std::__Fuzzer::vector&lt;fuzzer::SizedFile, std::__Fuzzer::allocator&lt;fuzzer::SizedFile&gt;&gt;&amp;) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:807:3
+    #4 0x56275b7840e7 in fuzzer::Fuzzer::Loop(std::__Fuzzer::vector&lt;fuzzer::SizedFile, std::__Fuzzer::allocator&lt;fuzzer::SizedFile&gt;&gt;&amp;) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:867:3
+    #5 0x56275b7726f6 in fuzzer::FuzzerDriver(int*, char***, int (*)(unsigned char const*, unsigned long)) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:914:6
+    #6 0x56275b79ec22 in main /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMain.cpp:20:10
+    #7 0x7fe444e78082 in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x24082) (BuildId: 0702430aef5fa3dda43986563e9ffcc47efbd75e)
+
+DEDUP_TOKEN: operator new(unsigned long)--LLVMFuzzerTestOneInput--fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long)
+[1m[34mIndirect leak of 3651968 byte(s) in 57062 object(s) allocated from:
+[1m[0m    #0 0x56275b8cd92d in operator new(unsigned long) /src/llvm-project/compiler-rt/lib/asan/asan_new_delete.cpp:95:3
+    #1 0x56275b8d0532 in LLVMFuzzerTestOneInput /src/xpdf-4.05/build/fuzz_JBIG2.cc:30:23
+    #2 0x56275b782600 in fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:614:13
+    #3 0x56275b781e25 in fuzzer::Fuzzer::RunOne(unsigned char const*, unsigned long, bool, fuzzer::InputInfo*, bool, bool*) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:516:7
+    #4 0x56275b7835f5 in fuzzer::Fuzzer::MutateAndTestOne() /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:760:19
+    #5 0x56275b7843e5 in fuzzer::Fuzzer::Loop(std::__Fuzzer::vector&lt;fuzzer::SizedFile, std::__Fuzzer::allocator&lt;fuzzer::SizedFile&gt;&gt;&amp;) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:905:5
+    #6 0x56275b7726f6 in fuzzer::FuzzerDriver(int*, char***, int (*)(unsigned char const*, unsigned long)) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:914:6
+    #7 0x56275b79ec22 in main /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMain.cpp:20:10
+    #8 0x7fe444e78082 in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x24082) (BuildId: 0702430aef5fa3dda43986563e9ffcc47efbd75e)
+
+DEDUP_TOKEN: operator new(unsigned long)--LLVMFuzzerTestOneInput--fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long)
+[1m[34mIndirect leak of 127512 byte(s) in 1449 object(s) allocated from:
+[1m[0m    #0 0x56275b8cd92d in operator new(unsigned long) /src/llvm-project/compiler-rt/lib/asan/asan_new_delete.cpp:95:3
+    #1 0x56275b8d058f in LLVMFuzzerTestOneInput /src/xpdf-4.05/build/fuzz_JBIG2.cc:34:11
+    #2 0x56275b782600 in fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:614:13
+    #3 0x56275b781e25 in fuzzer::Fuzzer::RunOne(unsigned char const*, unsigned long, bool, fuzzer::InputInfo*, bool, bool*) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:516:7
+    #4 0x56275b7835f5 in fuzzer::Fuzzer::MutateAndTestOne() /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:760:19
+    #5 0x56275b7843e5 in fuzzer::Fuzzer::Loop(std::__Fuzzer::vector&lt;fuzzer::SizedFile, std::__Fuzzer::allocator&lt;fuzzer::SizedFile&gt;&gt;&amp;) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:905:5
+    #6 0x56275b7726f6 in fuzzer::FuzzerDriver(int*, char***, int (*)(unsigned char const*, unsigned long)) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:914:6
+    #7 0x56275b79ec22 in main /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMain.cpp:20:10
+    #8 0x7fe444e78082 in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x24082) (BuildId: 0702430aef5fa3dda43986563e9ffcc47efbd75e)
+
+DEDUP_TOKEN: operator new(unsigned long)--LLVMFuzzerTestOneInput--fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long)
+[1m[34mIndirect leak of 64 byte(s) in 1 object(s) allocated from:
+[1m[0m    #0 0x56275b8cd92d in operator new(unsigned long) /src/llvm-project/compiler-rt/lib/asan/asan_new_delete.cpp:95:3
+    #1 0x56275b8d0532 in LLVMFuzzerTestOneInput /src/xpdf-4.05/build/fuzz_JBIG2.cc:30:23
+    #2 0x56275b782600 in fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:614:13
+    #3 0x56275b781e25 in fuzzer::Fuzzer::RunOne(unsigned char const*, unsigned long, bool, fuzzer::InputInfo*, bool, bool*) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:516:7
+    #4 0x56275b783c76 in fuzzer::Fuzzer::ReadAndExecuteSeedCorpora(std::__Fuzzer::vector&lt;fuzzer::SizedFile, std::__Fuzzer::allocator&lt;fuzzer::SizedFile&gt;&gt;&amp;) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:812:5
+    #5 0x56275b7840e7 in fuzzer::Fuzzer::Loop(std::__Fuzzer::vector&lt;fuzzer::SizedFile, std::__Fuzzer::allocator&lt;fuzzer::SizedFile&gt;&gt;&amp;) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:867:3
+    #6 0x56275b7726f6 in fuzzer::FuzzerDriver(int*, char***, int (*)(unsigned char const*, unsigned long)) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:914:6
+    #7 0x56275b79ec22 in main /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMain.cpp:20:10
+    #8 0x7fe444e78082 in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x24082) (BuildId: 0702430aef5fa3dda43986563e9ffcc47efbd75e)
+
+DEDUP_TOKEN: operator new(unsigned long)--LLVMFuzzerTestOneInput--fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long)
+[1m[34mIndirect leak of 64 byte(s) in 1 object(s) allocated from:
+[1m[0m    #0 0x56275b8cd92d in operator new(unsigned long) /src/llvm-project/compiler-rt/lib/asan/asan_new_delete.cpp:95:3
+    #1 0x56275b8d0532 in LLVMFuzzerTestOneInput /src/xpdf-4.05/build/fuzz_JBIG2.cc:30:23
+    #2 0x56275b782600 in fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:614:13
+    #3 0x56275b783b01 in fuzzer::Fuzzer::ReadAndExecuteSeedCorpora(std::__Fuzzer::vector&lt;fuzzer::SizedFile, std::__Fuzzer::allocator&lt;fuzzer::SizedFile&gt;&gt;&amp;) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:807:3
+    #4 0x56275b7840e7 in fuzzer::Fuzzer::Loop(std::__Fuzzer::vector&lt;fuzzer::SizedFile, std::__Fuzzer::allocator&lt;fuzzer::SizedFile&gt;&gt;&amp;) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:867:3
+    #5 0x56275b7726f6 in fuzzer::FuzzerDriver(int*, char***, int (*)(unsigned char const*, unsigned long)) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:914:6
+    #6 0x56275b79ec22 in main /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMain.cpp:20:10
+    #7 0x7fe444e78082 in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x24082) (BuildId: 0702430aef5fa3dda43986563e9ffcc47efbd75e)
+
+DEDUP_TOKEN: operator new(unsigned long)--LLVMFuzzerTestOneInput--fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long)
+SUMMARY: AddressSanitizer: 8673728 byte(s) leaked in 114128 allocation(s).
+MS: 5 ShuffleBytes-InsertRepeatedBytes-ShuffleBytes-PersAutoDict-CopyPart- DE: &#34;\000\000\000\027&#34;-; base unit: f50cc6cdd983d812e659c0804244d3268ad63eff
+
+
+artifact_prefix=&#39;./&#39;; Test unit written to ./crash-da39a3ee5e6b4b0d3255bfef95601890afd80709
+Base64: 
+stat::number_of_executed_units: 57064
+stat::average_exec_per_sec:     1840
+stat::new_units_added:          1460
+stat::slowest_unit_time_sec:    0
+stat::peak_rss_mb:              85
+
+</pre>
+
+
+</body>
