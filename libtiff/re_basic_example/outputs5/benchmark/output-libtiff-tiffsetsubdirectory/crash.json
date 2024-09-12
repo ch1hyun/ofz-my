@@ -1,0 +1,43 @@
+{
+    "samples": [
+
+    {
+        "benchmark": "output-libtiff-tiffsetsubdirectory",
+        "sample": "01",
+        "status": "Done",
+        "compiles": "False",
+        "crashes": "False",
+        "crash_reason": "-",
+        "bug": "True",
+        "coverage": "0.00",
+        "coverage_diff": "0.0",
+        "coverage_report": "#",
+        "stacktrace": "/stacktrace",
+        "target_binary": "/target_binary",
+        "reproducer": "/artifacts",
+        "run_log": "run.log",
+        "source_code": "#include \"tiffio.h\"\\n#include <fuzzer/FuzzedDataProvider.h>\\n#include <cstddef>\\n#include <cstdint>\\n#include <stdlib.h>\\n\\nstatic tsize_t tiff_ReadProc(thandle_t, tdata_t, tsize_t) { return 0; }\\n\\nstatic tsize_t tiff_WriteProc(thandle_t, tdata_t, tsize_t) { return 0; }\\n\\nstatic toff_t tiff_SeekProc(thandle_t, toff_t, int) { return 0; }\\n\\nstatic int tiff_CloseProc(thandle_t) { return 0; }\\n\\nstatic toff_t tiff_SizeProc(thandle_t) { return 0; }\\n\\nextern \"C\" void tiff_ErrorHandler(const char*, const char*, va_list) {}\\n\\nextern \"C\" int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {\\n  TIFFSetErrorHandler(tiff_ErrorHandler); \\n  TIFFSetWarningHandler(tiff_ErrorHandler); \\n  FuzzedDataProvider dataProvider(data, size);\\n  if (size < 1) {\\n    return 0;\\n  }\\n  TIFF* tif = TIFFClientOpen(\"dummy\", \"w\", (thandle_t)1,\\n                             tiff_ReadProc, tiff_WriteProc,\\n                             tiff_SeekProc, tiff_CloseProc,\\n                             tiff_SizeProc, nullptr, nullptr);\\n  if (!tif) {\\n    return 0;\\n  }\\n  while (dataProvider.remaining_bytes() > 0) {\\n    uint64_t value = dataProvider.ConsumeIntegral<uint64_t>();\\n    TIFFSetSubDirectory(tif, value);\\n  }\\n  TIFFClose(tif);\\n  return 0;\\n}",
+        "model": ""
+    },
+
+    {
+        "benchmark": "output-libtiff-tiffsetsubdirectory",
+        "sample": "02",
+        "status": "Done",
+        "compiles": "True",
+        "crashes": "False",
+        "crash_reason": "NO_COV_INCREASE",
+        "bug": "False",
+        "coverage": "0.00",
+        "coverage_diff": "0.0",
+        "coverage_report": "#",
+        "stacktrace": "/stacktrace",
+        "target_binary": "/target_binary",
+        "reproducer": "/artifacts",
+        "run_log": "run.log",
+        "source_code": "// Include the necessary libraries\\n#include <fuzzer/FuzzedDataProvider.h>\\n#include <tiffio.h>\\n#include <cstdint>\\n#include <cstdio>\\n#include <cstdlib>\\n#include <cstring>\\n\\nextern \"C\" void DummyErrorHandler(const char* mod, const char* fmt, va_list args) { return; }\\n\\n// Stream for reading image data\\nstruct MemStream {\\n  const uint8_t*  Data;\\n  size_t          DataSize;\\n};\\n\\ntmsize_t ReadFunc(thandle_t st, void* buffer, tmsize_t size) {\\n  MemStream*  ms = static_cast<MemStream*>(st);\\n  if (size > ms->DataSize)\\n    size = ms->DataSize;\\n  memcpy(buffer, ms->Data, size);\\n  ms->Data += size;\\n  ms->DataSize -= size;\\n  return size;\\n}\\n\\nextern \"C\" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {\\n  // Initialize libtiff\\n  static bool initialized = false;\\n  if (!initialized) {\\n    TIFFSetErrorHandler(DummyErrorHandler);\\n    TIFFSetWarningHandler(DummyErrorHandler);\\n    initialized = true;\\n  }\\n  \\n  // Prepare the stream and the callbacks\\n  MemStream ms;\\n  ms.Data = data;\\n  ms.DataSize = size;\\n  TIFF*  tif = TIFFClientOpen(\"dummy\", \"r\", &ms, ReadFunc, NULL, NULL, NULL, NULL, NULL, NULL);\\n  if (tif == NULL)\\n    return 0;\\n\\n  FuzzedDataProvider stream(data, size);\\n  const uint64_t sub_dir = stream.ConsumeIntegral<uint64_t>();\\n  \\n  TIFFSetSubDirectory(tif, sub_dir);\\n\\n  // Add a function call to increase code coverage\\n  uint32_t width;\\n  if(TIFFGetField(tif, TIFFTAG_IMAGEWIDTH, &width) == 1) {\\n    // Do something with width, to ensure the call isn't optimized away\\n    printf(\"Width: %u\\\n\", width);\\n  }\\n\\n  TIFFClose(tif);\\n  return 0;\\n}",
+        "model": ""
+    }
+
+    ]
+}

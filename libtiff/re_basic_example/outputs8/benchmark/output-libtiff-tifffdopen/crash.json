@@ -1,0 +1,43 @@
+{
+    "samples": [
+
+    {
+        "benchmark": "output-libtiff-tifffdopen",
+        "sample": "01",
+        "status": "Done",
+        "compiles": "True",
+        "crashes": "False",
+        "crash_reason": "NO_SEMANTIC_ERR",
+        "bug": "True",
+        "coverage": "0.00",
+        "coverage_diff": "0.0018517400318016223",
+        "coverage_report": "#",
+        "stacktrace": "/stacktrace",
+        "target_binary": "/target_binary",
+        "reproducer": "/artifacts",
+        "run_log": "run.log",
+        "source_code": "#include <sstream>\\n#include <string>\\n#include <stdint.h>\\n#include <stdlib.h>\\n#include <fcntl.h>\\n#include <unistd.h>\\n\\n#include \"tiffio.h\"\\n\\nstatic ssize_t fuzzread(thandle_t fd, void* buf, tmsize_t size) {\\n\tstd::string* str = reinterpret_cast<std::string*>(fd);\\n\ttmsize_t copy = (str->size() < size) ? str->size() : size;\\n\tmemcpy(buf, str->c_str(), copy);\\n\tstr->erase(0, copy);\\n\treturn copy;\\n}\\n\\nstatic ssize_t fuzzwrite(thandle_t fd, void* buf, tmsize_t size) {\\n\treturn size;\\n}\\n\\nstatic uint64_t fuzzseek(thandle_t fd, uint64_t off, int whence) {\\n\treturn 0;\\n}\\n\\nstatic int fuzzclose(thandle_t fd) {\\n\tdelete reinterpret_cast<std::string*>(fd);\\n\treturn 0;\\n}\\n\\nstatic uint64_t fuzzsize(thandle_t fd) {\\n\treturn reinterpret_cast<std::string*>(fd)->size();\\n}\\n\\nstatic int fuzzmap(thandle_t fd, void** pbase, toff_t* psize) {\\n\treturn 0;\\n}\\n\\nstatic void fuzzunmap(thandle_t fd, void* base, toff_t size) {\\n}\\n\\nTIFF* fuzztiff(const uint8_t* data, size_t size) {\\n\t// create custom input stream\\n\tstd::string* stream = new std::string(reinterpret_cast<const char*>(data), size);\\n\\n\t// open TIFF file using custom handlers for file I/O.\\n\tTIFF* tif = TIFFClientOpen(\"dummy\", \"rm\",\\n\t\treinterpret_cast<thandle_t>(stream),\\n\t\tfuzzread,\\n\t\tfuzzwrite,\\n\t\tfuzzseek,\\n\t\tfuzzclose,\\n\t\tfuzzsize,\\n\t\tfuzzmap,\\n\t\tfuzzunmap);\\n\\n\tif (tif)\\n\t\tTIFFClose(tif);\\n\\n\treturn tif;\\n}\\n\\nextern \"C\" int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {\\n\tint fd = open(\"dummy\", O_RDWR | O_CREAT, 0666);\\n\tTIFF *tif = TIFFFdOpen(fd, \"dummy\", \"w\");\\n\tif (tif) {\\n\t\tfuzztiff(data, size);\\n\t\tTIFFClose(tif);\\n\t}\\n\tclose(fd);\\n\treturn 0;\\n}",
+        "model": ""
+    },
+
+    {
+        "benchmark": "output-libtiff-tifffdopen",
+        "sample": "02",
+        "status": "Done",
+        "compiles": "True",
+        "crashes": "False",
+        "crash_reason": "NO_SEMANTIC_ERR",
+        "bug": "True",
+        "coverage": "0.37",
+        "coverage_diff": "0.0019121228589255882",
+        "coverage_report": "#",
+        "stacktrace": "/stacktrace",
+        "target_binary": "/target_binary",
+        "reproducer": "/artifacts",
+        "run_log": "run.log",
+        "source_code": "//\\n// Distributed under the terms of the GPLv2 or later\\n//\\n// you may not use this file except in compliance with the License.\\n//\\n#include <cstddef>\\n#include <cstring>\\n#include <stdint.h>\\n#include <unistd.h>\\n#include <tiffio.h>\\n#include <fuzzer/FuzzedDataProvider.h>\\n\\nextern \"C\" void _TIFFerr(const char* module, const char* fmt, ...) {\\n  // no-op: reserve to use in libtiff\\n  (void)module; (void)fmt;\\n}\\n\\nextern \"C\" int LLVMFuzzerTestOneInput(const uint8_t *Data, size_t Size) {\\n  FuzzedDataProvider stream(Data, Size);\\n\\n  const std::string mode = stream.ConsumeBytesAsString(1);\\n  if (mode.empty()) {\\n    return 0;\\n  }\\n  const std::string name = stream.ConsumeBytesAsString(0);\\n\\n  // Create a pipe.\\n  int pipefd[2];\\n  if (pipe(pipefd) != 0) {\\n    return 0;\\n  }\\n\\n  // Write the data to the pipe.\\n  write(pipefd[1], Data, Size);\\n\\n  // Closing write end of pipe to allow it to start reading.\\n  close(pipefd[1]);\\n\\n  // Open the tif file with the data from the pipe.\\n  TIFF* tif = TIFFFdOpen(pipefd[0], name.c_str(), mode.c_str());\\n  if (!tif) {\\n    close(pipefd[0]);\\n    return 0;\\n  }\\n\\n  // Close the opened tif file.\\n  TIFFClose(tif);\\n  close(pipefd[0]);\\n\\n  return 0;\\n}",
+        "model": ""
+    }
+
+    ]
+}

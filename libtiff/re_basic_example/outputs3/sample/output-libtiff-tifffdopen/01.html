@@ -1,0 +1,825 @@
+<!doctype html>
+
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Experiment results</title>
+<style>
+* {
+    box-sizing: border-box;
+}
+
+html {
+    line-height: 1.15;
+}
+
+body {
+    font-family: sans-serif;
+    font-size: 16px;
+}
+
+table {
+    border-collapse: collapse;
+    border-spacing: 0;
+}
+
+td, th {
+    border-right: 1px #dedede solid;
+    border-bottom: 1px #dedede solid;
+    padding: 5px;
+    text-align: left;
+}
+td:first-child, th:first-child {
+    border-left: 1px #dedede solid;
+}
+th {
+    border-top: 1px #dedede solid;
+}
+
+tbody tr:nth-child(odd) {
+    background-color: #f4f5ff;
+}
+</style>
+<body>
+    LLM: 
+    
+<h1>output-libtiff-tifffdopen / 01</h1>
+Bug: False
+<br>
+Crash reason: FP_NEAR_INIT_CRASH
+<br>
+<br>
+
+<h2>Triage</h2>
+<pre>
+Crash is caused by bug in project.
+
+The crash is caused by a heap-buffer-overflow when calling the strlen function on the &#39;name&#39; parameter in the TIFFClientOpenExt function. The &#39;name&#39; parameter comes from the fuzz driver as an input and is not properly validated or sanitized in the project code before it is used. This leads to a buffer overflow when the length of the &#39;name&#39; string is calculated with strlen.
+</pre>
+<br>
+
+
+
+
+
+<h3>Final code</h3>
+
+<pre>
+#include &lt;cstdint&gt;
+#include &lt;cstddef&gt;
+#include &lt;tiffio.h&gt;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+    if (size &lt; 3) {
+        return 0;
+    }
+    TIFF *tif = TIFFFdOpen(0, reinterpret_cast&lt;const char *&gt;(data), &#34;r&#34;);
+    if (tif) {
+        TIFFClose(tif);
+    }
+    return 0;
+}
+</pre>
+
+
+<h3>Fixer prompt #1</h3>
+<pre>
+
+Given the following C++ fuzz harness and its build error message, fix the code to make it build for fuzzing.
+
+If there is undeclared identifier or unknown type name error, fix it by finding and including the related libraries.
+
+MUST RETURN THE FULL CODE, INCLUDING UNCHANGED PARTS.
+
+Below is the code needs to be built:
+&lt;code&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+#include &lt;cstddef&gt;
+#include &lt;cstdint&gt;
+#include &lt;cstdlib&gt;
+#include &lt;string&gt;
+#include &lt;tiffio.h&gt;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  FuzzedDataProvider stream(data, size);
+  
+  if (stream.remaining_bytes() &lt; 1) {
+    return 0;
+  }
+  
+  std::string mode = stream.ConsumeBytesAsString(1);
+  
+  // We will use a file descriptor of a file created from our fuzzer input
+  int tfd = mkstemp(const_cast&lt;char *&gt;(mode.c_str()));
+  
+  if (tfd == -1) {
+    return 0;
+  }
+
+  char *name = tmpnam(NULL);
+  
+  if (name == NULL) {
+    close(tfd);
+    return 0;
+  }
+
+  // Calls the function-under-test
+  TIFF *tif = TIFFFdOpen(tfd, name, mode.c_str());
+  
+  if (tif) {
+    TIFFClose(tif);
+  }
+  
+  close(tfd);
+  
+  return 0;
+}
+&lt;/code&gt;
+
+Below is the error to fix:
+The code has the following build issues:
+&lt;error&gt;
+/src/libtiff/contrib/oss-fuzz/tiff_read_rgba_fuzzer.cc:28:5: error: use of undeclared identifier &#39;close&#39;
+   28 |     close(tfd);
+      |     ^
+/src/libtiff/contrib/oss-fuzz/tiff_read_rgba_fuzzer.cc:39:3: error: use of undeclared identifier &#39;close&#39;
+   39 |   close(tfd);
+      |   ^
+&lt;/error&gt;
+
+
+
+
+Fix code:
+1. Consider possible solutions for the issues listed above.
+2. Choose a solution that can maximize fuzzing result, which is utilizing the function under test and feeding it not null input.
+3. Apply the solutions to the original code.
+It&#39;s important to show the complete code, not only the fixed line.
+&lt;solution&gt;
+</pre>
+
+
+
+<h3>Code #1</h3>
+
+<pre>
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+#include &lt;cstddef&gt;
+#include &lt;cstdint&gt;
+#include &lt;cstdlib&gt;
+#include &lt;string&gt;
+#include &lt;tiffio.h&gt;
+#include &lt;unistd.h&gt; // added this to fix the error
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  FuzzedDataProvider stream(data, size);
+  
+  if (stream.remaining_bytes() &lt; 1) {
+    return 0;
+  }
+  
+  std::string mode = stream.ConsumeBytesAsString(1);
+  
+  // We will use a file descriptor of a file created from our fuzzer input
+  int tfd = mkstemp(const_cast&lt;char *&gt;(mode.c_str()));
+  
+  if (tfd == -1) {
+    return 0;
+  }
+
+  char *name = tmpnam(NULL);
+  
+  if (name == NULL) {
+    close(tfd);
+    return 0;
+  }
+
+  // Calls the function-under-test
+  TIFF *tif = TIFFFdOpen(tfd, name, mode.c_str());
+  
+  if (tif) {
+    TIFFClose(tif);
+  }
+  
+  close(tfd);
+  
+  return 0;
+}
+</pre>
+
+
+<h3>Fixer prompt #2</h3>
+<pre>
+
+Given the following C++ fuzz harness and its build error message, fix the code to make it build for fuzzing.
+
+If there is undeclared identifier or unknown type name error, fix it by finding and including the related libraries.
+
+MUST RETURN THE FULL CODE, INCLUDING UNCHANGED PARTS.
+
+Below is the code needs to be built:
+&lt;code&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+#include &lt;cstddef&gt;
+#include &lt;cstdint&gt;
+#include &lt;cstdlib&gt;
+#include &lt;string&gt;
+#include &lt;tiffio.h&gt;
+#include &lt;unistd.h&gt; // added this to fix the error
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  FuzzedDataProvider stream(data, size);
+  
+  if (stream.remaining_bytes() &lt; 1) {
+    return 0;
+  }
+  
+  std::string mode = stream.ConsumeBytesAsString(1);
+  
+  // We will use a file descriptor of a file created from our fuzzer input
+  int tfd = mkstemp(const_cast&lt;char *&gt;(mode.c_str()));
+  
+  if (tfd == -1) {
+    return 0;
+  }
+
+  char *name = tmpnam(NULL);
+  
+  if (name == NULL) {
+    close(tfd);
+    return 0;
+  }
+
+  // Calls the function-under-test
+  TIFF *tif = TIFFFdOpen(tfd, name, mode.c_str());
+  
+  if (tif) {
+    TIFFClose(tif);
+  }
+  
+  close(tfd);
+  
+  return 0;
+}
+&lt;/code&gt;
+
+Below is the error to fix:
+The code can build successfully but has a runtime issue: No code coverage increasement, indicating the fuzz target ineffectively invokes the function under test.
+
+
+
+
+Fix code:
+1. Consider possible solutions for the issues listed above.
+2. Choose a solution that can maximize fuzzing result, which is utilizing the function under test and feeding it not null input.
+3. Apply the solutions to the original code.
+It&#39;s important to show the complete code, not only the fixed line.
+&lt;solution&gt;
+</pre>
+
+
+
+<h3>Code #2</h3>
+
+<pre>
+&lt;code&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+#include &lt;cstddef&gt;
+#include &lt;cstdint&gt;
+#include &lt;cstdlib&gt;
+#include &lt;string&gt;
+#include &lt;tiffio.h&gt;
+#include &lt;unistd.h&gt;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  FuzzedDataProvider stream(data, size);
+  
+  if (stream.remaining_bytes() &lt; 2) {
+    return 0;
+  }
+  
+  std::string mode = stream.ConsumeBytesAsString(1);
+  
+  // We will use a file descriptor of a file created from our fuzzer input
+  int tfd = mkstemp(const_cast&lt;char *&gt;(mode.c_str()));
+  
+  if (tfd == -1) {
+    return 0;
+  }
+
+  char *name = tmpnam(NULL);
+  
+  if (name == NULL) {
+    close(tfd);
+    return 0;
+  }
+
+  // Write remaining data to the file
+  std::string remaining_data = stream.ConsumeRemainingBytesAsString();
+  write(tfd, remaining_data.data(), remaining_data.size());
+
+  // Calls the function-under-test
+  TIFF *tif = TIFFFdOpen(tfd, name, mode.c_str());
+  
+  if (tif) {
+    TIFFClose(tif);
+  }
+  
+  close(tfd);
+  
+  return 0;
+}
+&lt;/code&gt;
+&lt;/solution&gt;
+
+The fixed code writes the remaining fuzzing data to the file before calling the function under test. This ensures that the function under test is fed with non-null input, which can increase code coverage.
+</pre>
+
+
+<h3>Fixer prompt #3</h3>
+<pre>
+
+Given the following C++ fuzz harness and its build error message, fix the code to make it build for fuzzing.
+
+If there is undeclared identifier or unknown type name error, fix it by finding and including the related libraries.
+
+MUST RETURN THE FULL CODE, INCLUDING UNCHANGED PARTS.
+
+Below is the code needs to be built:
+&lt;code&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+#include &lt;cstddef&gt;
+#include &lt;cstdint&gt;
+#include &lt;cstdlib&gt;
+#include &lt;string&gt;
+#include &lt;tiffio.h&gt;
+#include &lt;unistd.h&gt;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  FuzzedDataProvider stream(data, size);
+  
+  if (stream.remaining_bytes() &lt; 2) {
+    return 0;
+  }
+  
+  std::string mode = stream.ConsumeBytesAsString(1);
+  
+  // We will use a file descriptor of a file created from our fuzzer input
+  int tfd = mkstemp(const_cast&lt;char *&gt;(mode.c_str()));
+  
+  if (tfd == -1) {
+    return 0;
+  }
+
+  char *name = tmpnam(NULL);
+  
+  if (name == NULL) {
+    close(tfd);
+    return 0;
+  }
+
+  // Write remaining data to the file
+  std::string remaining_data = stream.ConsumeRemainingBytesAsString();
+  write(tfd, remaining_data.data(), remaining_data.size());
+
+  // Calls the function-under-test
+  TIFF *tif = TIFFFdOpen(tfd, name, mode.c_str());
+  
+  if (tif) {
+    TIFFClose(tif);
+  }
+  
+  close(tfd);
+  
+  return 0;
+}
+&lt;/code&gt;
+
+Below is the error to fix:
+The code can build successfully but has a runtime issue: No code coverage increasement, indicating the fuzz target ineffectively invokes the function under test.
+
+
+
+
+Fix code:
+1. Consider possible solutions for the issues listed above.
+2. Choose a solution that can maximize fuzzing result, which is utilizing the function under test and feeding it not null input.
+3. Apply the solutions to the original code.
+It&#39;s important to show the complete code, not only the fixed line.
+&lt;solution&gt;
+</pre>
+
+
+
+<h3>Code #3</h3>
+
+<pre>
+&lt;code&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+#include &lt;cstddef&gt;
+#include &lt;cstdint&gt;
+#include &lt;cstdlib&gt;
+#include &lt;string&gt;
+#include &lt;tiffio.h&gt;
+#include &lt;unistd.h&gt;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  FuzzedDataProvider stream(data, size);
+  
+  if (stream.remaining_bytes() &lt; 2) {
+    return 0;
+  }
+  
+  std::string mode = stream.ConsumeBytesAsString(1);
+  
+  // We will use a file descriptor of a file created from our fuzzer input
+  int tfd = mkstemp(const_cast&lt;char *&gt;(mode.c_str()));
+  
+  if (tfd == -1) {
+    return 0;
+  }
+
+  char *name = tmpnam(NULL);
+  
+  if (name == NULL) {
+    close(tfd);
+    return 0;
+  }
+
+  // Write remaining data to the file
+  std::string remaining_data = stream.ConsumeRemainingBytesAsString();
+  ssize_t written = write(tfd, remaining_data.data(), remaining_data.size());
+
+  // Check if write was successful
+  if (written != static_cast&lt;ssize_t&gt;(remaining_data.size())) {
+    close(tfd);
+    return 0;
+  }
+
+  // Calls the function-under-test
+  TIFF *tif = TIFFFdOpen(tfd, name, mode.c_str());
+  
+  if (tif) {
+    TIFFClose(tif);
+  }
+  
+  close(tfd);
+  
+  return 0;
+}
+&lt;/code&gt;
+
+The fix is to check if the write operation was successful before calling the function under test. If the write operation was not successful, the function under test would not be effectively invoked, leading to no code coverage increasement. The check is done by comparing the return value of the write function (the number of bytes written) to the size of the data written. If they are not equal, the write operation was not successful.
+</pre>
+
+
+<h3>Fixer prompt #4</h3>
+<pre>
+
+Given the following C++ fuzz harness and its build error message, fix the code to make it build for fuzzing.
+
+If there is undeclared identifier or unknown type name error, fix it by finding and including the related libraries.
+
+MUST RETURN THE FULL CODE, INCLUDING UNCHANGED PARTS.
+
+Below is the code needs to be built:
+&lt;code&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+#include &lt;cstddef&gt;
+#include &lt;cstdint&gt;
+#include &lt;cstdlib&gt;
+#include &lt;string&gt;
+#include &lt;tiffio.h&gt;
+#include &lt;unistd.h&gt;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  FuzzedDataProvider stream(data, size);
+  
+  if (stream.remaining_bytes() &lt; 2) {
+    return 0;
+  }
+  
+  std::string mode = stream.ConsumeBytesAsString(1);
+  
+  // We will use a file descriptor of a file created from our fuzzer input
+  int tfd = mkstemp(const_cast&lt;char *&gt;(mode.c_str()));
+  
+  if (tfd == -1) {
+    return 0;
+  }
+
+  char *name = tmpnam(NULL);
+  
+  if (name == NULL) {
+    close(tfd);
+    return 0;
+  }
+
+  // Write remaining data to the file
+  std::string remaining_data = stream.ConsumeRemainingBytesAsString();
+  ssize_t written = write(tfd, remaining_data.data(), remaining_data.size());
+
+  // Check if write was successful
+  if (written != static_cast&lt;ssize_t&gt;(remaining_data.size())) {
+    close(tfd);
+    return 0;
+  }
+
+  // Calls the function-under-test
+  TIFF *tif = TIFFFdOpen(tfd, name, mode.c_str());
+  
+  if (tif) {
+    TIFFClose(tif);
+  }
+  
+  close(tfd);
+  
+  return 0;
+}
+&lt;/code&gt;
+
+Below is the error to fix:
+The code has the following build issues:
+&lt;error&gt;
+
+&lt;/error&gt;
+
+
+
+
+Fix code:
+1. Consider possible solutions for the issues listed above.
+2. Choose a solution that can maximize fuzzing result, which is utilizing the function under test and feeding it not null input.
+3. Apply the solutions to the original code.
+It&#39;s important to show the complete code, not only the fixed line.
+&lt;solution&gt;
+</pre>
+
+
+
+<h3>Code #4</h3>
+
+<pre>
+The error message is not provided in the question, so it&#39;s hard to provide a specific solution. However, based on the provided code, there doesn&#39;t seem to be any syntax errors or missing libraries.
+
+If there were an error message, the solution would involve analyzing the error message, identifying the problem in the code, and then making the necessary changes. This could involve adding missing libraries, fixing syntax errors, or resolving other issues identified by the error message.
+</pre>
+
+
+<h3>Fixer prompt #5</h3>
+<pre>
+
+Given the following C++ fuzz harness and its build error message, fix the code to make it build for fuzzing.
+
+If there is undeclared identifier or unknown type name error, fix it by finding and including the related libraries.
+
+MUST RETURN THE FULL CODE, INCLUDING UNCHANGED PARTS.
+
+Below is the code needs to be built:
+&lt;code&gt;
+The error message is not provided in the question, so it&#39;s hard to provide a specific solution. However, based on the provided code, there doesn&#39;t seem to be any syntax errors or missing libraries.
+
+If there were an error message, the solution would involve analyzing the error message, identifying the problem in the code, and then making the necessary changes. This could involve adding missing libraries, fixing syntax errors, or resolving other issues identified by the error message.
+&lt;/code&gt;
+
+Below is the error to fix:
+The code has the following build issues:
+&lt;error&gt;
+The target function `TIFF * TIFFFdOpen(int, const char *, const char *)` was not called by the fuzz target `LLVMFuzzerTestOneInput`.YOU MUST CALL FUNCTION `TIFF * TIFFFdOpen(int, const char *, const char *)` INSIDE FUNCTION `LLVMFuzzerTestOneInput`.
+&lt;/error&gt;
+
+
+
+
+Fix code:
+1. Consider possible solutions for the issues listed above.
+2. Choose a solution that can maximize fuzzing result, which is utilizing the function under test and feeding it not null input.
+3. Apply the solutions to the original code.
+It&#39;s important to show the complete code, not only the fixed line.
+&lt;solution&gt;
+</pre>
+
+
+
+<h3>Code #5</h3>
+
+<pre>
+```cpp
+#include &lt;cstdint&gt;
+#include &lt;cstddef&gt;
+#include &lt;tiffio.h&gt;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+    if (size &lt; 3) {
+        return 0;
+    }
+    TIFF *tif = TIFFFdOpen(0, reinterpret_cast&lt;const char *&gt;(data), &#34;r&#34;);
+    if (tif) {
+        TIFFClose(tif);
+    }
+    return 0;
+}
+```
+</pre>
+
+
+<h2>Logs</h2>
+<pre>
+Fixing /home/chyun/oss-fuzz-gen/results3/output-libtiff-tifffdopen/fixed_targets/01.cc with gpt-4, attempt 1.
+Fixing /home/chyun/oss-fuzz-gen/results3/output-libtiff-tifffdopen/fixed_targets/01.cc with gpt-4, attempt 2.
+Fixing /home/chyun/oss-fuzz-gen/results3/output-libtiff-tifffdopen/fixed_targets/01.cc with gpt-4, attempt 3.
+Fixing /home/chyun/oss-fuzz-gen/results3/output-libtiff-tifffdopen/fixed_targets/01.cc with gpt-4, attempt 4.
+Fixing /home/chyun/oss-fuzz-gen/results3/output-libtiff-tifffdopen/fixed_targets/01.cc with gpt-4, attempt 5.
+Successfully built /home/chyun/oss-fuzz-gen/results3/output-libtiff-tifffdopen/fixed_targets/01.cc with gpt-4 in 5 iterations of fixing.
+Triaging the crash related to /home/chyun/oss-fuzz-gen/results3/output-libtiff-tifffdopen/fixed_targets/01.cc with gpt-4.
+Warning: No cov info in run result of libtiff-tifffdopen-01.
+
+</pre>
+
+<h2>Run logs</h2>
+<pre>
+Unable to find image &#39;gcr.io/oss-fuzz-base/base-runner:latest&#39; locally
+latest: Pulling from oss-fuzz-base/base-runner
+b549f31133a9: Already exists
+5bcbb0e0103e: Already exists
+266e50764b8a: Already exists
+eb0c9d5a7623: Pulling fs layer
+984ee74b1757: Pulling fs layer
+2ac5fb15d978: Pulling fs layer
+5c76d9da3c1a: Pulling fs layer
+00fb65b08834: Pulling fs layer
+ade81b7493ff: Pulling fs layer
+1288b27a36be: Pulling fs layer
+ab8efb13c1d8: Pulling fs layer
+ffa7f91fb91a: Pulling fs layer
+e091729510d0: Pulling fs layer
+1288b27a36be: Waiting
+5c76d9da3c1a: Waiting
+ab8efb13c1d8: Waiting
+00fb65b08834: Waiting
+ffa7f91fb91a: Waiting
+ade81b7493ff: Waiting
+14a068fda959: Pulling fs layer
+9022f251e205: Pulling fs layer
+a730c3ddbfc5: Pulling fs layer
+e08826225b3a: Pulling fs layer
+e091729510d0: Waiting
+a730c3ddbfc5: Waiting
+14a068fda959: Waiting
+9022f251e205: Waiting
+e08826225b3a: Waiting
+15682148695b: Pulling fs layer
+20b9147a4ad8: Pulling fs layer
+9f8549c874e7: Pulling fs layer
+15682148695b: Waiting
+20b9147a4ad8: Waiting
+9f8549c874e7: Waiting
+2ac5fb15d978: Download complete
+eb0c9d5a7623: Verifying Checksum
+eb0c9d5a7623: Download complete
+984ee74b1757: Download complete
+eb0c9d5a7623: Pull complete
+984ee74b1757: Pull complete
+2ac5fb15d978: Pull complete
+ade81b7493ff: Verifying Checksum
+ade81b7493ff: Download complete
+1288b27a36be: Verifying Checksum
+1288b27a36be: Download complete
+00fb65b08834: Download complete
+5c76d9da3c1a: Verifying Checksum
+5c76d9da3c1a: Download complete
+ffa7f91fb91a: Download complete
+ab8efb13c1d8: Verifying Checksum
+ab8efb13c1d8: Download complete
+9022f251e205: Verifying Checksum
+9022f251e205: Download complete
+14a068fda959: Verifying Checksum
+14a068fda959: Download complete
+5c76d9da3c1a: Pull complete
+00fb65b08834: Pull complete
+ade81b7493ff: Pull complete
+1288b27a36be: Pull complete
+ab8efb13c1d8: Pull complete
+ffa7f91fb91a: Pull complete
+e091729510d0: Verifying Checksum
+e091729510d0: Download complete
+a730c3ddbfc5: Verifying Checksum
+a730c3ddbfc5: Download complete
+20b9147a4ad8: Verifying Checksum
+20b9147a4ad8: Download complete
+15682148695b: Verifying Checksum
+15682148695b: Download complete
+9f8549c874e7: Verifying Checksum
+9f8549c874e7: Download complete
+e08826225b3a: Verifying Checksum
+e08826225b3a: Download complete
+e091729510d0: Pull complete
+14a068fda959: Pull complete
+9022f251e205: Pull complete
+a730c3ddbfc5: Pull complete
+e08826225b3a: Pull complete
+15682148695b: Pull complete
+20b9147a4ad8: Pull complete
+9f8549c874e7: Pull complete
+Digest: sha256:912604f2c2d253196d3f247080d9ef0eaa6472d89de7b03247d746bdf5ef8697
+Status: Downloaded newer image for gcr.io/oss-fuzz-base/base-runner:latest
+INFO:__main__:Running: docker run --privileged --shm-size=2g --platform linux/amd64 --rm -e FUZZING_ENGINE=libfuzzer -e SANITIZER=address -e RUN_FUZZER_MODE=interactive -e HELPER=True -v /home/chyun/oss-fuzz-gen/results3/output-libtiff-tifffdopen/corpora/01.cc:/tmp/tiff_read_rgba_fuzzer_corpus -v /tmp/tmp98tuykc8/build/out/libtiff-tifffdopen-01:/out -t gcr.io/oss-fuzz-base/base-runner run_fuzzer tiff_read_rgba_fuzzer -print_final_stats=1 -max_total_time=30 -len_control=0 -timeout=30.
+vm.mmap_rnd_bits = 28
+rm: cannot remove &#39;/tmp/tiff_read_rgba_fuzzer_corpus&#39;: Device or resource busy
+Using seed corpus: tiff_read_rgba_fuzzer_seed_corpus.zip
+/out/tiff_read_rgba_fuzzer -rss_limit_mb=2560 -timeout=25 -print_final_stats=1 -max_total_time=30 -len_control=0 -timeout=30 /tmp/tiff_read_rgba_fuzzer_corpus -dict=tiff_read_rgba_fuzzer.dict &lt; /dev/null
+Dictionary: 40 entries
+INFO: Running with entropic power schedule (0xFF, 100).
+INFO: Seed: 1178163161
+INFO: Loaded 1 modules   (26796 inline 8-bit counters): 26796 [0x561f386f6de0, 0x561f386fd68c), 
+INFO: Loaded 1 PC tables (26796 PCs): 26796 [0x561f386fd690,0x561f38766150), 
+INFO:     6502 files found in /tmp/tiff_read_rgba_fuzzer_corpus
+INFO: -max_len is not provided; libFuzzer will not generate inputs larger than 16832 bytes
+INFO: seed corpus: files: 6502 min: 1b max: 16832b total: 6363517b rss: 39Mb
+II*: Cannot read TIFF header.
+II+: Cannot read TIFF header.
+=================================================================
+[1m[31m==12==ERROR: AddressSanitizer: heap-buffer-overflow on address 0x5020000008d8 at pc 0x561f381709c9 bp 0x7ffde2c063b0 sp 0x7ffde2c05b78
+[1m[0m[1m[34mREAD of size 9 at 0x5020000008d8 thread T0[1m[0m
+SCARINESS: 24 (9-byte-read-heap-buffer-overflow)
+    #0 0x561f381709c8 in strlen /src/llvm-project/compiler-rt/lib/asan/../sanitizer_common/sanitizer_common_interceptors.inc:390:5
+    #1 0x561f38280d4c in TIFFClientOpenExt /src/libtiff/libtiff/tif_open.c:334:56
+    #2 0x561f38294cb1 in TIFFFdOpenExt /src/libtiff/libtiff/tif_unix.c:217:11
+    #3 0x561f38294cb1 in TIFFFdOpen /src/libtiff/libtiff/tif_unix.c:207:12
+    #4 0x561f38234bdf in LLVMFuzzerTestOneInput /src/libtiff/contrib/oss-fuzz/tiff_read_rgba_fuzzer.cc:9:17
+    #5 0x561f380e7580 in fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:614:13
+    #6 0x561f380e6da5 in fuzzer::Fuzzer::RunOne(unsigned char const*, unsigned long, bool, fuzzer::InputInfo*, bool, bool*) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:516:7
+    #7 0x561f380e8d32 in fuzzer::Fuzzer::ReadAndExecuteSeedCorpora(std::__Fuzzer::vector&lt;fuzzer::SizedFile, std::__Fuzzer::allocator&lt;fuzzer::SizedFile&gt;&gt;&amp;) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:829:7
+    #8 0x561f380e9067 in fuzzer::Fuzzer::Loop(std::__Fuzzer::vector&lt;fuzzer::SizedFile, std::__Fuzzer::allocator&lt;fuzzer::SizedFile&gt;&gt;&amp;) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:867:3
+    #9 0x561f380d7676 in fuzzer::FuzzerDriver(int*, char***, int (*)(unsigned char const*, unsigned long)) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:914:6
+    #10 0x561f38103ba2 in main /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMain.cpp:20:10
+    #11 0x7f516a3c8082 in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x24082) (BuildId: 0702430aef5fa3dda43986563e9ffcc47efbd75e)
+    #12 0x561f380c87ed in _start (/out/tiff_read_rgba_fuzzer+0xff7ed)
+
+DEDUP_TOKEN: ___interceptor_strlen--TIFFClientOpenExt--TIFFFdOpenExt
+[1m[32m0x5020000008d8 is located 0 bytes after 8-byte region [0x5020000008d0,0x5020000008d8)
+[1m[0m[1m[35mallocated by thread T0 here:[1m[0m
+    #0 0x561f381f5b1e in malloc /src/llvm-project/compiler-rt/lib/asan/asan_malloc_linux.cpp:69:3
+    #1 0x561f38105356 in operator new(unsigned long) cxa_noexception.cpp
+    #2 0x561f380e6da5 in fuzzer::Fuzzer::RunOne(unsigned char const*, unsigned long, bool, fuzzer::InputInfo*, bool, bool*) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:516:7
+    #3 0x561f380e8d32 in fuzzer::Fuzzer::ReadAndExecuteSeedCorpora(std::__Fuzzer::vector&lt;fuzzer::SizedFile, std::__Fuzzer::allocator&lt;fuzzer::SizedFile&gt;&gt;&amp;) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:829:7
+    #4 0x561f380e9067 in fuzzer::Fuzzer::Loop(std::__Fuzzer::vector&lt;fuzzer::SizedFile, std::__Fuzzer::allocator&lt;fuzzer::SizedFile&gt;&gt;&amp;) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:867:3
+    #5 0x561f380d7676 in fuzzer::FuzzerDriver(int*, char***, int (*)(unsigned char const*, unsigned long)) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:914:6
+    #6 0x561f38103ba2 in main /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMain.cpp:20:10
+    #7 0x7f516a3c8082 in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x24082) (BuildId: 0702430aef5fa3dda43986563e9ffcc47efbd75e)
+
+DEDUP_TOKEN: __interceptor_malloc--operator new(unsigned long)--fuzzer::Fuzzer::RunOne(unsigned char const*, unsigned long, bool, fuzzer::InputInfo*, bool, bool*)
+SUMMARY: AddressSanitizer: heap-buffer-overflow /src/llvm-project/compiler-rt/lib/asan/../sanitizer_common/sanitizer_common_interceptors.inc:390:5 in strlen
+Shadow bytes around the buggy address:
+  0x502000000600: [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[35mfd[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[35mfd[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[35mfd[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[35mfd[1m[0m [1m[31mfa[1m[0m
+  0x502000000680: [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[35mfd[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[35mfd[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[35mfd[1m[0m [1m[35mfd[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[35mfd[1m[0m [1m[31mfa[1m[0m
+  0x502000000700: [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[35mfd[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[0m01[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[0m00[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[0m00[1m[0m [1m[0m00[1m[0m
+  0x502000000780: [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[35mfd[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[35mfd[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[35mfd[1m[0m [1m[35mfd[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[35mfd[1m[0m [1m[35mfd[1m[0m
+  0x502000000800: [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[35mfd[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[0m00[1m[0m [1m[0m00[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[0m00[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[35mfd[1m[0m [1m[31mfa[1m[0m
+=&gt;0x502000000880: [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[35mfd[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[0m00[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[0m00[1m[0m[[1m[31mfa[1m[0m][1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m
+  0x502000000900: [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m
+  0x502000000980: [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m
+  0x502000000a00: [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m
+  0x502000000a80: [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m
+  0x502000000b00: [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m [1m[31mfa[1m[0m
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           [1m[0m00[1m[0m
+  Partially addressable: [1m[0m01[1m[0m [1m[0m02[1m[0m [1m[0m03[1m[0m [1m[0m04[1m[0m [1m[0m05[1m[0m [1m[0m06[1m[0m [1m[0m07[1m[0m 
+  Heap left redzone:       [1m[31mfa[1m[0m
+  Freed heap region:       [1m[35mfd[1m[0m
+  Stack left redzone:      [1m[31mf1[1m[0m
+  Stack mid redzone:       [1m[31mf2[1m[0m
+  Stack right redzone:     [1m[31mf3[1m[0m
+  Stack after return:      [1m[35mf5[1m[0m
+  Stack use after scope:   [1m[35mf8[1m[0m
+  Global redzone:          [1m[31mf9[1m[0m
+  Global init order:       [1m[36mf6[1m[0m
+  Poisoned by user:        [1m[34mf7[1m[0m
+  Container overflow:      [1m[34mfc[1m[0m
+  Array cookie:            [1m[31mac[1m[0m
+  Intra object redzone:    [1m[33mbb[1m[0m
+  ASan internal:           [1m[33mfe[1m[0m
+  Left alloca redzone:     [1m[34mca[1m[0m
+  Right alloca redzone:    [1m[34mcb[1m[0m
+==12==ABORTING
+MS: 0 ; base unit: 0000000000000000000000000000000000000000
+0x45,0x50,0x38,0x47,0x82,0x1,0xea,0x82,
+EP8G\202\001\352\202
+artifact_prefix=&#39;./&#39;; Test unit written to ./crash-060b5263f927c96ca0392847f6944d90167c543b
+Base64: RVA4R4IB6oI=
+stat::number_of_executed_units: 5
+stat::average_exec_per_sec:     0
+stat::new_units_added:          0
+stat::slowest_unit_time_sec:    0
+stat::peak_rss_mb:              40
+
+</pre>
+
+
+</body>

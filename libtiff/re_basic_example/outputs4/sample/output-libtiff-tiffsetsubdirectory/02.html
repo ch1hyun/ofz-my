@@ -1,0 +1,1135 @@
+<!doctype html>
+
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Experiment results</title>
+<style>
+* {
+    box-sizing: border-box;
+}
+
+html {
+    line-height: 1.15;
+}
+
+body {
+    font-family: sans-serif;
+    font-size: 16px;
+}
+
+table {
+    border-collapse: collapse;
+    border-spacing: 0;
+}
+
+td, th {
+    border-right: 1px #dedede solid;
+    border-bottom: 1px #dedede solid;
+    padding: 5px;
+    text-align: left;
+}
+td:first-child, th:first-child {
+    border-left: 1px #dedede solid;
+}
+th {
+    border-top: 1px #dedede solid;
+}
+
+tbody tr:nth-child(odd) {
+    background-color: #f4f5ff;
+}
+</style>
+<body>
+    LLM: 
+    
+<h1>output-libtiff-tiffsetsubdirectory / 02</h1>
+Bug: False
+<br>
+Crash reason: -
+<br>
+<br>
+
+<h2>Triage</h2>
+<pre>
+
+</pre>
+<br>
+
+
+
+
+
+<h3>Final code</h3>
+
+<pre>
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+#include &lt;cstddef&gt;
+#include &lt;cstdint&gt;
+#include &lt;cstdlib&gt;
+#include &lt;string&gt;
+#include &lt;cstring&gt;
+
+#include &#34;tiffio.h&#34;
+#include &#34;tiffio.hxx&#34;
+
+struct vorbis_data {
+  const uint8_t *current;
+  const uint8_t *data;
+  size_t size;
+};
+
+tmsize_t read_func(thandle_t fd, void *ptr, tmsize_t size) {
+  vorbis_data *vd = (vorbis_data *)(fd);
+  size_t len = size;
+  if (vd-&gt;current + len &gt; vd-&gt;data + vd-&gt;size) {
+    len = vd-&gt;data + vd-&gt;size - vd-&gt;current;
+  }
+  memcpy(ptr, vd-&gt;current, len);
+  vd-&gt;current += len;
+  return len;
+}
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  vorbis_data data_st;
+  data_st.size = size;
+  data_st.current = data;
+  data_st.data = data;
+  thandle_t ts = &amp;data_st;
+  
+  TIFF *tif = TIFFClientOpen(&#34;MemTIFF&#34;, &#34;r&#34;, ts, 
+                             read_func, NULL, NULL, NULL, NULL, NULL, NULL);
+
+  if (!tif) {
+    return 0;
+  }
+
+  FuzzedDataProvider provider(data, size);
+  uint64_t dirOff = provider.ConsumeIntegral&lt;uint64_t&gt;();
+
+  TIFFSetSubDirectory(tif, dirOff);
+
+  // Add more calls to TIFF library functions to increase code coverage
+  uint32_t width = TIFFGetField(tif, TIFFTAG_IMAGEWIDTH, &amp;width) ? width : 0;
+  uint32_t height = TIFFGetField(tif, TIFFTAG_IMAGELENGTH, &amp;height) ? height : 0;
+  uint16_t bitsPerSample = TIFFGetField(tif, TIFFTAG_BITSPERSAMPLE, &amp;bitsPerSample) ? bitsPerSample : 0;
+  uint16_t samplesPerPixel = TIFFGetField(tif, TIFFTAG_SAMPLESPERPIXEL, &amp;samplesPerPixel) ? samplesPerPixel : 0;
+
+  TIFFClose(tif);
+
+  return 0;
+}
+</pre>
+
+
+<h3>Fixer prompt #1</h3>
+<pre>
+
+Given the following C++ fuzz harness and its build error message, fix the code to make it build for fuzzing.
+
+If there is undeclared identifier or unknown type name error, fix it by finding and including the related libraries.
+
+MUST RETURN THE FULL CODE, INCLUDING UNCHANGED PARTS.
+
+Below is the code needs to be built:
+&lt;code&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+#include &lt;cstddef&gt;
+#include &lt;cstdint&gt;
+#include &lt;cstdlib&gt;
+#include &lt;string&gt;
+
+#include &#34;tiffio.h&#34;
+#include &#34;tiffio.hxx&#34;
+
+struct vorbis_data {
+  const uint8_t *current;
+  const uint8_t *data;
+  size_t size;
+};
+
+size_t read_func(void *ptr, size_t size1, size_t size2, void *datasource) {
+  vorbis_data *vd = (vorbis_data *)(datasource);
+  size_t len = size1 * size2;
+  if (vd-&gt;current + len &gt; vd-&gt;data + vd-&gt;size) {
+    len = vd-&gt;data + vd-&gt;size - vd-&gt;current;
+  }
+  memcpy(ptr, vd-&gt;current, len);
+  vd-&gt;current += len;
+  return len;
+}
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  // Create a TIFF-file object
+  vorbis_data data_st;
+  data_st.size = size;
+  data_st.current = data;
+  data_st.data = data;
+  tsptr ts;
+  TIFF *tif = TIFFStreamOpen(&#34;MemTIFF&#34;, &amp;ts);
+  setbuf(ts.get_fh(),NULL);
+
+  if (!tif) {
+    return 0;
+  }
+
+  FuzzedDataProvider provider(data, size);
+  uint64_t dirOff = provider.ConsumeIntegral&lt;uint64_t&gt;();
+
+  // Calls the function-under-test
+  TIFFSetSubDirectory(tif, dirOff);
+
+  TIFFClose(tif);
+
+  return 0;
+}
+&lt;/code&gt;
+
+Below is the error to fix:
+The code has the following build issues:
+&lt;error&gt;
+/src/libtiff/contrib/oss-fuzz/tiff_read_rgba_fuzzer.cc:34:3: error: unknown type name &#39;tsptr&#39;
+   34 |   tsptr ts;
+      |   ^
+&lt;/error&gt;
+
+
+Below are instructions to assist you in fixing the error.
+&lt;instruction&gt;
+IMPORTANT: ALWAYS INCLUDE STANDARD LIBRARIES BEFORE PROJECT-SPECIFIC (libtiff) LIBRARIES. This order prevents errors like &#34;unknown type name&#34; for basic types. Additionally, include project-specific libraries that contain declarations before those thatuse these declared symbols.
+&lt;/instruction&gt;
+
+Fix code:
+1. Consider possible solutions for the issues listed above.
+2. Choose a solution that can maximize fuzzing result, which is utilizing the function under test and feeding it not null input.
+3. Apply the solutions to the original code.
+It&#39;s important to show the complete code, not only the fixed line.
+&lt;solution&gt;
+</pre>
+
+
+
+<h3>Code #1</h3>
+
+<pre>
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+#include &lt;cstddef&gt;
+#include &lt;cstdint&gt;
+#include &lt;cstdlib&gt;
+#include &lt;string&gt;
+
+#include &#34;tiffio.h&#34;
+#include &#34;tiffio.hxx&#34;
+
+struct vorbis_data {
+  const uint8_t *current;
+  const uint8_t *data;
+  size_t size;
+};
+
+size_t read_func(void *ptr, size_t size1, size_t size2, void *datasource) {
+  vorbis_data *vd = (vorbis_data *)(datasource);
+  size_t len = size1 * size2;
+  if (vd-&gt;current + len &gt; vd-&gt;data + vd-&gt;size) {
+    len = vd-&gt;data + vd-&gt;size - vd-&gt;current;
+  }
+  memcpy(ptr, vd-&gt;current, len);
+  vd-&gt;current += len;
+  return len;
+}
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  // Create a TIFF-file object
+  vorbis_data data_st;
+  data_st.size = size;
+  data_st.current = data;
+  data_st.data = data;
+  thandle_t ts; // fix here, replace tsptr with thandle_t
+  TIFF *tif = TIFFStreamOpen(&#34;MemTIFF&#34;, &amp;ts);
+  setbuf(ts.get_fh(),NULL);
+
+  if (!tif) {
+    return 0;
+  }
+
+  FuzzedDataProvider provider(data, size);
+  uint64_t dirOff = provider.ConsumeIntegral&lt;uint64_t&gt;();
+
+  // Calls the function-under-test
+  TIFFSetSubDirectory(tif, dirOff);
+
+  TIFFClose(tif);
+
+  return 0;
+}
+</pre>
+
+
+<h3>Fixer prompt #2</h3>
+<pre>
+
+Given the following C++ fuzz harness and its build error message, fix the code to make it build for fuzzing.
+
+If there is undeclared identifier or unknown type name error, fix it by finding and including the related libraries.
+
+MUST RETURN THE FULL CODE, INCLUDING UNCHANGED PARTS.
+
+Below is the code needs to be built:
+&lt;code&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+#include &lt;cstddef&gt;
+#include &lt;cstdint&gt;
+#include &lt;cstdlib&gt;
+#include &lt;string&gt;
+
+#include &#34;tiffio.h&#34;
+#include &#34;tiffio.hxx&#34;
+
+struct vorbis_data {
+  const uint8_t *current;
+  const uint8_t *data;
+  size_t size;
+};
+
+size_t read_func(void *ptr, size_t size1, size_t size2, void *datasource) {
+  vorbis_data *vd = (vorbis_data *)(datasource);
+  size_t len = size1 * size2;
+  if (vd-&gt;current + len &gt; vd-&gt;data + vd-&gt;size) {
+    len = vd-&gt;data + vd-&gt;size - vd-&gt;current;
+  }
+  memcpy(ptr, vd-&gt;current, len);
+  vd-&gt;current += len;
+  return len;
+}
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  // Create a TIFF-file object
+  vorbis_data data_st;
+  data_st.size = size;
+  data_st.current = data;
+  data_st.data = data;
+  thandle_t ts; // fix here, replace tsptr with thandle_t
+  TIFF *tif = TIFFStreamOpen(&#34;MemTIFF&#34;, &amp;ts);
+  setbuf(ts.get_fh(),NULL);
+
+  if (!tif) {
+    return 0;
+  }
+
+  FuzzedDataProvider provider(data, size);
+  uint64_t dirOff = provider.ConsumeIntegral&lt;uint64_t&gt;();
+
+  // Calls the function-under-test
+  TIFFSetSubDirectory(tif, dirOff);
+
+  TIFFClose(tif);
+
+  return 0;
+}
+&lt;/code&gt;
+
+Below is the error to fix:
+The code has the following build issues:
+&lt;error&gt;
+
+&lt;/error&gt;
+
+
+
+
+Fix code:
+1. Consider possible solutions for the issues listed above.
+2. Choose a solution that can maximize fuzzing result, which is utilizing the function under test and feeding it not null input.
+3. Apply the solutions to the original code.
+It&#39;s important to show the complete code, not only the fixed line.
+&lt;solution&gt;
+</pre>
+
+
+
+<h3>Code #2</h3>
+
+<pre>
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+#include &lt;cstddef&gt;
+#include &lt;cstdint&gt;
+#include &lt;cstdlib&gt;
+#include &lt;string&gt;
+#include &lt;cstring&gt; // Include this library to fix memcpy error
+
+#include &#34;tiffio.h&#34;
+#include &#34;tiffio.hxx&#34;
+
+struct vorbis_data {
+  const uint8_t *current;
+  const uint8_t *data;
+  size_t size;
+};
+
+size_t read_func(void *ptr, size_t size1, size_t size2, void *datasource) {
+  vorbis_data *vd = (vorbis_data *)(datasource);
+  size_t len = size1 * size2;
+  if (vd-&gt;current + len &gt; vd-&gt;data + vd-&gt;size) {
+    len = vd-&gt;data + vd-&gt;size - vd-&gt;current;
+  }
+  memcpy(ptr, vd-&gt;current, len);
+  vd-&gt;current += len;
+  return len;
+}
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  // Create a TIFF-file object
+  vorbis_data data_st;
+  data_st.size = size;
+  data_st.current = data;
+  data_st.data = data;
+  thandle_t ts; 
+  TIFF *tif = TIFFStreamOpen(&#34;MemTIFF&#34;, &amp;ts);
+  setbuf(ts.get_fh(),NULL);
+
+  if (!tif) {
+    return 0;
+  }
+
+  FuzzedDataProvider provider(data, size);
+  uint64_t dirOff = provider.ConsumeIntegral&lt;uint64_t&gt;();
+
+  // Calls the function-under-test
+  TIFFSetSubDirectory(tif, dirOff);
+
+  TIFFClose(tif);
+
+  return 0;
+}
+</pre>
+
+
+<h3>Fixer prompt #3</h3>
+<pre>
+
+Given the following C++ fuzz harness and its build error message, fix the code to make it build for fuzzing.
+
+If there is undeclared identifier or unknown type name error, fix it by finding and including the related libraries.
+
+MUST RETURN THE FULL CODE, INCLUDING UNCHANGED PARTS.
+
+Below is the code needs to be built:
+&lt;code&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+#include &lt;cstddef&gt;
+#include &lt;cstdint&gt;
+#include &lt;cstdlib&gt;
+#include &lt;string&gt;
+#include &lt;cstring&gt; // Include this library to fix memcpy error
+
+#include &#34;tiffio.h&#34;
+#include &#34;tiffio.hxx&#34;
+
+struct vorbis_data {
+  const uint8_t *current;
+  const uint8_t *data;
+  size_t size;
+};
+
+size_t read_func(void *ptr, size_t size1, size_t size2, void *datasource) {
+  vorbis_data *vd = (vorbis_data *)(datasource);
+  size_t len = size1 * size2;
+  if (vd-&gt;current + len &gt; vd-&gt;data + vd-&gt;size) {
+    len = vd-&gt;data + vd-&gt;size - vd-&gt;current;
+  }
+  memcpy(ptr, vd-&gt;current, len);
+  vd-&gt;current += len;
+  return len;
+}
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  // Create a TIFF-file object
+  vorbis_data data_st;
+  data_st.size = size;
+  data_st.current = data;
+  data_st.data = data;
+  thandle_t ts; 
+  TIFF *tif = TIFFStreamOpen(&#34;MemTIFF&#34;, &amp;ts);
+  setbuf(ts.get_fh(),NULL);
+
+  if (!tif) {
+    return 0;
+  }
+
+  FuzzedDataProvider provider(data, size);
+  uint64_t dirOff = provider.ConsumeIntegral&lt;uint64_t&gt;();
+
+  // Calls the function-under-test
+  TIFFSetSubDirectory(tif, dirOff);
+
+  TIFFClose(tif);
+
+  return 0;
+}
+&lt;/code&gt;
+
+Below is the error to fix:
+The code has the following build issues:
+&lt;error&gt;
+/src/libtiff/contrib/oss-fuzz/tiff_read_rgba_fuzzer.cc:36:15: error: no matching function for call to &#39;TIFFStreamOpen&#39;
+   36 |   TIFF *tif = TIFFStreamOpen(&#34;MemTIFF&#34;, &amp;ts);
+      |               ^~~~~~~~~~~~~~
+/work/include/tiffio.hxx:36:14: note: candidate function not viable: no known conversion from &#39;thandle_t *&#39; (aka &#39;void **&#39;) to &#39;std::ostream *&#39; (aka &#39;basic_ostream&lt;char&gt; *&#39;) for 2nd argument
+   36 | extern TIFF *TIFFStreamOpen(const char *, std::ostream *);
+      |              ^                            ~~~~~~~~~~~~~~
+/work/include/tiffio.hxx:37:14: note: candidate function not viable: no known conversion from &#39;thandle_t *&#39; (aka &#39;void **&#39;) to &#39;std::istream *&#39; (aka &#39;basic_istream&lt;char&gt; *&#39;) for 2nd argument
+   37 | extern TIFF *TIFFStreamOpen(const char *, std::istream *);
+      |              ^                            ~~~~~~~~~~~~~~
+/src/libtiff/contrib/oss-fuzz/tiff_read_rgba_fuzzer.cc:37:12: error: member reference base type &#39;thandle_t&#39; (aka &#39;void *&#39;) is not a structure or union
+   37 |   setbuf(ts.get_fh(),NULL);
+      |          ~~^~~~~~~
+&lt;/error&gt;
+
+
+
+
+Fix code:
+1. Consider possible solutions for the issues listed above.
+2. Choose a solution that can maximize fuzzing result, which is utilizing the function under test and feeding it not null input.
+3. Apply the solutions to the original code.
+It&#39;s important to show the complete code, not only the fixed line.
+&lt;solution&gt;
+</pre>
+
+
+
+<h3>Code #3</h3>
+
+<pre>
+The fixed code is as follows:
+
+```cpp
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+#include &lt;cstddef&gt;
+#include &lt;cstdint&gt;
+#include &lt;cstdlib&gt;
+#include &lt;string&gt;
+#include &lt;cstring&gt; // Include this library to fix memcpy error
+
+#include &#34;tiffio.h&#34;
+#include &#34;tiffio.hxx&#34;
+
+struct vorbis_data {
+  const uint8_t *current;
+  const uint8_t *data;
+  size_t size;
+};
+
+size_t read_func(void *ptr, size_t size1, size_t size2, void *datasource) {
+  vorbis_data *vd = (vorbis_data *)(datasource);
+  size_t len = size1 * size2;
+  if (vd-&gt;current + len &gt; vd-&gt;data + vd-&gt;size) {
+    len = vd-&gt;data + vd-&gt;size - vd-&gt;current;
+  }
+  memcpy(ptr, vd-&gt;current, len);
+  vd-&gt;current += len;
+  return len;
+}
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  // Create a TIFF-file object
+  vorbis_data data_st;
+  data_st.size = size;
+  data_st.current = data;
+  data_st.data = data;
+  thandle_t ts = &amp;data_st; // Fix: change ts to be a pointer to data_st
+  TIFF *tif = TIFFClientOpen(&#34;MemTIFF&#34;, &#34;r&#34;, ts, 
+                             read_func, NULL, NULL, NULL, NULL, NULL, NULL); // Fix: change TIFFStreamOpen to TIFFClientOpen
+
+  if (!tif) {
+    return 0;
+  }
+
+  FuzzedDataProvider provider(data, size);
+  uint64_t dirOff = provider.ConsumeIntegral&lt;uint64_t&gt;();
+
+  // Calls the function-under-test
+  TIFFSetSubDirectory(tif, dirOff);
+
+  TIFFClose(tif);
+
+  return 0;
+}
+```
+
+The error was due to the wrong function `TIFFStreamOpen` being called with incompatible arguments. The correct function to use is `TIFFClientOpen` which takes a `thandle_t` as its third argument. The `setbuf` function call was removed as it is not necessary in this context.
+</pre>
+
+
+<h3>Fixer prompt #4</h3>
+<pre>
+
+Given the following C++ fuzz harness and its build error message, fix the code to make it build for fuzzing.
+
+If there is undeclared identifier or unknown type name error, fix it by finding and including the related libraries.
+
+MUST RETURN THE FULL CODE, INCLUDING UNCHANGED PARTS.
+
+Below is the code needs to be built:
+&lt;code&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+#include &lt;cstddef&gt;
+#include &lt;cstdint&gt;
+#include &lt;cstdlib&gt;
+#include &lt;string&gt;
+#include &lt;cstring&gt; // Include this library to fix memcpy error
+
+#include &#34;tiffio.h&#34;
+#include &#34;tiffio.hxx&#34;
+
+struct vorbis_data {
+  const uint8_t *current;
+  const uint8_t *data;
+  size_t size;
+};
+
+size_t read_func(void *ptr, size_t size1, size_t size2, void *datasource) {
+  vorbis_data *vd = (vorbis_data *)(datasource);
+  size_t len = size1 * size2;
+  if (vd-&gt;current + len &gt; vd-&gt;data + vd-&gt;size) {
+    len = vd-&gt;data + vd-&gt;size - vd-&gt;current;
+  }
+  memcpy(ptr, vd-&gt;current, len);
+  vd-&gt;current += len;
+  return len;
+}
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  // Create a TIFF-file object
+  vorbis_data data_st;
+  data_st.size = size;
+  data_st.current = data;
+  data_st.data = data;
+  thandle_t ts = &amp;data_st; // Fix: change ts to be a pointer to data_st
+  TIFF *tif = TIFFClientOpen(&#34;MemTIFF&#34;, &#34;r&#34;, ts, 
+                             read_func, NULL, NULL, NULL, NULL, NULL, NULL); // Fix: change TIFFStreamOpen to TIFFClientOpen
+
+  if (!tif) {
+    return 0;
+  }
+
+  FuzzedDataProvider provider(data, size);
+  uint64_t dirOff = provider.ConsumeIntegral&lt;uint64_t&gt;();
+
+  // Calls the function-under-test
+  TIFFSetSubDirectory(tif, dirOff);
+
+  TIFFClose(tif);
+
+  return 0;
+}
+&lt;/code&gt;
+
+Below is the error to fix:
+The code has the following build issues:
+&lt;error&gt;
+/src/libtiff/contrib/oss-fuzz/tiff_read_rgba_fuzzer.cc:36:15: error: no matching function for call to &#39;TIFFClientOpen&#39;
+   36 |   TIFF *tif = TIFFClientOpen(&#34;MemTIFF&#34;, &#34;r&#34;, ts,
+      |               ^~~~~~~~~~~~~~
+/work/include/tiffio.h:529:18: note: candidate function not viable: no known conversion from &#39;size_t (void *, size_t, size_t, void *)&#39; (aka &#39;unsigned long (void *, unsigned long, unsigned long, void *)&#39;) to &#39;TIFFReadWriteProc&#39; (aka &#39;long (*)(void *, void *, long)&#39;) for 4th argument
+  529 |     extern TIFF *TIFFClientOpen(const char *, const char *, thandle_t,
+      |                  ^
+  530 |                                 TIFFReadWriteProc, TIFFReadWriteProc,
+      |                                 ~~~~~~~~~~~~~~~~~
+&lt;/error&gt;
+
+
+
+
+Fix code:
+1. Consider possible solutions for the issues listed above.
+2. Choose a solution that can maximize fuzzing result, which is utilizing the function under test and feeding it not null input.
+3. Apply the solutions to the original code.
+It&#39;s important to show the complete code, not only the fixed line.
+&lt;solution&gt;
+</pre>
+
+
+
+<h3>Code #4</h3>
+
+<pre>
+Here is the corrected code:
+
+```cpp
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+#include &lt;cstddef&gt;
+#include &lt;cstdint&gt;
+#include &lt;cstdlib&gt;
+#include &lt;string&gt;
+#include &lt;cstring&gt;
+
+#include &#34;tiffio.h&#34;
+#include &#34;tiffio.hxx&#34;
+
+struct vorbis_data {
+  const uint8_t *current;
+  const uint8_t *data;
+  size_t size;
+};
+
+tmsize_t read_func(thandle_t fd, void *ptr, tmsize_t size) {
+  vorbis_data *vd = (vorbis_data *)(fd);
+  size_t len = size;
+  if (vd-&gt;current + len &gt; vd-&gt;data + vd-&gt;size) {
+    len = vd-&gt;data + vd-&gt;size - vd-&gt;current;
+  }
+  memcpy(ptr, vd-&gt;current, len);
+  vd-&gt;current += len;
+  return len;
+}
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  vorbis_data data_st;
+  data_st.size = size;
+  data_st.current = data;
+  data_st.data = data;
+  thandle_t ts = &amp;data_st;
+  
+  TIFF *tif = TIFFClientOpen(&#34;MemTIFF&#34;, &#34;r&#34;, ts, 
+                             read_func, NULL, NULL, NULL, NULL, NULL, NULL);
+
+  if (!tif) {
+    return 0;
+  }
+
+  FuzzedDataProvider provider(data, size);
+  uint64_t dirOff = provider.ConsumeIntegral&lt;uint64_t&gt;();
+
+  TIFFSetSubDirectory(tif, dirOff);
+
+  TIFFClose(tif);
+
+  return 0;
+}
+```
+
+In the above code, the read_func function signature was changed to match the expected type TIFFReadWriteProc, which is a function that takes a thandle_t, a void pointer, and a tmsize_t and returns a tmsize_t. This change was made to fix the error that occurred when trying to pass read_func as an argument to TIFFClientOpen.
+</pre>
+
+
+<h3>Fixer prompt #5</h3>
+<pre>
+
+Given the following C++ fuzz harness and its build error message, fix the code to make it build for fuzzing.
+
+If there is undeclared identifier or unknown type name error, fix it by finding and including the related libraries.
+
+MUST RETURN THE FULL CODE, INCLUDING UNCHANGED PARTS.
+
+Below is the code needs to be built:
+&lt;code&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+#include &lt;cstddef&gt;
+#include &lt;cstdint&gt;
+#include &lt;cstdlib&gt;
+#include &lt;string&gt;
+#include &lt;cstring&gt;
+
+#include &#34;tiffio.h&#34;
+#include &#34;tiffio.hxx&#34;
+
+struct vorbis_data {
+  const uint8_t *current;
+  const uint8_t *data;
+  size_t size;
+};
+
+tmsize_t read_func(thandle_t fd, void *ptr, tmsize_t size) {
+  vorbis_data *vd = (vorbis_data *)(fd);
+  size_t len = size;
+  if (vd-&gt;current + len &gt; vd-&gt;data + vd-&gt;size) {
+    len = vd-&gt;data + vd-&gt;size - vd-&gt;current;
+  }
+  memcpy(ptr, vd-&gt;current, len);
+  vd-&gt;current += len;
+  return len;
+}
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  vorbis_data data_st;
+  data_st.size = size;
+  data_st.current = data;
+  data_st.data = data;
+  thandle_t ts = &amp;data_st;
+  
+  TIFF *tif = TIFFClientOpen(&#34;MemTIFF&#34;, &#34;r&#34;, ts, 
+                             read_func, NULL, NULL, NULL, NULL, NULL, NULL);
+
+  if (!tif) {
+    return 0;
+  }
+
+  FuzzedDataProvider provider(data, size);
+  uint64_t dirOff = provider.ConsumeIntegral&lt;uint64_t&gt;();
+
+  TIFFSetSubDirectory(tif, dirOff);
+
+  TIFFClose(tif);
+
+  return 0;
+}
+&lt;/code&gt;
+
+Below is the error to fix:
+The code can build successfully but has a runtime issue: No code coverage increasement, indicating the fuzz target ineffectively invokes the function under test.
+
+
+
+
+Fix code:
+1. Consider possible solutions for the issues listed above.
+2. Choose a solution that can maximize fuzzing result, which is utilizing the function under test and feeding it not null input.
+3. Apply the solutions to the original code.
+It&#39;s important to show the complete code, not only the fixed line.
+&lt;solution&gt;
+</pre>
+
+
+
+<h3>Code #5</h3>
+
+<pre>
+The code provided does not seem to have any build errors. The issue mentioned is about code coverage, which is a runtime issue, not a build issue. 
+
+However, to increase the code coverage, you might want to add more calls to the functions in the TIFF library. Here is an example:
+
+```cpp
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+#include &lt;cstddef&gt;
+#include &lt;cstdint&gt;
+#include &lt;cstdlib&gt;
+#include &lt;string&gt;
+#include &lt;cstring&gt;
+
+#include &#34;tiffio.h&#34;
+#include &#34;tiffio.hxx&#34;
+
+struct vorbis_data {
+  const uint8_t *current;
+  const uint8_t *data;
+  size_t size;
+};
+
+tmsize_t read_func(thandle_t fd, void *ptr, tmsize_t size) {
+  vorbis_data *vd = (vorbis_data *)(fd);
+  size_t len = size;
+  if (vd-&gt;current + len &gt; vd-&gt;data + vd-&gt;size) {
+    len = vd-&gt;data + vd-&gt;size - vd-&gt;current;
+  }
+  memcpy(ptr, vd-&gt;current, len);
+  vd-&gt;current += len;
+  return len;
+}
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  vorbis_data data_st;
+  data_st.size = size;
+  data_st.current = data;
+  data_st.data = data;
+  thandle_t ts = &amp;data_st;
+  
+  TIFF *tif = TIFFClientOpen(&#34;MemTIFF&#34;, &#34;r&#34;, ts, 
+                             read_func, NULL, NULL, NULL, NULL, NULL, NULL);
+
+  if (!tif) {
+    return 0;
+  }
+
+  FuzzedDataProvider provider(data, size);
+  uint64_t dirOff = provider.ConsumeIntegral&lt;uint64_t&gt;();
+
+  TIFFSetSubDirectory(tif, dirOff);
+
+  // Add more calls to TIFF library functions to increase code coverage
+  uint32_t width = TIFFGetField(tif, TIFFTAG_IMAGEWIDTH, &amp;width) ? width : 0;
+  uint32_t height = TIFFGetField(tif, TIFFTAG_IMAGELENGTH, &amp;height) ? height : 0;
+  uint16_t bitsPerSample = TIFFGetField(tif, TIFFTAG_BITSPERSAMPLE, &amp;bitsPerSample) ? bitsPerSample : 0;
+  uint16_t samplesPerPixel = TIFFGetField(tif, TIFFTAG_SAMPLESPERPIXEL, &amp;samplesPerPixel) ? samplesPerPixel : 0;
+
+  TIFFClose(tif);
+
+  return 0;
+}
+```
+
+In this updated code, we added calls to `TIFFGetField` to retrieve more information from the TIFF file. This should increase the code coverage of the fuzzing process.
+</pre>
+
+
+<h2>Logs</h2>
+<pre>
+Fixing /home/chyun/oss-fuzz-gen/results4/output-libtiff-tiffsetsubdirectory/fixed_targets/02.cc with gpt-4, attempt 1.
+Fixing /home/chyun/oss-fuzz-gen/results4/output-libtiff-tiffsetsubdirectory/fixed_targets/02.cc with gpt-4, attempt 2.
+Fixing /home/chyun/oss-fuzz-gen/results4/output-libtiff-tiffsetsubdirectory/fixed_targets/02.cc with gpt-4, attempt 3.
+Fixing /home/chyun/oss-fuzz-gen/results4/output-libtiff-tiffsetsubdirectory/fixed_targets/02.cc with gpt-4, attempt 4.
+Fixing /home/chyun/oss-fuzz-gen/results4/output-libtiff-tiffsetsubdirectory/fixed_targets/02.cc with gpt-4, attempt 5.
+Failed to build /home/chyun/oss-fuzz-gen/results4/output-libtiff-tiffsetsubdirectory/fixed_targets/02.cc with gpt-4 in 5 iterations of fixing.
+
+</pre>
+
+<h2>Run logs</h2>
+<pre>
+INFO:__main__:Running: docker run --privileged --shm-size=2g --platform linux/amd64 --rm -e FUZZING_ENGINE=libfuzzer -e SANITIZER=address -e RUN_FUZZER_MODE=interactive -e HELPER=True -v /home/chyun/oss-fuzz-gen/results4/output-libtiff-tiffsetsubdirectory/corpora/02.cc:/tmp/tiff_read_rgba_fuzzer_corpus -v /tmp/tmpiv7_3_tu/build/out/libtiff-tiffsetsubdirectory-02:/out -t gcr.io/oss-fuzz-base/base-runner run_fuzzer tiff_read_rgba_fuzzer -print_final_stats=1 -max_total_time=30 -len_control=0 -timeout=30.
+vm.mmap_rnd_bits = 28
+rm: cannot remove &#39;/tmp/tiff_read_rgba_fuzzer_corpus&#39;: Device or resource busy
+Using seed corpus: tiff_read_rgba_fuzzer_seed_corpus.zip
+/out/tiff_read_rgba_fuzzer -rss_limit_mb=2560 -timeout=25 -print_final_stats=1 -max_total_time=30 -len_control=0 -timeout=30 /tmp/tiff_read_rgba_fuzzer_corpus -dict=tiff_read_rgba_fuzzer.dict &lt; /dev/null
+Dictionary: 40 entries
+INFO: Running with entropic power schedule (0xFF, 100).
+INFO: Seed: 862071870
+INFO: Loaded 1 modules   (26801 inline 8-bit counters): 26801 [0x55a6b7eabe20, 0x55a6b7eb26d1), 
+INFO: Loaded 1 PC tables (26801 PCs): 26801 [0x55a6b7eb26d8,0x55a6b7f1b1e8), 
+INFO:     6502 files found in /tmp/tiff_read_rgba_fuzzer_corpus
+INFO: -max_len is not provided; libFuzzer will not generate inputs larger than 16832 bytes
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+INFO: seed corpus: files: 6502 min: 1b max: 16832b total: 6363517b rss: 38Mb
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt
+...truncated...
+tOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+TIFFClientOpenExt: One of the client procedures is NULL pointer..
+#635533	DONE   cov: 21 ft: 22 corp: 1/1b lim: 16832 exec/s: 20501 rss: 74Mb
+Done 635533 runs in 31 second(s)
+stat::number_of_executed_units: 635533
+stat::average_exec_per_sec:     20501
+stat::new_units_added:          0
+stat::slowest_unit_time_sec:    0
+stat::peak_rss_mb:              74
+
+</pre>
+
+
+</body>

@@ -1,0 +1,43 @@
+{
+    "samples": [
+
+    {
+        "benchmark": "output-libtiff-tiffsetsubdirectory",
+        "sample": "01",
+        "status": "Done",
+        "compiles": "False",
+        "crashes": "False",
+        "crash_reason": "-",
+        "bug": "True",
+        "coverage": "0.00",
+        "coverage_diff": "0.0",
+        "coverage_report": "#",
+        "stacktrace": "/stacktrace",
+        "target_binary": "/target_binary",
+        "reproducer": "/artifacts",
+        "run_log": "run.log",
+        "source_code": "#include <fuzzer/FuzzedDataProvider.h>\\n\\n#include <cstddef>\\n#include <cstdint>\\n#include <cstring>\\n#include <iostream>\\n#include <tiffio.h>\\n\\n// Create a memory stream that libtiff can read from\\ntsize_t strm_read(thandle_t handle, tdata_t buf, tsize_t size) {\\n  std::string *strm = reinterpret_cast<std::string *>(handle);\\n  strm->resize(size);\\n  memcpy(buf, strm->data(), size);\\n  return size;\\n}\\n\\nextern \"C\" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {\\n  // The following function comes from tiffmem.c\\n  // _TIFFmemset(amalloc(1), 0, 1);\\n  \\n  // Setting up libtiff read sources\\n  TIFFErrorHandler oldhandler = TIFFSetWarningHandler(NULL);\\n  \\n  // Set data to non-NULL value\\n  FuzzedDataProvider stream(data, size);\\n  std::string value = stream.ConsumeRandomLengthString(size);\\n  \\n  TIFF *tif = TIFFClientOpen(\"memory\", \"r\", &value,\\n                             // No write function, a read function,\\n                             NULL, strm_read,\\n                             // An empty size function and close function\\n                             NULL, NULL,\\n                             // A memory manager using libtiff functions\\n                             NULL, NULL);\\n  \\n  if (tif != NULL) {\\n    uint64_t subDir = stream.ConsumeIntegral<uint64_t>();\\n    TIFFSetSubDirectory(tif, subDir);\\n    TIFFClose(tif);\\n  }\\n\\n  TIFFSetWarningHandler(oldhandler);\\n  return 0;\\n}",
+        "model": ""
+    },
+
+    {
+        "benchmark": "output-libtiff-tiffsetsubdirectory",
+        "sample": "02",
+        "status": "Done",
+        "compiles": "True",
+        "crashes": "True",
+        "crash_reason": "FP_NEAR_INIT_CRASH",
+        "bug": "False",
+        "coverage": "0.00",
+        "coverage_diff": "0.0",
+        "coverage_report": "#",
+        "stacktrace": "/stacktrace",
+        "target_binary": "/target_binary",
+        "reproducer": "/artifacts",
+        "run_log": "run.log",
+        "source_code": "#include <cstdint>\\n#include <cstddef>\\n#include \"/work/include/tiffio.h\"\\n\\nextern \"C\" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {\\n    auto tiff = TIFFOpen(\"/dev/null\", \"w\");\\n    if (!tiff) {\\n        return 0;\\n    }\\n    while (size > 0) {\\n        uint64_t dir_off = *reinterpret_cast<const uint64_t*>(data);\\n        TIFFSetSubDirectory(tiff, dir_off);\\n        data += sizeof(uint64_t);\\n        size -= sizeof(uint64_t);\\n    }\\n    TIFFClose(tiff);\\n    return 0;\\n}",
+        "model": ""
+    }
+
+    ]
+}

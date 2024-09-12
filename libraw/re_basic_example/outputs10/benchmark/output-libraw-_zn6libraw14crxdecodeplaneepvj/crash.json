@@ -1,0 +1,43 @@
+{
+    "samples": [
+
+    {
+        "benchmark": "output-libraw-_zn6libraw14crxdecodeplaneepvj",
+        "sample": "01",
+        "status": "Done",
+        "compiles": "True",
+        "crashes": "False",
+        "crash_reason": "NO_SEMANTIC_ERR",
+        "bug": "True",
+        "coverage": "0.38",
+        "coverage_diff": "0.0",
+        "coverage_report": "#",
+        "stacktrace": "/stacktrace",
+        "target_binary": "/target_binary",
+        "reproducer": "/artifacts",
+        "run_log": "run.log",
+        "source_code": "#include <fuzzer/FuzzedDataProvider.h>\\n\\n#include <cstddef>\\n#include <cstdint>\\n#include <string>\\n#include \"/src/libraw/libraw/libraw.h\"\\n\\nstruct LibRaw_datastream : public LibRaw_abstract_datastream {\\n  const uint8_t *str;\\n  size_t len;\\n  LibRaw_datastream(const uint8_t *s, size_t l) : str(s), len(l) {}\\n  \\n  int read(void *dst, size_t o, size_t len) override {\\n    if (this->len < len)\\n      return EOF;\\n    memcpy(dst, str, len);\\n    this->len -= len;\\n    str += len;\\n    return 0;\\n  }\\n  \\n  int valid() override { return 1; }\\n  int seek(INT64 o, int whence) override { return 0; }\\n  INT64 tell() override { return 0; }\\n  INT64 size() override { return len; }\\n  int get_char() override { return EOF; }\\n  char *gets(char *s, int len) override { return nullptr; }\\n  int scanf_one(const char *fmt, void *val) override { return EOF; }\\n\\n  int eof() override { return len == 0; };\\n};\\n\\nclass MyLibRaw : public LibRaw {\\npublic:\\n  using LibRaw::crxDecodePlane;\\n};\\n\\nextern \"C\" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {\\n  FuzzedDataProvider stream(data, size);\\n\\n  if (stream.remaining_bytes() < 1) {\\n    return 0;\\n  }\\n\\n  MyLibRaw RawProcessor;\\n  LibRaw_datastream DataStream(data, size);\\n\\n  int ret = RawProcessor.open_datastream(&DataStream);\\n  \\n  if (ret != LIBRAW_SUCCESS) {\\n    RawProcessor.recycle();\\n    return 0;\\n  }\\n\\n  uint32_t param_1 = stream.ConsumeIntegral<uint32_t>();\\n  \\n  void* buffer = malloc(param_1);\\n  RawProcessor.crxDecodePlane(buffer, param_1);\\n  free(buffer);\\n  \\n  RawProcessor.recycle();\\n\\n  return 0;\\n}",
+        "model": ""
+    },
+
+    {
+        "benchmark": "output-libraw-_zn6libraw14crxdecodeplaneepvj",
+        "sample": "02",
+        "status": "Done",
+        "compiles": "True",
+        "crashes": "True",
+        "crash_reason": "FP_NEAR_INIT_CRASH",
+        "bug": "False",
+        "coverage": "0.00",
+        "coverage_diff": "0.0",
+        "coverage_report": "#",
+        "stacktrace": "/stacktrace",
+        "target_binary": "/target_binary",
+        "reproducer": "/artifacts",
+        "run_log": "run.log",
+        "source_code": "#include <fuzzer/FuzzedDataProvider.h>\\n\\n#include <cstddef>\\n#include <cstdint>\\n#include <cstdlib>\\n#include <vector>\\n#include <cstring>\\n\\n#include \"/src/libraw/libraw/libraw.h\"\\n\\nclass LibRawPublic : public LibRaw {\\npublic:\\n    using LibRaw::crxDecodePlane;\\n};\\n\\nextern \"C\" int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {\\n  FuzzedDataProvider stream(data, size);\\n\\n  LibRawPublic RawProcessor;\\n  uint32_t bytes = stream.ConsumeIntegral<uint32_t>();\\n  \\n  std::vector<uint8_t> buffer = stream.ConsumeRemainingBytes<uint8_t>();\\n  \\n  // Create a temporary memory chunk as destination since crxDecodePlane requires non-const ptr as first parameter.\\n  void* tempBuffer = malloc(buffer.size()); \\n  memcpy(tempBuffer, buffer.data(), buffer.size()); \\n\\n  // Check if buffer size is less than the bytes to be consumed by crxDecodePlane\\n  if (buffer.size() < bytes) {\\n    bytes = buffer.size();\\n  }\\n\\n  // Check if buffer is not empty to avoid heap-buffer-overflow\\n  if (!buffer.empty()) {\\n    int decode_result = RawProcessor.crxDecodePlane(tempBuffer, bytes);\\n  }\\n  \\n  free(tempBuffer);\\n  \\n  return 0;\\n}",
+        "model": ""
+    }
+
+    ]
+}

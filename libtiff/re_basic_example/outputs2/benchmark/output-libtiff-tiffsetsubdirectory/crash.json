@@ -1,0 +1,43 @@
+{
+    "samples": [
+
+    {
+        "benchmark": "output-libtiff-tiffsetsubdirectory",
+        "sample": "01",
+        "status": "Done",
+        "compiles": "True",
+        "crashes": "False",
+        "crash_reason": "NO_SEMANTIC_ERR",
+        "bug": "True",
+        "coverage": "0.00",
+        "coverage_diff": "0.0",
+        "coverage_report": "#",
+        "stacktrace": "/stacktrace",
+        "target_binary": "/target_binary",
+        "reproducer": "/artifacts",
+        "run_log": "run.log",
+        "source_code": "#include <fuzzer/FuzzedDataProvider.h>\\n\\n#include <cstdint>\\n#include <cstring>\\n\\n#include \"tiffio.h\"\\n\\n// Define the missing functions\\ntsize_t _tiffReadProc(thandle_t fd, tdata_t buf, tsize_t size) {\\n    FuzzedDataProvider* stream = static_cast<FuzzedDataProvider*>(fd);\\n    const std::vector<uint8_t> data = stream->ConsumeBytes<uint8_t>(size);\\n    std::memcpy(buf, data.data(), data.size());\\n    return data.size();\\n}\\n\\ntsize_t _tiffWriteProc(thandle_t fd, tdata_t buf, tsize_t size) {\\n    return size;\\n}\\n\\ntoff_t _tiffSeekProc(thandle_t fd, toff_t off, int whence) {\\n    return off;\\n}\\n\\nint _tiffCloseProc(thandle_t fd) {\\n    return 0;\\n}\\n\\ntoff_t _tiffSizeProc(thandle_t fd) {\\n    return 0;\\n}\\n\\nint _tiffMapFileProc(thandle_t fd, tdata_t* pbase, toff_t* psize) {\\n    return 0;\\n}\\n\\nvoid _tiffUnmapFileProc(thandle_t fd, tdata_t base, toff_t size) {\\n    return;\\n}\\n\\nextern \"C\" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {\\n    if (size < sizeof(uint64_t)) {\\n        // Not enough data for test, return early\\n        return 0;\\n    }\\n\\n    FuzzedDataProvider stream(data, size);\\n    \\n    // Create a new memory block for TIFF file\\n    TIFF *tif = TIFFClientOpen(\"MemTIFF\", \"w\", (thandle_t)&stream, \\n                                _tiffReadProc, _tiffWriteProc, \\n                                _tiffSeekProc, _tiffCloseProc, \\n                                _tiffSizeProc, _tiffMapFileProc, _tiffUnmapFileProc);\\n    if (!tif) {\\n      return 0;\\n    }\\n\\n    // Calls the function-under-test\\n    uint64_t sub_directory_offset = stream.ConsumeIntegral<uint64_t>();\\n    TIFFSetSubDirectory(tif, sub_directory_offset);\\n\\n    TIFFClose(tif);\\n\\n    return 0;\\n}",
+        "model": ""
+    },
+
+    {
+        "benchmark": "output-libtiff-tiffsetsubdirectory",
+        "sample": "02",
+        "status": "Done",
+        "compiles": "True",
+        "crashes": "False",
+        "crash_reason": "NO_SEMANTIC_ERR",
+        "bug": "True",
+        "coverage": "9.06",
+        "coverage_diff": "0.006903769901173439",
+        "coverage_report": "#",
+        "stacktrace": "/stacktrace",
+        "target_binary": "/target_binary",
+        "reproducer": "/artifacts",
+        "run_log": "run.log",
+        "source_code": "#include <fuzzer/FuzzedDataProvider.h>\\n\\n#include <cstddef>\\n#include <cstdint>\\n#include <cstring>\\n\\n#include \"tiffio.h\"\\n\\nconst uint32_t MEMSTREAM_TAG = 123456; // random unique number\\n\\nstruct memrange_t {\\n  unsigned const char *data;\\n  tmsize_t size;\\n  tmsize_t pos;\\n  tmsize_t eof;\\n};\\n\\nstatic tmsize_t memrange_read(thandle_t handle, void *buffer, tmsize_t size) {\\n    memrange_t *memrange = (memrange_t *)handle;\\n    if (memrange->pos >= memrange->eof) return 0;\\n    auto remaining_size = memrange->eof - memrange->pos;\\n    auto bytes_to_read = remaining_size > size ? size : remaining_size;\\n    memcpy(buffer, memrange->data + memrange->pos, bytes_to_read);\\n    memrange->pos += bytes_to_read;\\n    return bytes_to_read;\\n}\\n\\nstatic tmsize_t memrange_write(thandle_t handle, void *buffer, tmsize_t size) {\\n    return 0;\\n}\\n\\nstatic toff_t memrange_seek(thandle_t handle, toff_t pos, int whence) {\\n    memrange_t *memrange = (memrange_t *)handle; \\n    switch (whence) {\\n        case SEEK_SET:\\n            memrange->pos = (memrange->size > (uint64_t)pos) ? pos : memrange->size;\\n            return memrange->pos;\\n        case SEEK_CUR:\\n            memrange->pos = ((memrange->size - memrange->pos) > (uint64_t)pos) ? memrange->pos + pos : memrange->size;\\n            return memrange->pos;\\n        case SEEK_END:\\n            memrange->pos = ((memrange->size + pos) > memrange->size) ? memrange->size + pos : memrange->size;\\n            return memrange->pos;\\n        default:\\n            return static_cast<toff_t>(-1);\\n    }\\n}\\n\\nstatic toff_t memrange_size(thandle_t handle) {\\n    memrange_t *memrange = (memrange_t *)handle;\\n    return memrange ? (toff_t)memrange->size : 0;\\n}\\n\\nstatic int memrange_close(thandle_t handle) {\\n    memrange_t *memrange = (memrange_t *)handle;\\n    memrange->data = NULL;\\n    memrange->size = memrange->pos = memrange->eof = 0;\\n\\n    return 0;\\n}\\n\\nstatic int memrange_map(thandle_t, void **, toff_t *) {\\n    return 0;\\n}\\n\\nstatic void memrange_unmap(thandle_t, void *, toff_t) {}\\n\\nextern \"C\" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {\\n    TIFFErrorHandler prevHandler = TIFFSetErrorHandler(NULL); // Disable libtiff error handler\\n    TIFFErrorHandlerExt prevHandlerExt = TIFFSetErrorHandlerExt(NULL); // Disable ext error handler\\n\\n    memrange_t memrange = {data, static_cast<tmsize_t>(size), 0, static_cast<tmsize_t>(size)};\\n    TIFF *tiff = TIFFClientOpen(\"memory\", \"rm\",\\n                                &memrange,\\n                                memrange_read,\\n                                memrange_write,\\n                                memrange_seek,\\n                                memrange_close,\\n                                memrange_size,\\n                                memrange_map,\\n                                memrange_unmap);\\n    if (tiff != NULL) {\\n        uint64_t dir = 0;\\n        if (size >= sizeof(uint64_t)) {\\n            memcpy(&dir, data, sizeof(uint64_t));\\n        }\\n        TIFFSetSubDirectory(tiff, dir);\\n        TIFFClose(tiff);\\n    }\\n\\n    return 0;\\n}",
+        "model": ""
+    }
+
+    ]
+}

@@ -1,0 +1,577 @@
+<!doctype html>
+
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Experiment results</title>
+<style>
+* {
+    box-sizing: border-box;
+}
+
+html {
+    line-height: 1.15;
+}
+
+body {
+    font-family: sans-serif;
+    font-size: 16px;
+}
+
+table {
+    border-collapse: collapse;
+    border-spacing: 0;
+}
+
+td, th {
+    border-right: 1px #dedede solid;
+    border-bottom: 1px #dedede solid;
+    padding: 5px;
+    text-align: left;
+}
+td:first-child, th:first-child {
+    border-left: 1px #dedede solid;
+}
+th {
+    border-top: 1px #dedede solid;
+}
+
+tbody tr:nth-child(odd) {
+    background-color: #f4f5ff;
+}
+</style>
+<body>
+    LLM: 
+    
+<h1>output-libtiff-tifffdopen / 02</h1>
+Bug: False
+<br>
+Crash reason: NO_SEMANTIC_ERR
+<br>
+<br>
+
+<h2>Triage</h2>
+<pre>
+
+</pre>
+<br>
+
+
+
+
+
+<h3>Final code</h3>
+
+<pre>
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+#include &lt;sstream&gt;
+#include &lt;tiffio.h&gt;
+#include &lt;tiffio.hxx&gt;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
+  std::string text_file_name = &#34;/tmp/temp.tiff&#34;;
+  
+  FILE * temp_file;
+  temp_file = fopen (text_file_name.c_str(), &#34;w+&#34;);
+  if (temp_file == NULL) exit(1); //  Failed to open a file.
+
+  // parse data as text and write it to a file.
+  std::string s(data, data+size);
+  fprintf(temp_file, &#34;%s&#34;, s.c_str());
+
+  // Reopen the file in read mode for TIFFFdOpen
+  fclose(temp_file);
+  temp_file = fopen (text_file_name.c_str(), &#34;r&#34;);
+  
+  TIFF* tiff = TIFFFdOpen(fileno(temp_file), text_file_name.c_str(), &#34;r&#34;);
+  if (!tiff) {
+    fclose(temp_file);
+    remove(text_file_name.c_str());
+    return 0;
+  }
+  
+  TIFFClose(tiff);
+  fclose(temp_file);
+  
+  // Clean up created file
+  remove(text_file_name.c_str());
+
+  return 0;
+}
+</pre>
+
+
+<h3>Fixer prompt #1</h3>
+<pre>
+
+Given the following C++ fuzz harness and its build error message, fix the code to make it build for fuzzing.
+
+If there is undeclared identifier or unknown type name error, fix it by finding and including the related libraries.
+
+MUST RETURN THE FULL CODE, INCLUDING UNCHANGED PARTS.
+
+Below is the code needs to be built:
+&lt;code&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+#include &lt;sstream&gt;
+#include &lt;tiffio.h&gt;
+#include &lt;tiffio.hxx&gt;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
+  std::string text_file_name = &#34;/tmp/temp.tiff&#34;;
+  
+  FILE * temp_file;
+  temp_file = fopen (text_file_name.c_str(), &#34;w+&#34;);
+  if (temp_file == NULL) exit(1); //  Failed to open a file.
+
+  // parse data as text and write it to a file.
+  std::string s(data, data+size);
+  fprintf(temp_file, &#34;%s&#34;, s.c_str());
+  fclose(temp_file);
+
+  TIFF* tiff = TIFFFdOpen(fileno(temp_file), text_file_name.c_str(), &#34;r&#34;);
+  if (!tiff) {
+    return 0;
+  }
+  
+  TIFFClose(tiff);
+  
+  // Clean up created file
+  remove(text_file_name.c_str());
+
+  return 0;
+}
+&lt;/code&gt;
+
+Below is the error to fix:
+The code has the following build issues:
+&lt;error&gt;
+
+&lt;/error&gt;
+
+
+
+
+Fix code:
+1. Consider possible solutions for the issues listed above.
+2. Choose a solution that can maximize fuzzing result, which is utilizing the function under test and feeding it not null input.
+3. Apply the solutions to the original code.
+It&#39;s important to show the complete code, not only the fixed line.
+&lt;solution&gt;
+</pre>
+
+
+
+<h3>Code #1</h3>
+
+<pre>
+The provided error message is empty, so I&#39;ll assume the problem is that the file is closed before it is opened with TIFFFdOpen. Here&#39;s the corrected code:
+
+```cpp
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+#include &lt;sstream&gt;
+#include &lt;tiffio.h&gt;
+#include &lt;tiffio.hxx&gt;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
+  std::string text_file_name = &#34;/tmp/temp.tiff&#34;;
+  
+  FILE * temp_file;
+  temp_file = fopen (text_file_name.c_str(), &#34;w+&#34;);
+  if (temp_file == NULL) exit(1); //  Failed to open a file.
+
+  // parse data as text and write it to a file.
+  std::string s(data, data+size);
+  fprintf(temp_file, &#34;%s&#34;, s.c_str());
+
+  // Reopen the file in read mode for TIFFFdOpen
+  fclose(temp_file);
+  temp_file = fopen (text_file_name.c_str(), &#34;r&#34;);
+  
+  TIFF* tiff = TIFFFdOpen(fileno(temp_file), text_file_name.c_str(), &#34;r&#34;);
+  if (!tiff) {
+    fclose(temp_file);
+    remove(text_file_name.c_str());
+    return 0;
+  }
+  
+  TIFFClose(tiff);
+  fclose(temp_file);
+  
+  // Clean up created file
+  remove(text_file_name.c_str());
+
+  return 0;
+}
+```
+
+In the fixed code, the file is closed and reopened in read mode before calling TIFFFdOpen. After TIFFFdOpen, the file is closed again if it couldn&#39;t be opened as a TIFF file.
+</pre>
+
+
+<h2>Logs</h2>
+<pre>
+Fixing /home/chyun/oss-fuzz-gen/results1/output-libtiff-tifffdopen/fixed_targets/02.cc with gpt-4, attempt 1.
+Successfully built /home/chyun/oss-fuzz-gen/results1/output-libtiff-tifffdopen/fixed_targets/02.cc with gpt-4 in 1 iterations of fixing.
+Triaging the crash related to /home/chyun/oss-fuzz-gen/results1/output-libtiff-tifffdopen/fixed_targets/02.cc with gpt-4.
+Warning: no crash info in libtiff-tifffdopen-02.
+Warning: No cov info in run result of libtiff-tifffdopen-02.
+
+</pre>
+
+<h2>Run logs</h2>
+<pre>
+INFO:__main__:Running: docker run --privileged --shm-size=2g --platform linux/amd64 --rm -e FUZZING_ENGINE=libfuzzer -e SANITIZER=address -e RUN_FUZZER_MODE=interactive -e HELPER=True -v /home/chyun/oss-fuzz-gen/results1/output-libtiff-tifffdopen/corpora/02.cc:/tmp/tiff_read_rgba_fuzzer_corpus -v /tmp/tmp0uwq2wh4/build/out/libtiff-tifffdopen-02:/out -t gcr.io/oss-fuzz-base/base-runner run_fuzzer tiff_read_rgba_fuzzer -print_final_stats=1 -max_total_time=30 -len_control=0 -timeout=30.
+vm.mmap_rnd_bits = 28
+rm: cannot remove &#39;/tmp/tiff_read_rgba_fuzzer_corpus&#39;: Device or resource busy
+Using seed corpus: tiff_read_rgba_fuzzer_seed_corpus.zip
+/out/tiff_read_rgba_fuzzer -rss_limit_mb=2560 -timeout=25 -print_final_stats=1 -max_total_time=30 -len_control=0 -timeout=30 /tmp/tiff_read_rgba_fuzzer_corpus -dict=tiff_read_rgba_fuzzer.dict &lt; /dev/null
+Dictionary: 40 entries
+INFO: Running with entropic power schedule (0xFF, 100).
+INFO: Seed: 2430412960
+INFO: Loaded 1 modules   (26825 inline 8-bit counters): 26825 [0x55624f8e9ef8, 0x55624f8f07c1), 
+INFO: Loaded 1 PC tables (26825 PCs): 26825 [0x55624f8f07c8,0x55624f959458), 
+INFO:     6502 files found in /tmp/tiff_read_rgba_fuzzer_corpus
+INFO: -max_len is not provided; libFuzzer will not generate inputs larger than 16832 bytes
+/tmp/temp.tiff: Cannot read TIFF header.
+INFO: seed corpus: files: 6502 min: 1b max: 16832b total: 6363517b rss: 38Mb
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Not a TIFF file, bad version number 18232 (0x4738).
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+...truncated...
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Not a TIFF file, bad version number 44856 (0xaf38).
+/tmp/temp.tiff: Not a TIFF or MDI file, bad magic number 20485 (0x5005).
+/tmp/temp.tiff: Not a TIFF or MDI file, bad magic number 20485 (0x5005).
+/tmp/temp.tiff: Not a TIFF or MDI file, bad magic number 20485 (0x5005).
+/tmp/temp.tiff: Not a TIFF or MDI file, bad magic number 20485 (0x5005).
+/tmp/temp.tiff: Not a TIFF file, bad version number 17219 (0x4343).
+/tmp/temp.tiff: Not a TIFF file, bad version number 17219 (0x4343).
+/tmp/temp.tiff: Not a TIFF file, bad version number 17219 (0x4343).
+/tmp/temp.tiff: Not a TIFF or MDI file, bad magic number 19834 (0x4d7a).
+/tmp/temp.tiff: Not a TIFF or MDI file, bad magic number 19834 (0x4d7a).
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Not a TIFF file, bad version number 18232 (0x4738).
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Not a TIFF file, bad version number 17219 (0x4343).
+/tmp/temp.tiff: Not a TIFF file, bad version number 513 (0x201).
+/tmp/temp.tiff: Not a TIFF file, bad version number 515 (0x203).
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Not a TIFF file, bad version number 39722 (0x9b2a).
+/tmp/temp.tiff: Not a TIFF file, bad version number 39722 (0x9b2a).
+/tmp/temp.tiff: Not a TIFF file, bad version number 39722 (0x9b2a).
+/tmp/temp.tiff: Not a TIFF file, bad version number 39722 (0x9b2a).
+/tmp/temp.tiff: Not a TIFF file, bad version number 39722 (0x9b2a).
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Not a TIFF or MDI file, bad magic number 11010 (0x2b02).
+/tmp/temp.tiff: Not a TIFF or MDI file, bad magic number 5254 (0x1486).
+/tmp/temp.tiff: Not a TIFF or MDI file, bad magic number 5254 (0x1486).
+/tmp/temp.tiff: Not a TIFF or MDI file, bad magic number 5254 (0x1486).
+/tmp/temp.tiff: Not a TIFF or MDI file, bad magic number 5254 (0x1486).
+/tmp/temp.tiff: Not a TIFF or MDI file, bad magic number 5254 (0x1486).
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Not a TIFF or MDI file, bad magic number 20524 (0x502c).
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Not a TIFF or MDI file, bad magic number 20817 (0x5151).
+/tmp/temp.tiff: Not a TIFF or MDI file, bad magic number 20817 (0x5151).
+/tmp/temp.tiff: Not a TIFF or MDI file, bad magic number 20817 (0x5151).
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Not a TIFF or MDI file, bad magic number 42437 (0xa5c5).
+/tmp/temp.tiff: Not a TIFF or MDI file, bad magic number 42437 (0xa5c5).
+/tmp/temp.tiff: Not a TIFF or MDI file, bad magic number 42949 (0xa7c5).
+/tmp/temp.tiff: Not a TIFF or MDI file, bad magic number 42949 (0xa7c5).
+/tmp/temp.tiff: Not a TIFF or MDI file, bad magic number 42949 (0xa7c5).
+/tmp/temp.tiff: Not a TIFF file, bad version number 17219 (0x4343).
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Not a TIFF file, bad version number 17158 (0x4306).
+/tmp/temp.tiff: Not a TIFF file, bad version number 50597 (0xc5a5).
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Not a TIFF or MDI file, bad magic number 17317 (0x43a5).
+/tmp/temp.tiff: Not a TIFF or MDI file, bad magic number 17317 (0x43a5).
+/tmp/temp.tiff: Not a TIFF or MDI file, bad magic number 17317 (0x43a5).
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+/tmp/temp.tiff: Cannot read TIFF header.
+#124419	DONE   cov: 88 ft: 98 corp: 13/2825b lim: 16832 exec/s: 4013 rss: 74Mb
+###### Recommended dictionary. ######
+&#34;\001\000&#34; # Uses: 1002
+&#34;\007\000\000\000\000\000\000\000&#34; # Uses: 1020
+&#34;\000\000\000\000&#34; # Uses: 1013
+&#34;\001\000\000\000\000\000\000c&#34; # Uses: 982
+###### End of recommended dictionary. ######
+Done 124419 runs in 31 second(s)
+stat::number_of_executed_units: 124419
+stat::average_exec_per_sec:     4013
+stat::new_units_added:          44
+stat::slowest_unit_time_sec:    0
+stat::peak_rss_mb:              74
+
+</pre>
+
+
+</body>

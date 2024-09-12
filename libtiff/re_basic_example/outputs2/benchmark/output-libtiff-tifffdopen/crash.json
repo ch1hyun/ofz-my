@@ -1,0 +1,43 @@
+{
+    "samples": [
+
+    {
+        "benchmark": "output-libtiff-tifffdopen",
+        "sample": "01",
+        "status": "Done",
+        "compiles": "True",
+        "crashes": "False",
+        "crash_reason": "NO_SEMANTIC_ERR",
+        "bug": "True",
+        "coverage": "0.00",
+        "coverage_diff": "0.0",
+        "coverage_report": "#",
+        "stacktrace": "/stacktrace",
+        "target_binary": "/target_binary",
+        "reproducer": "/artifacts",
+        "run_log": "run.log",
+        "source_code": "#include <tiffio.h>\\n#include <fuzzer/FuzzedDataProvider.h>\\n#include <cstdlib>\\n#include <string>\\n#include <fcntl.h>\\n#include <unistd.h>\\n\\n#define MAX_BUF_SIZE 1024\\n\\nextern \"C\" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {\\n  FuzzedDataProvider fdp(data, size);\\n\\n  std::string mode(1, fdp.ConsumeIntegral<char>());\\n  std::string extra_chars = fdp.ConsumeRemainingBytesAsString();\\n\\n  int fd = open(\"/tmp/temp.tiff\", O_CREAT | O_TRUNC | O_WRONLY, S_IRUSR | S_IWUSR);\\n  if (fd == -1) return 0;\\n\\n  write(fd, extra_chars.data(), extra_chars.size());\\n\\n  lseek(fd, SEEK_SET, 0);\\n\\n  TIFF* out_tif = TIFFFdOpen(fd, \"dummy\", mode.c_str());\\n\\n  if (out_tif) {\\n    TIFFClose(out_tif);\\n  }\\n\\n  close(fd);\\n  return 0;\\n}",
+        "model": ""
+    },
+
+    {
+        "benchmark": "output-libtiff-tifffdopen",
+        "sample": "02",
+        "status": "Done",
+        "compiles": "True",
+        "crashes": "False",
+        "crash_reason": "NO_SEMANTIC_ERR",
+        "bug": "True",
+        "coverage": "0.41",
+        "coverage_diff": "0.0008856147978181672",
+        "coverage_report": "#",
+        "stacktrace": "/stacktrace",
+        "target_binary": "/target_binary",
+        "reproducer": "/artifacts",
+        "run_log": "run.log",
+        "source_code": "#include <cassert>\\n#include <cstdint>\\n#include <cstdio>\\n#include <cstring>\\n#include <string>\\n#include <fuzzer/FuzzedDataProvider.h>\\n#include \"tiffio.h\"\\n\\nstruct FileCloser {\\n  FILE *file;\\n  ~FileCloser() {\\n    if(file) {fclose(file);}\\n  }\\n};\\n\\nextern \"C\" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {\\n  FuzzedDataProvider stream(data, size);\\n  \\n  const std::string file_name = stream.ConsumeRandomLengthString();\\n  std::string open_mode = stream.PickValueInArray({\"r\", \"w\", \"a\"});\\n  \\n  FILE *tmpfile = fopen(file_name.c_str(), open_mode.c_str());\\n  FileCloser file_closer{tmpfile};  // Use RAII to close tmpfile.\\n  if (!tmpfile) {\\n    return 0;\\n  }\\n  \\n  int fd = fileno(tmpfile);\\n\\n  // Call the function under test.\\n  TIFF *c_tiff = TIFFFdOpen(fd, \"MemTIFF\", \"r\");\\n\\n  if (c_tiff) {\\n    TIFFClose(c_tiff);\\n  }\\n\\n  return 0;\\n}",
+        "model": ""
+    }
+
+    ]
+}

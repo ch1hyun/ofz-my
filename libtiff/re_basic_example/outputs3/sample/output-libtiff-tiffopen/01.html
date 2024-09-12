@@ -1,0 +1,425 @@
+<!doctype html>
+
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Experiment results</title>
+<style>
+* {
+    box-sizing: border-box;
+}
+
+html {
+    line-height: 1.15;
+}
+
+body {
+    font-family: sans-serif;
+    font-size: 16px;
+}
+
+table {
+    border-collapse: collapse;
+    border-spacing: 0;
+}
+
+td, th {
+    border-right: 1px #dedede solid;
+    border-bottom: 1px #dedede solid;
+    padding: 5px;
+    text-align: left;
+}
+td:first-child, th:first-child {
+    border-left: 1px #dedede solid;
+}
+th {
+    border-top: 1px #dedede solid;
+}
+
+tbody tr:nth-child(odd) {
+    background-color: #f4f5ff;
+}
+</style>
+<body>
+    LLM: 
+    
+<h1>output-libtiff-tiffopen / 01</h1>
+Bug: False
+<br>
+Crash reason: NO_SEMANTIC_ERR
+<br>
+<br>
+
+<h2>Triage</h2>
+<pre>
+
+</pre>
+<br>
+
+
+
+
+
+<h3>Final code</h3>
+
+<pre>
+#include &lt;cstddef&gt;
+#include &lt;cstdlib&gt;
+#include &lt;unistd.h&gt; // added this line
+#include &#34;tiffio.h&#34;
+
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  FuzzedDataProvider stream(data, size);
+  const std::string mode = stream.PickValueInArray({&#34;r&#34;,&#34;r+&#34;, &#34;w+&#34;, &#34;a+&#34;});
+  
+  std::string file = stream.ConsumeRemainingBytesAsString();
+
+  char filename[] = &#34;/tmp/fuzz-XXXXXX&#34;;
+  int fd = mkstemp(filename);
+  if (fd &lt; 0) {
+    return 0;
+  }
+
+  ssize_t ret = write(fd, file.data(), file.size());
+  if (ret &lt; 0) {
+    close(fd);
+    return 0;
+  }
+
+  TIFF *tif = TIFFOpen(filename, mode.c_str());
+  if (tif) {
+    TIFFClose(tif);
+  }
+
+  close(fd);
+  remove(filename);
+
+  return 0;
+}
+</pre>
+
+
+<h3>Fixer prompt #1</h3>
+<pre>
+
+Given the following C++ fuzz harness and its build error message, fix the code to make it build for fuzzing.
+
+If there is undeclared identifier or unknown type name error, fix it by finding and including the related libraries.
+
+MUST RETURN THE FULL CODE, INCLUDING UNCHANGED PARTS.
+
+Below is the code needs to be built:
+&lt;code&gt;
+#include &lt;cstddef&gt;
+#include &lt;cstdlib&gt;
+#include &#34;tiffio.h&#34;
+
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  FuzzedDataProvider stream(data, size);
+  const std::string mode = stream.PickValueInArray({&#34;r&#34;,&#34;r+&#34;, &#34;w+&#34;, &#34;a+&#34;});
+  
+  std::string file = stream.ConsumeRemainingBytesAsString();
+
+  char filename[] = &#34;/tmp/fuzz-XXXXXX&#34;;
+  int fd = mkstemp(filename);
+  if (fd &lt; 0) {
+    return 0;
+  }
+
+  ssize_t ret = write(fd, file.data(), file.size());
+  if (ret &lt; 0) {
+    close(fd);
+    return 0;
+  }
+
+  TIFF *tif = TIFFOpen(filename, mode.c_str());
+  if (tif) {
+    TIFFClose(tif);
+  }
+
+  close(fd);
+  remove(filename);
+
+  return 0;
+}
+&lt;/code&gt;
+
+Below is the error to fix:
+The code has the following build issues:
+&lt;error&gt;
+/src/libtiff/contrib/oss-fuzz/tiff_read_rgba_fuzzer.cc:19:17: error: use of undeclared identifier &#39;write&#39;; did you mean &#39;_IO_cookie_io_functions_t::write&#39;?
+   19 |   ssize_t ret = write(fd, file.data(), file.size());
+      |                 ^~~~~
+      |                 _IO_cookie_io_functions_t::write
+/usr/include/x86_64-linux-gnu/bits/types/cookie_io_functions_t.h:58:28: note: &#39;_IO_cookie_io_functions_t::write&#39; declared here
+   58 |   cookie_write_function_t *write;       /* Write bytes.  */
+      |                            ^
+/src/libtiff/contrib/oss-fuzz/tiff_read_rgba_fuzzer.cc:19:17: error: invalid use of non-static data member &#39;write&#39;
+   19 |   ssize_t ret = write(fd, file.data(), file.size());
+      |                 ^~~~~
+/src/libtiff/contrib/oss-fuzz/tiff_read_rgba_fuzzer.cc:21:5: error: use of undeclared identifier &#39;close&#39;
+   21 |     close(fd);
+      |     ^
+/src/libtiff/contrib/oss-fuzz/tiff_read_rgba_fuzzer.cc:30:3: error: use of undeclared identifier &#39;close&#39;
+   30 |   close(fd);
+      |   ^
+&lt;/error&gt;
+
+
+
+
+Fix code:
+1. Consider possible solutions for the issues listed above.
+2. Choose a solution that can maximize fuzzing result, which is utilizing the function under test and feeding it not null input.
+3. Apply the solutions to the original code.
+It&#39;s important to show the complete code, not only the fixed line.
+&lt;solution&gt;
+</pre>
+
+
+
+<h3>Code #1</h3>
+
+<pre>
+The error message indicates that the functions &#39;write&#39; and &#39;close&#39; are not declared. These functions are part of the unistd.h library. Include this library to fix the error.
+
+Here&#39;s the fixed code:
+
+```cpp
+#include &lt;cstddef&gt;
+#include &lt;cstdlib&gt;
+#include &lt;unistd.h&gt; // added this line
+#include &#34;tiffio.h&#34;
+
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  FuzzedDataProvider stream(data, size);
+  const std::string mode = stream.PickValueInArray({&#34;r&#34;,&#34;r+&#34;, &#34;w+&#34;, &#34;a+&#34;});
+  
+  std::string file = stream.ConsumeRemainingBytesAsString();
+
+  char filename[] = &#34;/tmp/fuzz-XXXXXX&#34;;
+  int fd = mkstemp(filename);
+  if (fd &lt; 0) {
+    return 0;
+  }
+
+  ssize_t ret = write(fd, file.data(), file.size());
+  if (ret &lt; 0) {
+    close(fd);
+    return 0;
+  }
+
+  TIFF *tif = TIFFOpen(filename, mode.c_str());
+  if (tif) {
+    TIFFClose(tif);
+  }
+
+  close(fd);
+  remove(filename);
+
+  return 0;
+}
+```
+
+</pre>
+
+
+<h2>Logs</h2>
+<pre>
+Fixing /home/chyun/oss-fuzz-gen/results3/output-libtiff-tiffopen/fixed_targets/01.cc with gpt-4, attempt 1.
+Successfully built /home/chyun/oss-fuzz-gen/results3/output-libtiff-tiffopen/fixed_targets/01.cc with gpt-4 in 1 iterations of fixing.
+Triaging the crash related to /home/chyun/oss-fuzz-gen/results3/output-libtiff-tiffopen/fixed_targets/01.cc with gpt-4.
+Warning: no crash info in libtiff-tiffopen-01.
+Result for libtiff-tiffopen-01: crashes=False, coverage=0.08778924618996162 (2356/26837), coverage diff=0.007648491435702353 (380/49683)
+
+</pre>
+
+<h2>Run logs</h2>
+<pre>
+INFO:__main__:Running: docker run --privileged --shm-size=2g --platform linux/amd64 --rm -e FUZZING_ENGINE=libfuzzer -e SANITIZER=address -e RUN_FUZZER_MODE=interactive -e HELPER=True -v /home/chyun/oss-fuzz-gen/results3/output-libtiff-tiffopen/corpora/01.cc:/tmp/tiff_read_rgba_fuzzer_corpus -v /tmp/tmp98tuykc8/build/out/libtiff-tiffopen-01:/out -t gcr.io/oss-fuzz-base/base-runner run_fuzzer tiff_read_rgba_fuzzer -print_final_stats=1 -max_total_time=30 -len_control=0 -timeout=30.
+vm.mmap_rnd_bits = 28
+rm: cannot remove &#39;/tmp/tiff_read_rgba_fuzzer_corpus&#39;: Device or resource busy
+Using seed corpus: tiff_read_rgba_fuzzer_seed_corpus.zip
+/out/tiff_read_rgba_fuzzer -rss_limit_mb=2560 -timeout=25 -print_final_stats=1 -max_total_time=30 -len_control=0 -timeout=30 /tmp/tiff_read_rgba_fuzzer_corpus -dict=tiff_read_rgba_fuzzer.dict &lt; /dev/null
+Dictionary: 40 entries
+INFO: Running with entropic power schedule (0xFF, 100).
+INFO: Seed: 3010862527
+INFO: Loaded 1 modules   (26837 inline 8-bit counters): 26837 [0x5653f7077fb8, 0x5653f707e88d), 
+INFO: Loaded 1 PC tables (26837 PCs): 26837 [0x5653f707e890,0x5653f70e75e0), 
+INFO:     6502 files found in /tmp/tiff_read_rgba_fuzzer_corpus
+INFO: -max_len is not provided; libFuzzer will not generate inputs larger than 16832 bytes
+/tmp/fuzz-JBUwwd: Cannot read TIFF header.
+INFO: seed corpus: files: 6502 min: 1b max: 16832b total: 6363517b rss: 39Mb
+/tmp/fuzz-WE847a: Cannot read TIFF header.
+/tmp/fuzz-Ic8jI9: Cannot read TIFF header.
+/tmp/fuzz-bhUN6b: Cannot read TIFF header.
+/tmp/fuzz-IScrL9: Cannot read TIFF header.
+/tmp/fuzz-34rKud: Cannot read TIFF header.
+/tmp/fuzz-iaxHCd: Cannot read TIFF header.
+/tmp/fuzz-SsIord: Cannot read TIFF header.
+/tmp/fuzz-cwkQ0b: Cannot read TIFF header.
+/tmp/fuzz-eAndNb: Cannot read TIFF header.
+TIFFReadDirectoryCheckOrder: Warning, Invalid TIFF directory; tags are not sorted in ascending order.
+TIFFReadDirectory: IO error during reading of &#34;Compression&#34;.
+TIFFReadDirectoryCheckOrder: Warning, Invalid TIFF directory; tags are not sorted in ascending order.
+TIFFReadDirectory: Warning, Photometric tag is missing, assuming data is YCbCr.
+TIFFReadDirectory: Warning, BitsPerSample tag is missing, assuming 8 bits per sample.
+TIFFReadDirectory: Warning, SamplesPerPixel tag is missing, applying correct SamplesPerPixel value of 3.
+TIFFReadDirectoryCheckOrder: Warning, Invalid TIFF directory; tags are not sorted in ascending order.
+TIFFReadDirectory: Warning, Photometric tag is missing, assuming data is YCbCr.
+TIFFReadDirectory: Warning, BitsPerSample tag is missing, assuming 8 bits per sample.
+TIFFReadDirectory: Warning, SamplesPerPixel tag is missing, applying correct SamplesPerPixel value of 3.
+TIFFReadDirectoryCheckOrder: Warning, Invalid TIFF directory; tags are not sorted in ascending order.
+TIFFReadDirectory: Warning, Photometric tag is missing, assuming data is YCbCr.
+TIFFReadDirectory: Warning, BitsPerSample tag is missing, assuming 8 bits per sample.
+TIFFReadDirectory: Warning, SamplesPerPixel tag is missing, applying correct SamplesPerPixel value of 3.
+TIFFReadDirectoryCheckOrder: Warning, Invalid TIFF directory; tags are not sorted in ascending order.
+TIFFReadDirectory: Warning, Photometric tag is missing, assuming data is YCbCr.
+TIFFReadDirectory: Warning, BitsPerSample tag is missing, assuming 8 bits per sample.
+TIFFReadDirectory: Warning, SamplesPerPixel tag is missing, applying correct SamplesPerPixel value of 3.
+TIFFReadDirectoryCheckOrder: Warning, Invalid TIFF directory; tags are not sorted in ascending order.
+TIFFReadDirectory: Warning, Photometric tag is missing, assuming data is YCbCr.
+TIFFReadDirectory: Warning, BitsPerSample tag is missing, assuming 8 bits per sample.
+TIFFReadDirectory: Warning, SamplesPerPixel tag is missing, applying correct SamplesPerPixel value of 3.
+TIFFReadDirectoryCheckOrder: Warning, Invalid TIFF directory; tags are not sorted in ascending order.
+TIFFReadDirectory: Warning, Photometric tag is missing, assuming data is YCbCr.
+TIFFReadDirectory: Warning, BitsPerSample tag is missing, assuming 8 bits per sample.
+TIFFReadDirectory: Warning, SamplesPerPixel tag is missing, applying correct SamplesPerPixel value of 3.
+TIFFReadDirectoryCheckOrder: Warning, Invalid TIFF directory; tags are not sorted in ascending order.
+TIFFReadDirectory: Warning, Photometric tag is missing, assuming data is YCbCr.
+TIFFReadDirectory: Warning, BitsPerSample tag is missing, assuming 8 bits per sample.
+TIFFReadDirectory: Warning, SamplesPerPixel tag is missing, applying correct SamplesPerPixel value of 3.
+TIFFReadDirectoryCheckOrder: Warning, Invalid TIFF directory; tags are not sorted in ascending order.
+TIFFReadDirectory: Warning, Photometric tag is missing, assuming data is YCbCr.
+TIFFReadDirectory: Warning, BitsPerSample tag is missing, assuming 8 bits per sample.
+TIFFReadDirectory: Warning, SamplesPerPixel tag is missing, applying correct SamplesPerPixel value of 3.
+TIFFReadDirectoryCheckOrder: Warning, Invalid TIFF directory; tags are not sorted in ascending order.
+TIFFReadDirectory: Warning, Photometric tag is missing, assuming data is YCbCr.
+TIFFReadDirectory: Warning, BitsPerSample tag is missing, assuming 8 bits per sample.
+TIFFReadDirectory: Warning, SamplesPerPixel tag is missing, applying correct SamplesPerPixel value of 3.
+TIFFReadDirectoryCheckOrder: Warning, Invalid TIFF directory; tags are not sorted in ascending order.
+TIFFReadDirectory: Warning, Photometric tag is missing, assuming data is YCbCr.
+TIFFReadDirectory: Warning, BitsPerSample tag is missing, assuming 8 bits per sample.
+TIFFReadDirectory: Warning, SamplesPerPixel tag is missing, applying correct SamplesPerPixel value of 3.
+TIFFReadDirectoryCheckOrder: Warning, Invalid TIFF directory; tags are not sorted in ascending order.
+TIFFReadDirectory: Warning, Photometric tag is missing, assuming data is YCbCr.
+TIFFReadDirectory: Warning, BitsPerSample tag is missing, assuming 8 bits per sample.
+TIFFReadDirectory: Warning, SamplesPerPixel tag is missing, applying correct SamplesPerPixel value of 3.
+TIFFReadDirectoryCheckOrder: Warning, Invalid TIFF directory; tags are not sorted in ascending order.
+TIFFReadDirectory: Warning, Photometric tag is missing, assuming data is YCbCr.
+TIFFReadDirectory: Warning, BitsPerSample tag is missing, assuming 8 bits per sample.
+TIFFReadDirectory: Warning, SamplesPerPixel tag is missing, applying correct SamplesPerPixel value of 3.
+TIFFReadDirectoryCheckOrder: Warning, Invalid TIFF directory; tags are not sorted in ascending order.
+TIFFReadDirectory: Warning, Photometric tag is missing, assuming data is YCbCr.
+TIFFReadDirectory: Warning, BitsPerSample tag is missing, assuming 8 bits per sample.
+TIFFReadDirectory: Warning, SamplesPerPixel tag is missing, applying correct SamplesPerPixel value of 3.
+OJPEGSubsamplingCorrect: Warning, Subsampling values [1,2] are not allowed in TIFF.
+TIFFReadDirectoryCheckOrder: Warning, Invalid TIFF directory; tags are not sorted in ascending order.
+TIFFReadDirectory: Warning, Photometric tag is missing, assuming data is YCbCr.
+TIFFReadDirectory: Warning, BitsPerSample tag is missing, assuming 8 bits per sample.
+TIFFReadDirectory: Warning, SamplesPerPixel tag is missing, applying correct SamplesPerPixel value of 3.
+TIFFReadDirectoryCheckOrder: Warning, Invalid TIFF directory; tags are not sorted in ascending order.
+TIFFReadDirectory: Warning, Photometric tag is missing, assuming data is YCbCr.
+TIFFReadDirectory: Warning, BitsPerSample tag is missing, assuming 8 bits per sample.
+TIFFReadDirectory: Warning, SamplesPerPixel tag is missing, applying correct SamplesPerPixel value of 3.
+TIFFReadDirectoryCheckOrder: Warning, Invalid TIFF directory; tags are not sorted in ascending order.
+TIFFReadDirectory: Warning, Photometric tag is missing, assuming data is YCbCr.
+TIFFReadDirectory: Warning, BitsPerSample tag is missing, assuming 8 bits per sample.
+TIFFReadDirectory: Warning, SamplesPerPixel tag is missing, applying correct SamplesPerPixel value of 3.
+TIFFReadDirectoryCheckOrder: Warning, Invalid TIFF directory; tags are not sorted in ascending order.
+TIFFReadDirectory: Warning, Photometric tag is missing, assuming data is YCbCr.
+TIFFReadD
+...truncated...
+ thus tag is not read from file.
+TIFFFetchNormalTag: Defined set_field_type of custom tag 2048 (Tag 2048) is TIFF_SETGET_UNDEFINED and thus tag is not read from file.
+TIFFFetchNormalTag: Defined set_field_type of custom tag 4 (Tag 4) is TIFF_SETGET_UNDEFINED and thus tag is not read from file.
+TIFFFetchNormalTag: Defined set_field_type of custom tag 38912 (Tag 38912) is TIFF_SETGET_UNDEFINED and thus tag is not read from file.
+TIFFFetchNormalTag: Defined set_field_type of custom tag 19713 (Tag 19713) is TIFF_SETGET_UNDEFINED and thus tag is not read from file.
+TIFFFetchNormalTag: Defined set_field_type of custom tag 36353 (Tag 36353) is TIFF_SETGET_UNDEFINED and thus tag is not read from file.
+TIFFFetchNormalTag: Defined set_field_type of custom tag 60395 (Tag 60395) is TIFF_SETGET_UNDEFINED and thus tag is not read from file.
+TIFFFetchNormalTag: Defined set_field_type of custom tag 21 (Tag 21) is TIFF_SETGET_UNDEFINED and thus tag is not read from file.
+TIFFFetchNormalTag: Defined set_field_type of custom tag 22 (Tag 22) is TIFF_SETGET_UNDEFINED and thus tag is not read from file.
+TIFFFetchNormalTag: Defined set_field_type of custom tag 151 (Tag 151) is TIFF_SETGET_UNDEFINED and thus tag is not read from file.
+TIFFFetchNormalTag: Defined set_field_type of custom tag 26 (Tag 26) is TIFF_SETGET_UNDEFINED and thus tag is not read from file.
+TIFFFetchNormalTag: Defined set_field_type of custom tag 27 (Tag 27) is TIFF_SETGET_UNDEFINED and thus tag is not read from file.
+TIFFFetchNormalTag: Defined set_field_type of custom tag 28 (Tag 28) is TIFF_SETGET_UNDEFINED and thus tag is not read from file.
+TIFFFetchNormalTag: Warning, Incorrect count for &#34;JpegProc&#34;; tag ignored.
+TIFFFetchNormalTag: Defined set_field_type of custom tag 10900 (Tag 10900) is TIFF_SETGET_UNDEFINED and thus tag is not read from file.
+TIFFFetchNormalTag: Defined set_field_type of custom tag 12496 (Tag 12496) is TIFF_SETGET_UNDEFINED and thus tag is not read from file.
+TIFFFetchNormalTag: Defined set_field_type of custom tag 507 (Tag 507) is TIFF_SETGET_UNDEFINED and thus tag is not read from file.
+TIFFFetchNormalTag: Defined set_field_type of custom tag 34805 (Tag 34805) is TIFF_SETGET_UNDEFINED and thus tag is not read from file.
+TIFFFetchNormalTag: Defined set_field_type of custom tag 768 (Tag 768) is TIFF_SETGET_UNDEFINED and thus tag is not read from file.
+TIFFFetchNormalTag: Defined set_field_type of custom tag 41634 (Tag 41634) is TIFF_SETGET_UNDEFINED and thus tag is not read from file.
+TIFFFetchNormalTag: Defined set_field_type of custom tag 1536 (Tag 1536) is TIFF_SETGET_UNDEFINED and thus tag is not read from file.
+TIFFFetchNormalTag: Defined set_field_type of custom tag 18 (Tag 18) is TIFF_SETGET_UNDEFINED and thus tag is not read from file.
+TIFFFetchNormalTag: Defined set_field_type of custom tag 51043 (Tag 51043) is TIFF_SETGET_UNDEFINED and thus tag is not read from file.
+TIFFFetchNormalTag: Defined set_field_type of custom tag 63748 (Tag 63748) is TIFF_SETGET_UNDEFINED and thus tag is not read from file.
+TIFFFetchNormalTag: Defined set_field_type of custom tag 1551 (Tag 1551) is TIFF_SETGET_UNDEFINED and thus tag is not read from file.
+TIFFFetchNormalTag: Defined set_field_type of custom tag 49919 (Tag 49919) is TIFF_SETGET_UNDEFINED and thus tag is not read from file.
+TIFFFetchNormalTag: Defined set_field_type of custom tag 39933 (Tag 39933) is TIFF_SETGET_UNDEFINED and thus tag is not read from file.
+TIFFFetchNormalTag: Defined set_field_type of custom tag 21244 (Tag 21244) is TIFF_SETGET_UNDEFINED and thus tag is not read from file.
+TIFFFetchNormalTag: Defined set_field_type of custom tag 37904 (Tag 37904) is TIFF_SETGET_UNDEFINED and thus tag is not read from file.
+TIFFFetchNormalTag: Defined set_field_type of custom tag 53293 (Tag 53293) is TIFF_SETGET_UNDEFINED and thus tag is not read from file.
+TIFFFetchNormalTag: Defined set_field_type of custom tag 2331 (Tag 2331) is TIFF_SETGET_UNDEFINED and thus tag is not read from file.
+TIFFFetchNormalTag: Defined set_field_type of custom tag 40 (Tag 40) is TIFF_SETGET_UNDEFINED and thus tag is not read from file.
+TIFFFetchNormalTag: Warning, Incorrect value for &#34;StripRowCounts&#34;; tag ignored.
+TIFFFetchNormalTag: Defined set_field_type of custom tag 7156 (Tag 7156) is TIFF_SETGET_UNDEFINED and thus tag is not read from file.
+TIFFFetchNormalTag: Defined set_field_type of custom tag 65281 (Tag 65281) is TIFF_SETGET_UNDEFINED and thus tag is not read from file.
+TIFFFetchNormalTag: Defined set_field_type of custom tag 65016 (Tag 65016) is TIFF_SETGET_UNDEFINED and thus tag is not read from file.
+TIFFFetchNormalTag: Defined set_field_type of custom tag 64549 (Tag 64549) is TIFF_SETGET_UNDEFINED and thus tag is not read from file.
+TIFFFetchNormalTag: Defined set_field_type of custom tag 57967 (Tag 57967) is TIFF_SETGET_UNDEFINED and thus tag is not read from file.
+TIFFFetchNormalTag: Defined set_field_type of custom tag 11648 (Tag 11648) is TIFF_SETGET_UNDEFINED and thus tag is not read from file.
+TIFFFetchNormalTag: Defined set_field_type of custom tag 12063 (Tag 12063) is TIFF_SETGET_UNDEFINED and thus tag is not read from file.
+TIFFFetchNormalTag: Defined set_field_type of custom tag 6164 (Tag 6164) is TIFF_SETGET_UNDEFINED and thus tag is not read from file.
+TIFFFetchNormalTag: Defined set_field_type of custom tag 38293 (Tag 38293) is TIFF_SETGET_UNDEFINED and thus tag is not read from file.
+TIFFFetchNormalTag: Defined set_field_type of custom tag 49090 (Tag 49090) is TIFF_SETGET_UNDEFINED and thus tag is not read from file.
+TIFFFetchNormalTag: Defined set_field_type of custom tag 5304 (Tag 5304) is TIFF_SETGET_UNDEFINED and thus tag is not read from file.
+TIFFFetchNormalTag: Defined set_field_type of custom tag 28662 (Tag 28662) is TIFF_SETGET_UNDEFINED and thus tag is not read from file.
+TIFFFetchNormalTag: Defined set_field_type of custom tag 32943 (Tag 32943) is TIFF_SETGET_UNDEFINED and thus tag is not read from file.
+TIFFFetchNormalTag: Defined set_field_type of custom tag 8127 (Tag 8127) is TIFF_SETGET_UNDEFINED and thus tag is not read from file.
+TIFFFetchNormalTag: Defined set_field_type of custom tag 49796 (Tag 49796) is TIFF_SETGET_UNDEFINED and thus tag is not read from file.
+TIFFFetchNormalTag: Defined set_field_type of custom tag 38114 (Tag 38114) is TIFF_SETGET_UNDEFINED and thus tag is not read from file.
+TIFFFetchNormalTag: Defined set_field_type of custom tag 64303 (Tag 64303) is TIFF_SETGET_UNDEFINED and thus tag is not read from file.
+TIFFFetchNormalTag: Defined set_field_type of custom tag 24 (Tag 24) is TIFF_SETGET_UNDEFINED and thus tag is not read from file.
+TIFFFetchNormalTag: Defined set_field_type of custom tag 8 (Tag 8) is TIFF_SETGET_UNDEFINED and thus tag is not read from file.
+TIFFReadDirectory: Warning, Photometric tag is missing, assuming data is YCbCr.
+TIFFReadDirectory: Warning, BitsPerSample tag is missing, assuming 8 bits per sample.
+TIFFReadDirectory: Warning, SamplesPerPixel tag is missing, applying correct SamplesPerPixel value of 3.
+TIFFScanlineSize64: Computed scanline size is zero.
+TIFFReadDirectory: Cannot handle zero scanline size.
+#17790	DONE   cov: 2356 ft: 5212 corp: 1022/1003Kb lim: 16832 exec/s: 573 rss: 78Mb
+###### Recommended dictionary. ######
+&#34;\001\000\000\000\000\000\000\000&#34; # Uses: 43
+&#34;\001\000\000\000&#34; # Uses: 57
+&#34;0\201\377\377&#34; # Uses: 43
+&#34;\000\000&#34; # Uses: 39
+&#34;\377\377\377\027&#34; # Uses: 33
+&#34;\377\377\377\377\377\377\377\231&#34; # Uses: 18
+&#34;\000\000\000\000&#34; # Uses: 26
+&#34;\377\377\377\377&#34; # Uses: 23
+&#34;U\000\000\000\000\000\000\000&#34; # Uses: 25
+&#34;?\001\000\000&#34; # Uses: 12
+&#34;\001\000\000\000\000\000\000q&#34; # Uses: 18
+&#34;\003\000&#34; # Uses: 18
+&#34;\377\377\377\377\377\377\377\026&#34; # Uses: 8
+&#34;\026\000\000\000\000\000\000\000&#34; # Uses: 7
+&#34;\010\001&#34; # Uses: 4
+&#34;\001\000\000\000\000\000\000\215&#34; # Uses: 4
+&#34;\000\000\000\000\000\000\000\010&#34; # Uses: 4
+###### End of recommended dictionary. ######
+Done 17790 runs in 31 second(s)
+stat::number_of_executed_units: 17790
+stat::average_exec_per_sec:     573
+stat::new_units_added:          156
+stat::slowest_unit_time_sec:    0
+stat::peak_rss_mb:              78
+
+</pre>
+
+
+</body>

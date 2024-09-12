@@ -1,0 +1,43 @@
+{
+    "samples": [
+
+    {
+        "benchmark": "output-libtiff-tifffdopen",
+        "sample": "01",
+        "status": "Done",
+        "compiles": "True",
+        "crashes": "False",
+        "crash_reason": "NO_COV_INCREASE",
+        "bug": "False",
+        "coverage": "0.00",
+        "coverage_diff": "0.0",
+        "coverage_report": "#",
+        "stacktrace": "/stacktrace",
+        "target_binary": "/target_binary",
+        "reproducer": "/artifacts",
+        "run_log": "run.log",
+        "source_code": "#include <cstdint>\\n#include <cstddef>\\n#include <tiffio.h>\\n\\nextern \"C\" int LLVMFuzzerTestOneInput(const uint8_t *Data, size_t Size) {\\n  if (Size < 3) {\\n    return 0;\\n  }\\n  TIFF *tif = TIFFFdOpen(0, \"dummy\", \"w\");\\n  if (tif) {\\n    TIFFClose(tif);\\n  }\\n  return 0;\\n}",
+        "model": ""
+    },
+
+    {
+        "benchmark": "output-libtiff-tifffdopen",
+        "sample": "02",
+        "status": "Done",
+        "compiles": "True",
+        "crashes": "False",
+        "crash_reason": "NO_SEMANTIC_ERR",
+        "bug": "True",
+        "coverage": "9.15",
+        "coverage_diff": "0.007487470563371777",
+        "coverage_report": "#",
+        "stacktrace": "/stacktrace",
+        "target_binary": "/target_binary",
+        "reproducer": "/artifacts",
+        "run_log": "run.log",
+        "source_code": "#include \"tiffio.h\"\\n#include <cstdint>\\n#include <cstdlib>\\n#include <string.h>\\n#include <fuzzer/FuzzedDataProvider.h>\\n#include <vector>\\n\\nconst size_t INPUT_LIMIT = 16384;\\n\\nstatic void handle_error(const char *unused, const char *unused2, va_list unused3) {\\n  return;\\n}\\n\\nextern \"C\" int LLVMFuzzerTestOneInput(const uint8_t *Data, size_t Size) {\\n  TIFFSetErrorHandler(handle_error);\\n  TIFFSetWarningHandler(handle_error);\\n#if defined(__has_feature)\\n#if __has_feature(memory_sanitizer)\\n  /* libjpeg-turbo has issues with MSAN and SIMD code\\n   * See https://bugs.chromium.org/p/oss-fuzz/issues/detail?id=7547\\n   * and https://github.com/libjpeg-turbo/libjpeg-turbo/pull/365\\n   */\\n  setenv(\"JSIMD_FORCENONE\", \"1\", 1);\\n#endif\\n#endif\\n  // Creates a fuzzer data provider from the given data.\\n  FuzzedDataProvider stream(Data, Size);\\n\\n  // generates a mode\\n  bool is_update_mode = stream.ConsumeBool();\\n  const char* mode = is_update_mode ? \"r+\" : \"r\";\\n\\n  // creates a temporary file.\\n  FILE *tif_file_handler = tmpfile();\\n  if (tif_file_handler == NULL) { return 0; }\\n\\n  // feeds the temporary file with fuzzed data.\\n  std::vector<uint8_t> buffer = stream.ConsumeRemainingBytes<uint8_t>();\\n  const size_t len = buffer.size();\\n  fwrite(buffer.data(), 1, len, tif_file_handler);\\n\\n  // Reset the file pointer to the beginning of the file\\n  rewind(tif_file_handler);\\n\\n  // Opens a TIFF file descriptor using TIFFFdOpen() which is our fuzzing target.\\n  TIFF *TIFF_obj = TIFFFdOpen(fileno(tif_file_handler), \"\", mode);\\n  // Since tmpfile() deletes the temporary file upon closing the \\n  // associated file we do not need to explicitly delete the file\\n  if(TIFF_obj == NULL) {\\n    fclose(tif_file_handler);\\n    return 0;\\n  }\\n  TIFFClose(TIFF_obj);\\n  fclose(tif_file_handler);\\n  \\n  return 0;\\n}",
+        "model": ""
+    }
+
+    ]
+}

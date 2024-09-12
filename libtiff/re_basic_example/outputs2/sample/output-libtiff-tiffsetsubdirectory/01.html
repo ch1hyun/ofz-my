@@ -1,0 +1,987 @@
+<!doctype html>
+
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Experiment results</title>
+<style>
+* {
+    box-sizing: border-box;
+}
+
+html {
+    line-height: 1.15;
+}
+
+body {
+    font-family: sans-serif;
+    font-size: 16px;
+}
+
+table {
+    border-collapse: collapse;
+    border-spacing: 0;
+}
+
+td, th {
+    border-right: 1px #dedede solid;
+    border-bottom: 1px #dedede solid;
+    padding: 5px;
+    text-align: left;
+}
+td:first-child, th:first-child {
+    border-left: 1px #dedede solid;
+}
+th {
+    border-top: 1px #dedede solid;
+}
+
+tbody tr:nth-child(odd) {
+    background-color: #f4f5ff;
+}
+</style>
+<body>
+    LLM: 
+    
+<h1>output-libtiff-tiffsetsubdirectory / 01</h1>
+Bug: False
+<br>
+Crash reason: NO_SEMANTIC_ERR
+<br>
+<br>
+
+<h2>Triage</h2>
+<pre>
+
+</pre>
+<br>
+
+
+
+
+
+<h3>Final code</h3>
+
+<pre>
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+#include &lt;cstdint&gt;
+#include &lt;cstring&gt;
+
+#include &#34;tiffio.h&#34;
+
+// Define the missing functions
+tsize_t _tiffReadProc(thandle_t fd, tdata_t buf, tsize_t size) {
+    FuzzedDataProvider* stream = static_cast&lt;FuzzedDataProvider*&gt;(fd);
+    const std::vector&lt;uint8_t&gt; data = stream-&gt;ConsumeBytes&lt;uint8_t&gt;(size);
+    std::memcpy(buf, data.data(), data.size());
+    return data.size();
+}
+
+tsize_t _tiffWriteProc(thandle_t fd, tdata_t buf, tsize_t size) {
+    return size;
+}
+
+toff_t _tiffSeekProc(thandle_t fd, toff_t off, int whence) {
+    return off;
+}
+
+int _tiffCloseProc(thandle_t fd) {
+    return 0;
+}
+
+toff_t _tiffSizeProc(thandle_t fd) {
+    return 0;
+}
+
+int _tiffMapFileProc(thandle_t fd, tdata_t* pbase, toff_t* psize) {
+    return 0;
+}
+
+void _tiffUnmapFileProc(thandle_t fd, tdata_t base, toff_t size) {
+    return;
+}
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+    if (size &lt; sizeof(uint64_t)) {
+        // Not enough data for test, return early
+        return 0;
+    }
+
+    FuzzedDataProvider stream(data, size);
+    
+    // Create a new memory block for TIFF file
+    TIFF *tif = TIFFClientOpen(&#34;MemTIFF&#34;, &#34;w&#34;, (thandle_t)&amp;stream, 
+                                _tiffReadProc, _tiffWriteProc, 
+                                _tiffSeekProc, _tiffCloseProc, 
+                                _tiffSizeProc, _tiffMapFileProc, _tiffUnmapFileProc);
+    if (!tif) {
+      return 0;
+    }
+
+    // Calls the function-under-test
+    uint64_t sub_directory_offset = stream.ConsumeIntegral&lt;uint64_t&gt;();
+    TIFFSetSubDirectory(tif, sub_directory_offset);
+
+    TIFFClose(tif);
+
+    return 0;
+}
+</pre>
+
+
+<h3>Fixer prompt #1</h3>
+<pre>
+
+Given the following C++ fuzz harness and its build error message, fix the code to make it build for fuzzing.
+
+If there is undeclared identifier or unknown type name error, fix it by finding and including the related libraries.
+
+MUST RETURN THE FULL CODE, INCLUDING UNCHANGED PARTS.
+
+Below is the code needs to be built:
+&lt;code&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+#include &lt;cstdint&gt;
+#include &lt;cstring&gt;
+
+#include &#34;tiffio.h&#34;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+    FuzzedDataProvider stream(data, size);
+    
+    // Create a new memory block for TIFF file
+    TIFF *tif = TIFFClientOpen(&#34;MemTIFF&#34;, &#34;w&#34;, (thandle_t)&amp;stream, 
+                                nullptr, nullptr, 
+                                nullptr, nullptr, 
+                                nullptr, nullptr, nullptr);
+    if (!tif) {
+      return 0;
+	}
+
+    // Calls the function-under-test
+    uint64_t sub_directory_offset = stream.ConsumeIntegral&lt;uint64_t&gt;();
+    TIFFSetSubDirectory(tif, sub_directory_offset);
+
+    TIFFClose(tif);
+
+    return 0;
+}
+&lt;/code&gt;
+
+Below is the error to fix:
+The code can build successfully but has a runtime issue: No code coverage increasement, indicating the fuzz target ineffectively invokes the function under test.
+
+
+
+
+Fix code:
+1. Consider possible solutions for the issues listed above.
+2. Choose a solution that can maximize fuzzing result, which is utilizing the function under test and feeding it not null input.
+3. Apply the solutions to the original code.
+It&#39;s important to show the complete code, not only the fixed line.
+&lt;solution&gt;
+</pre>
+
+
+
+<h3>Code #1</h3>
+
+<pre>
+&lt;code&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+#include &lt;cstdint&gt;
+#include &lt;cstring&gt;
+
+#include &#34;tiffio.h&#34;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+    if (size &lt; sizeof(uint64_t)) {
+        // Not enough data for test, return early
+        return 0;
+    }
+
+    FuzzedDataProvider stream(data, size);
+    
+    // Create a new memory block for TIFF file
+    TIFF *tif = TIFFClientOpen(&#34;MemTIFF&#34;, &#34;w&#34;, (thandle_t)&amp;stream, 
+                                nullptr, nullptr, 
+                                nullptr, nullptr, 
+                                nullptr, nullptr, nullptr);
+    if (!tif) {
+      return 0;
+    }
+
+    // Calls the function-under-test
+    uint64_t sub_directory_offset = stream.ConsumeIntegral&lt;uint64_t&gt;();
+    TIFFSetSubDirectory(tif, sub_directory_offset);
+
+    TIFFClose(tif);
+
+    return 0;
+}
+&lt;/code&gt;
+&lt;solution&gt;
+
+The fix ensures that there is enough data provided for the `TIFFSetSubDirectory` function to be called effectively. This is done by checking if the size of the input data is less than the size of `uint64_t`. If it is, the function returns early. This ensures that the function under test is invoked effectively and the fuzz target is not null, thus maximizing the fuzzing result.
+</pre>
+
+
+<h3>Fixer prompt #2</h3>
+<pre>
+
+Given the following C++ fuzz harness and its build error message, fix the code to make it build for fuzzing.
+
+If there is undeclared identifier or unknown type name error, fix it by finding and including the related libraries.
+
+MUST RETURN THE FULL CODE, INCLUDING UNCHANGED PARTS.
+
+Below is the code needs to be built:
+&lt;code&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+#include &lt;cstdint&gt;
+#include &lt;cstring&gt;
+
+#include &#34;tiffio.h&#34;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+    if (size &lt; sizeof(uint64_t)) {
+        // Not enough data for test, return early
+        return 0;
+    }
+
+    FuzzedDataProvider stream(data, size);
+    
+    // Create a new memory block for TIFF file
+    TIFF *tif = TIFFClientOpen(&#34;MemTIFF&#34;, &#34;w&#34;, (thandle_t)&amp;stream, 
+                                nullptr, nullptr, 
+                                nullptr, nullptr, 
+                                nullptr, nullptr, nullptr);
+    if (!tif) {
+      return 0;
+    }
+
+    // Calls the function-under-test
+    uint64_t sub_directory_offset = stream.ConsumeIntegral&lt;uint64_t&gt;();
+    TIFFSetSubDirectory(tif, sub_directory_offset);
+
+    TIFFClose(tif);
+
+    return 0;
+}
+&lt;/code&gt;
+
+Below is the error to fix:
+The code can build successfully but has a runtime issue: No code coverage increasement, indicating the fuzz target ineffectively invokes the function under test.
+
+
+
+
+Fix code:
+1. Consider possible solutions for the issues listed above.
+2. Choose a solution that can maximize fuzzing result, which is utilizing the function under test and feeding it not null input.
+3. Apply the solutions to the original code.
+It&#39;s important to show the complete code, not only the fixed line.
+&lt;solution&gt;
+</pre>
+
+
+
+<h3>Code #2</h3>
+
+<pre>
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+#include &lt;cstdint&gt;
+#include &lt;cstring&gt;
+
+#include &#34;tiffio.h&#34;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+    if (size &lt; sizeof(uint64_t)) {
+        // Not enough data for test, return early
+        return 0;
+    }
+
+    FuzzedDataProvider stream(data, size);
+    
+    // Create a new memory block for TIFF file
+    TIFF *tif = TIFFClientOpen(&#34;MemTIFF&#34;, &#34;w&#34;, (thandle_t)&amp;stream, 
+                                _tiffReadProc, _tiffWriteProc, 
+                                _tiffSeekProc, _tiffCloseProc, 
+                                _tiffSizeProc, _tiffMapFileProc, _tiffUnmapFileProc);
+    if (!tif) {
+      return 0;
+    }
+
+    // Calls the function-under-test
+    uint64_t sub_directory_offset = stream.ConsumeIntegral&lt;uint64_t&gt;();
+    TIFFSetSubDirectory(tif, sub_directory_offset);
+
+    TIFFClose(tif);
+
+    return 0;
+}
+</pre>
+
+
+<h3>Fixer prompt #3</h3>
+<pre>
+
+Given the following C++ fuzz harness and its build error message, fix the code to make it build for fuzzing.
+
+If there is undeclared identifier or unknown type name error, fix it by finding and including the related libraries.
+
+MUST RETURN THE FULL CODE, INCLUDING UNCHANGED PARTS.
+
+Below is the code needs to be built:
+&lt;code&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+#include &lt;cstdint&gt;
+#include &lt;cstring&gt;
+
+#include &#34;tiffio.h&#34;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+    if (size &lt; sizeof(uint64_t)) {
+        // Not enough data for test, return early
+        return 0;
+    }
+
+    FuzzedDataProvider stream(data, size);
+    
+    // Create a new memory block for TIFF file
+    TIFF *tif = TIFFClientOpen(&#34;MemTIFF&#34;, &#34;w&#34;, (thandle_t)&amp;stream, 
+                                _tiffReadProc, _tiffWriteProc, 
+                                _tiffSeekProc, _tiffCloseProc, 
+                                _tiffSizeProc, _tiffMapFileProc, _tiffUnmapFileProc);
+    if (!tif) {
+      return 0;
+    }
+
+    // Calls the function-under-test
+    uint64_t sub_directory_offset = stream.ConsumeIntegral&lt;uint64_t&gt;();
+    TIFFSetSubDirectory(tif, sub_directory_offset);
+
+    TIFFClose(tif);
+
+    return 0;
+}
+&lt;/code&gt;
+
+Below is the error to fix:
+The code has the following build issues:
+&lt;error&gt;
+/src/libtiff/contrib/oss-fuzz/tiff_read_rgba_fuzzer.cc:18:33: error: use of undeclared identifier &#39;_tiffReadProc&#39;
+   18 |                                 _tiffReadProc, _tiffWriteProc,
+      |                                 ^
+/src/libtiff/contrib/oss-fuzz/tiff_read_rgba_fuzzer.cc:18:48: error: use of undeclared identifier &#39;_tiffWriteProc&#39;
+   18 |                                 _tiffReadProc, _tiffWriteProc,
+      |                                                ^
+/src/libtiff/contrib/oss-fuzz/tiff_read_rgba_fuzzer.cc:19:33: error: use of undeclared identifier &#39;_tiffSeekProc&#39;
+   19 |                                 _tiffSeekProc, _tiffCloseProc,
+      |                                 ^
+/src/libtiff/contrib/oss-fuzz/tiff_read_rgba_fuzzer.cc:19:48: error: use of undeclared identifier &#39;_tiffCloseProc&#39;
+   19 |                                 _tiffSeekProc, _tiffCloseProc,
+      |                                                ^
+/src/libtiff/contrib/oss-fuzz/tiff_read_rgba_fuzzer.cc:20:33: error: use of undeclared identifier &#39;_tiffSizeProc&#39;
+   20 |                                 _tiffSizeProc, _tiffMapFileProc, _tiffUnmapFileProc);
+      |                                 ^
+/src/libtiff/contrib/oss-fuzz/tiff_read_rgba_fuzzer.cc:20:48: error: use of undeclared identifier &#39;_tiffMapFileProc&#39;
+   20 |                                 _tiffSizeProc, _tiffMapFileProc, _tiffUnmapFileProc);
+      |                                                ^
+/src/libtiff/contrib/oss-fuzz/tiff_read_rgba_fuzzer.cc:20:66: error: use of undeclared identifier &#39;_tiffUnmapFileProc&#39;
+   20 |                                 _tiffSizeProc, _tiffMapFileProc, _tiffUnmapFileProc);
+      |                                                                  ^
+&lt;/error&gt;
+
+
+
+
+Fix code:
+1. Consider possible solutions for the issues listed above.
+2. Choose a solution that can maximize fuzzing result, which is utilizing the function under test and feeding it not null input.
+3. Apply the solutions to the original code.
+It&#39;s important to show the complete code, not only the fixed line.
+&lt;solution&gt;
+</pre>
+
+
+
+<h3>Code #3</h3>
+
+<pre>
+&lt;code&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+#include &lt;cstdint&gt;
+#include &lt;cstring&gt;
+
+#include &#34;tiffio.h&#34;
+
+// Define the missing functions
+tsize_t _tiffReadProc(thandle_t fd, tdata_t buf, tsize_t size) {
+    return 0;
+}
+
+tsize_t _tiffWriteProc(thandle_t fd, tdata_t buf, tsize_t size) {
+    return 0;
+}
+
+toff_t _tiffSeekProc(thandle_t fd, toff_t off, int whence) {
+    return 0;
+}
+
+int _tiffCloseProc(thandle_t fd) {
+    return 0;
+}
+
+toff_t _tiffSizeProc(thandle_t fd) {
+    return 0;
+}
+
+int _tiffMapFileProc(thandle_t fd, tdata_t* pbase, toff_t* psize) {
+    return 0;
+}
+
+void _tiffUnmapFileProc(thandle_t fd, tdata_t base, toff_t size) {
+    return;
+}
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+    if (size &lt; sizeof(uint64_t)) {
+        // Not enough data for test, return early
+        return 0;
+    }
+
+    FuzzedDataProvider stream(data, size);
+    
+    // Create a new memory block for TIFF file
+    TIFF *tif = TIFFClientOpen(&#34;MemTIFF&#34;, &#34;w&#34;, (thandle_t)&amp;stream, 
+                                _tiffReadProc, _tiffWriteProc, 
+                                _tiffSeekProc, _tiffCloseProc, 
+                                _tiffSizeProc, _tiffMapFileProc, _tiffUnmapFileProc);
+    if (!tif) {
+      return 0;
+    }
+
+    // Calls the function-under-test
+    uint64_t sub_directory_offset = stream.ConsumeIntegral&lt;uint64_t&gt;();
+    TIFFSetSubDirectory(tif, sub_directory_offset);
+
+    TIFFClose(tif);
+
+    return 0;
+}
+&lt;/code&gt;
+&lt;/solution&gt;
+</pre>
+
+
+<h3>Fixer prompt #4</h3>
+<pre>
+
+Given the following C++ fuzz harness and its build error message, fix the code to make it build for fuzzing.
+
+If there is undeclared identifier or unknown type name error, fix it by finding and including the related libraries.
+
+MUST RETURN THE FULL CODE, INCLUDING UNCHANGED PARTS.
+
+Below is the code needs to be built:
+&lt;code&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+#include &lt;cstdint&gt;
+#include &lt;cstring&gt;
+
+#include &#34;tiffio.h&#34;
+
+// Define the missing functions
+tsize_t _tiffReadProc(thandle_t fd, tdata_t buf, tsize_t size) {
+    return 0;
+}
+
+tsize_t _tiffWriteProc(thandle_t fd, tdata_t buf, tsize_t size) {
+    return 0;
+}
+
+toff_t _tiffSeekProc(thandle_t fd, toff_t off, int whence) {
+    return 0;
+}
+
+int _tiffCloseProc(thandle_t fd) {
+    return 0;
+}
+
+toff_t _tiffSizeProc(thandle_t fd) {
+    return 0;
+}
+
+int _tiffMapFileProc(thandle_t fd, tdata_t* pbase, toff_t* psize) {
+    return 0;
+}
+
+void _tiffUnmapFileProc(thandle_t fd, tdata_t base, toff_t size) {
+    return;
+}
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+    if (size &lt; sizeof(uint64_t)) {
+        // Not enough data for test, return early
+        return 0;
+    }
+
+    FuzzedDataProvider stream(data, size);
+    
+    // Create a new memory block for TIFF file
+    TIFF *tif = TIFFClientOpen(&#34;MemTIFF&#34;, &#34;w&#34;, (thandle_t)&amp;stream, 
+                                _tiffReadProc, _tiffWriteProc, 
+                                _tiffSeekProc, _tiffCloseProc, 
+                                _tiffSizeProc, _tiffMapFileProc, _tiffUnmapFileProc);
+    if (!tif) {
+      return 0;
+    }
+
+    // Calls the function-under-test
+    uint64_t sub_directory_offset = stream.ConsumeIntegral&lt;uint64_t&gt;();
+    TIFFSetSubDirectory(tif, sub_directory_offset);
+
+    TIFFClose(tif);
+
+    return 0;
+}
+&lt;/code&gt;
+
+Below is the error to fix:
+The code can build successfully but has a runtime issue: No code coverage increasement, indicating the fuzz target ineffectively invokes the function under test.
+
+
+
+
+Fix code:
+1. Consider possible solutions for the issues listed above.
+2. Choose a solution that can maximize fuzzing result, which is utilizing the function under test and feeding it not null input.
+3. Apply the solutions to the original code.
+It&#39;s important to show the complete code, not only the fixed line.
+&lt;solution&gt;
+</pre>
+
+
+
+<h3>Code #4</h3>
+
+<pre>
+&lt;code&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+#include &lt;cstdint&gt;
+#include &lt;cstring&gt;
+
+#include &#34;tiffio.h&#34;
+
+// Define the missing functions
+tsize_t _tiffReadProc(thandle_t fd, tdata_t buf, tsize_t size) {
+    FuzzedDataProvider* stream = static_cast&lt;FuzzedDataProvider*&gt;(fd);
+    const std::vector&lt;uint8_t&gt; data = stream-&gt;ConsumeBytes&lt;uint8_t&gt;(size);
+    std::memcpy(buf, data.data(), data.size());
+    return data.size();
+}
+
+tsize_t _tiffWriteProc(thandle_t fd, tdata_t buf, tsize_t size) {
+    return size;
+}
+
+toff_t _tiffSeekProc(thandle_t fd, toff_t off, int whence) {
+    return off;
+}
+
+int _tiffCloseProc(thandle_t fd) {
+    return 0;
+}
+
+toff_t _tiffSizeProc(thandle_t fd) {
+    return 0;
+}
+
+int _tiffMapFileProc(thandle_t fd, tdata_t* pbase, toff_t* psize) {
+    return 0;
+}
+
+void _tiffUnmapFileProc(thandle_t fd, tdata_t base, toff_t size) {
+    return;
+}
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+    if (size &lt; sizeof(uint64_t)) {
+        // Not enough data for test, return early
+        return 0;
+    }
+
+    FuzzedDataProvider stream(data, size);
+    
+    // Create a new memory block for TIFF file
+    TIFF *tif = TIFFClientOpen(&#34;MemTIFF&#34;, &#34;w&#34;, (thandle_t)&amp;stream, 
+                                _tiffReadProc, _tiffWriteProc, 
+                                _tiffSeekProc, _tiffCloseProc, 
+                                _tiffSizeProc, _tiffMapFileProc, _tiffUnmapFileProc);
+    if (!tif) {
+      return 0;
+    }
+
+    // Calls the function-under-test
+    uint64_t sub_directory_offset = stream.ConsumeIntegral&lt;uint64_t&gt;();
+    TIFFSetSubDirectory(tif, sub_directory_offset);
+
+    TIFFClose(tif);
+
+    return 0;
+}
+&lt;/code&gt;
+</pre>
+
+
+<h2>Logs</h2>
+<pre>
+Fixing /home/chyun/oss-fuzz-gen/results2/output-libtiff-tiffsetsubdirectory/fixed_targets/01.cc with gpt-4, attempt 1.
+Fixing /home/chyun/oss-fuzz-gen/results2/output-libtiff-tiffsetsubdirectory/fixed_targets/01.cc with gpt-4, attempt 2.
+Fixing /home/chyun/oss-fuzz-gen/results2/output-libtiff-tiffsetsubdirectory/fixed_targets/01.cc with gpt-4, attempt 3.
+Fixing /home/chyun/oss-fuzz-gen/results2/output-libtiff-tiffsetsubdirectory/fixed_targets/01.cc with gpt-4, attempt 4.
+Successfully built /home/chyun/oss-fuzz-gen/results2/output-libtiff-tiffsetsubdirectory/fixed_targets/01.cc with gpt-4 in 4 iterations of fixing.
+Triaging the crash related to /home/chyun/oss-fuzz-gen/results2/output-libtiff-tiffsetsubdirectory/fixed_targets/01.cc with gpt-4.
+Warning: no crash info in libtiff-tiffsetsubdirectory-01.
+Warning: No cov info in run result of libtiff-tiffsetsubdirectory-01.
+
+</pre>
+
+<h2>Run logs</h2>
+<pre>
+INFO:__main__:Running: docker run --privileged --shm-size=2g --platform linux/amd64 --rm -e FUZZING_ENGINE=libfuzzer -e SANITIZER=address -e RUN_FUZZER_MODE=interactive -e HELPER=True -v /home/chyun/oss-fuzz-gen/results2/output-libtiff-tiffsetsubdirectory/corpora/01.cc:/tmp/tiff_read_rgba_fuzzer_corpus -v /tmp/tmpa872gqz1/build/out/libtiff-tiffsetsubdirectory-01:/out -t gcr.io/oss-fuzz-base/base-runner run_fuzzer tiff_read_rgba_fuzzer -print_final_stats=1 -max_total_time=30 -len_control=0 -timeout=30.
+vm.mmap_rnd_bits = 28
+rm: cannot remove &#39;/tmp/tiff_read_rgba_fuzzer_corpus&#39;: Device or resource busy
+Using seed corpus: tiff_read_rgba_fuzzer_seed_corpus.zip
+/out/tiff_read_rgba_fuzzer -rss_limit_mb=2560 -timeout=25 -print_final_stats=1 -max_total_time=30 -len_control=0 -timeout=30 /tmp/tiff_read_rgba_fuzzer_corpus -dict=tiff_read_rgba_fuzzer.dict &lt; /dev/null
+Dictionary: 40 entries
+INFO: Running with entropic power schedule (0xFF, 100).
+INFO: Seed: 648021980
+INFO: Loaded 1 modules   (27070 inline 8-bit counters): 27070 [0x562623bbe0e8, 0x562623bc4aa6), 
+INFO: Loaded 1 PC tables (27070 PCs): 27070 [0x562623bc4aa8,0x562623c2e688), 
+INFO:     6502 files found in /tmp/tiff_read_rgba_fuzzer_corpus
+INFO: -max_len is not provided; libFuzzer will not generate inputs larger than 16832 bytes
+INFO: seed corpus: files: 6502 min: 1b max: 16832b total: 6363517b rss: 39Mb
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+TIFFFetchDirectory: MemTIFF: Seek error accessing TIFF directory.
+TIFFReadDirectory: Failed to read directory at offset 2147483647.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+TIFFFetchDirectory: MemTIFF: Can not read TIFF directory count.
+TIFFReadDirectory: Failed to read directory at offset 22.
+TIFFReadDirectoryCheckOrder: Warning, Invalid TIFF directory; tags are not sorted in ascending order.
+TIFFReadDirectory: Warning, Unknown field with tag 0 (0x0) encountered.
+MissingRequired: TIFF directory is missing required &#34;ImageLength&#34; field.
+TIFFFetchDirectory: MemTIFF: Can not read TIFF directory.
+TIFFReadDirectory: Failed to read directory at offset 22.
+TIFFFetchDirectory: MemTIFF: Can not read TIFF directory.
+TIFFReadDirectory: Failed to read directory at offset 22.
+TIFFFetchDirectory: MemTIFF: Can not read TIFF directory.
+TIFFReadDirectory: Failed to read directory at offset 22.
+TIFFFetchDirectory: MemTIFF: Seek error accessing TIFF directory.
+TIFFReadDirectory: Failed to read directory at offset 160.
+TIFFFetchDirectory: MemTIFF: Seek error accessing TIFF directory.
+TIFFReadDirectory: Failed to read directory at offset 160.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemTIFF: Cannot read TIFF header.
+MemT
+...truncated...
+ield with tag 464 (0x1d0) encountered.
+TIFFReadDirectory: Warning, Unknown field with tag 0 (0x0) encountered.
+TIFFReadDirectory: Warning, Unknown field with tag 1 (0x1) encountered.
+TIFFFetchNormalTag: Defined set_field_type of custom tag 464 (Tag 464) is TIFF_SETGET_UNDEFINED and thus tag is not read from file.
+TIFFFetchNormalTag: Warning, Incompatible type for &#34;DocumentName&#34;; tag ignored.
+TIFFFetchNormalTag: Defined set_field_type of custom tag 0 (Tag 0) is TIFF_SETGET_UNDEFINED and thus tag is not read from file.
+TIFFFetchNormalTag: Defined set_field_type of custom tag 1 (Tag 1) is TIFF_SETGET_UNDEFINED and thus tag is not read from file.
+TIFFReadDirectory: Warning, Sum of Photometric type-related color channels and ExtraSamples doesn&#39;t match SamplesPerPixel. Defining non-color channels as ExtraSamples..
+TIFFReadDirectory: Warning, TIFF directory is missing required &#34;StripByteCounts&#34; field, calculating from imagelength.
+EstimateStripByteCounts: Cannot determine size of unknown tag type 6659.
+TIFFReadDirectoryCheckOrder: Warning, Invalid TIFF directory; tags are not sorted in ascending order.
+TIFFReadDirectory: Warning, Unknown field with tag 464 (0x1d0) encountered.
+TIFFReadDirectory: Warning, Unknown field with tag 0 (0x0) encountered.
+TIFFReadDirectory: Warning, Unknown field with tag 1 (0x1) encountered.
+TIFFFetchNormalTag: Defined set_field_type of custom tag 464 (Tag 464) is TIFF_SETGET_UNDEFINED and thus tag is not read from file.
+TIFFFetchNormalTag: Warning, Incompatible type for &#34;DocumentName&#34;; tag ignored.
+TIFFFetchNormalTag: Defined set_field_type of custom tag 0 (Tag 0) is TIFF_SETGET_UNDEFINED and thus tag is not read from file.
+TIFFFetchNormalTag: Defined set_field_type of custom tag 1 (Tag 1) is TIFF_SETGET_UNDEFINED and thus tag is not read from file.
+TIFFReadDirectory: Warning, Sum of Photometric type-related color channels and ExtraSamples doesn&#39;t match SamplesPerPixel. Defining non-color channels as ExtraSamples..
+TIFFReadDirectory: Warning, TIFF directory is missing required &#34;StripByteCounts&#34; field, calculating from imagelength.
+EstimateStripByteCounts: Cannot determine size of unknown tag type 6659.
+TIFFReadDirectoryCheckOrder: Warning, Invalid TIFF directory; tags are not sorted in ascending order.
+TIFFReadDirectory: Warning, Unknown field with tag 464 (0x1d0) encountered.
+TIFFReadDirectory: Warning, Unknown field with tag 0 (0x0) encountered.
+TIFFReadDirectory: Warning, Unknown field with tag 1 (0x1) encountered.
+TIFFFetchNormalTag: Defined set_field_type of custom tag 464 (Tag 464) is TIFF_SETGET_UNDEFINED and thus tag is not read from file.
+TIFFFetchNormalTag: Warning, Incompatible type for &#34;DocumentName&#34;; tag ignored.
+TIFFFetchNormalTag: Defined set_field_type of custom tag 0 (Tag 0) is TIFF_SETGET_UNDEFINED and thus tag is not read from file.
+TIFFFetchNormalTag: Defined set_field_type of custom tag 1 (Tag 1) is TIFF_SETGET_UNDEFINED and thus tag is not read from file.
+TIFFReadDirectory: Warning, Sum of Photometric type-related color channels and ExtraSamples doesn&#39;t match SamplesPerPixel. Defining non-color channels as ExtraSamples..
+TIFFReadDirectory: Warning, TIFF directory is missing required &#34;StripByteCounts&#34; field, calculating from imagelength.
+EstimateStripByteCounts: Cannot determine size of unknown tag type 6659.
+TIFFReadDirectoryCheckOrder: Warning, Invalid TIFF directory; tags are not sorted in ascending order.
+TIFFReadDirectory: Warning, Unknown field with tag 464 (0x1d0) encountered.
+TIFFReadDirectory: Warning, Unknown field with tag 0 (0x0) encountered.
+TIFFReadDirectory: Warning, Unknown field with tag 1 (0x1) encountered.
+TIFFFetchNormalTag: Defined set_field_type of custom tag 464 (Tag 464) is TIFF_SETGET_UNDEFINED and thus tag is not read from file.
+TIFFFetchNormalTag: Warning, Incompatible type for &#34;DocumentName&#34;; tag ignored.
+TIFFFetchNormalTag: Defined set_field_type of custom tag 0 (Tag 0) is TIFF_SETGET_UNDEFINED and thus tag is not read from file.
+TIFFFetchNormalTag: Defined set_field_type of custom tag 1 (Tag 1) is TIFF_SETGET_UNDEFINED and thus tag is not read from file.
+TIFFReadDirectory: Warning, Sum of Photometric type-related color channels and ExtraSamples doesn&#39;t match SamplesPerPixel. Defining non-color channels as ExtraSamples..
+TIFFReadDirectory: Warning, TIFF directory is missing required &#34;StripByteCounts&#34; field, calculating from imagelength.
+EstimateStripByteCounts: Cannot determine size of unknown tag type 6659.
+TIFFReadDirectoryCheckOrder: Warning, Invalid TIFF directory; tags are not sorted in ascending order.
+TIFFReadDirectory: Warning, Unknown field with tag 464 (0x1d0) encountered.
+TIFFReadDirectory: Warning, Unknown field with tag 0 (0x0) encountered.
+TIFFReadDirectory: Warning, Unknown field with tag 1 (0x1) encountered.
+TIFFFetchNormalTag: Defined set_field_type of custom tag 464 (Tag 464) is TIFF_SETGET_UNDEFINED and thus tag is not read from file.
+TIFFFetchNormalTag: Warning, Incompatible type for &#34;DocumentName&#34;; tag ignored.
+TIFFFetchNormalTag: Defined set_field_type of custom tag 0 (Tag 0) is TIFF_SETGET_UNDEFINED and thus tag is not read from file.
+TIFFFetchNormalTag: Defined set_field_type of custom tag 1 (Tag 1) is TIFF_SETGET_UNDEFINED and thus tag is not read from file.
+TIFFReadDirectory: Warning, Sum of Photometric type-related color channels and ExtraSamples doesn&#39;t match SamplesPerPixel. Defining non-color channels as ExtraSamples..
+TIFFReadDirectory: Warning, TIFF directory is missing required &#34;StripByteCounts&#34; field, calculating from imagelength.
+EstimateStripByteCounts: Cannot determine size of unknown tag type 6659.
+#36000	DONE   cov: 1543 ft: 3113 corp: 397/762Kb lim: 16832 exec/s: 1161 rss: 73Mb
+###### Recommended dictionary. ######
+&#34;\331\377\377\377&#34; # Uses: 69
+&#34;\377\377\377\376&#34; # Uses: 44
+&#34;\215\001\000\000\000\000\000\000&#34; # Uses: 39
+&#34;\022\000\000\000&#34; # Uses: 29
+&#34;\027\000\001\000&#34; # Uses: 46
+&#34;\000\006&#34; # Uses: 49
+&#34;\001\000\000\000\000\000\001z&#34; # Uses: 30
+&#34;\377\377\377\377\377\377C\360&#34; # Uses: 37
+&#34;\021\002\000\000&#34; # Uses: 31
+&#34;\000\000\377\357&#34; # Uses: 28
+&#34;\001\000\000\000\000\000\000\000&#34; # Uses: 42
+&#34;\000\000\000\000&#34; # Uses: 38
+&#34;\000\000\0011&#34; # Uses: 48
+&#34;\346\377\377\377\377\377\377\377&#34; # Uses: 32
+&#34;\377\377\377\377&#34; # Uses: 38
+&#34;\001\000\001\012&#34; # Uses: 33
+&#34;\001\233&#34; # Uses: 27
+&#34;\306\006\000\000\000\000\000\000&#34; # Uses: 41
+&#34;\001\000\000\000\000\000\000\330&#34; # Uses: 37
+&#34;\030\000&#34; # Uses: 28
+&#34;\023\002&#34; # Uses: 30
+&#34;\002\001\000\000&#34; # Uses: 31
+&#34;\024\002&#34; # Uses: 19
+&#34;\232\000\000\000\000\000\000\000&#34; # Uses: 15
+&#34;\003\000\000\000&#34; # Uses: 25
+&#34;\000\000\000\000\000\006\000\020&#34; # Uses: 21
+&#34;\002\000\000\000&#34; # Uses: 27
+&#34;\001\000\000\000\000\000\000 &#34; # Uses: 24
+&#34;\001\000\000\000\000\000\000!&#34; # Uses: 28
+&#34;\376\377\377\374&#34; # Uses: 17
+&#34;\002\007&#34; # Uses: 21
+&#34;\000\000\000\000\000\000\000\002&#34; # Uses: 22
+&#34;\377\377\000\002&#34; # Uses: 17
+&#34;\376\377\377\377&#34; # Uses: 17
+&#34;\226\000\000\000\000\000\000\000&#34; # Uses: 14
+&#34;\020\000\000\000\000\000\000\000&#34; # Uses: 17
+&#34;\000\000\000\000\000\000\001~&#34; # Uses: 16
+&#34;\000\000\000\000\000\000\000\000&#34; # Uses: 18
+&#34;\001\000\001#&#34; # Uses: 14
+&#34;\001\000\001Y&#34; # Uses: 26
+&#34;\001\000\000\020&#34; # Uses: 11
+&#34;\375\377\377\377&#34; # Uses: 11
+&#34;\377\377\017\000&#34; # Uses: 7
+&#34;\001\000\000\023&#34; # Uses: 7
+&#34;\012\000\000\000&#34; # Uses: 10
+&#34;\001\000\000\000&#34; # Uses: 11
+&#34;\010\000\000\000\000\000\000\000&#34; # Uses: 9
+&#34;\000\000\002\023&#34; # Uses: 5
+&#34;\000\000\001\021&#34; # Uses: 8
+&#34;#\000\000\000\000\000\000\000&#34; # Uses: 7
+&#34;\272\000&#34; # Uses: 6
+&#34;\377\377\377\377\377\377\377\377&#34; # Uses: 5
+&#34;\000\000\000\000\216\300\212\016&#34; # Uses: 2
+&#34;\377\377\377\377\377\377\377\000&#34; # Uses: 6
+&#34;\002\000\000\000\000\000\000\000&#34; # Uses: 2
+&#34;\001\000\000\000\000\000\000[&#34; # Uses: 3
+&#34;\377\377\377\377\377\377\377\001&#34; # Uses: 0
+&#34;\203\000\000\000\000\000\000\000&#34; # Uses: 0
+&#34;v\001\000\000\000\000\000\000&#34; # Uses: 1
+###### End of recommended dictionary. ######
+Done 36000 runs in 31 second(s)
+stat::number_of_executed_units: 36000
+stat::average_exec_per_sec:     1161
+stat::new_units_added:          791
+stat::slowest_unit_time_sec:    0
+stat::peak_rss_mb:              73
+
+</pre>
+
+
+</body>

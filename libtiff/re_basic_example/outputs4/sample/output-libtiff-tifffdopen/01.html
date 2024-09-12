@@ -1,0 +1,664 @@
+<!doctype html>
+
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Experiment results</title>
+<style>
+* {
+    box-sizing: border-box;
+}
+
+html {
+    line-height: 1.15;
+}
+
+body {
+    font-family: sans-serif;
+    font-size: 16px;
+}
+
+table {
+    border-collapse: collapse;
+    border-spacing: 0;
+}
+
+td, th {
+    border-right: 1px #dedede solid;
+    border-bottom: 1px #dedede solid;
+    padding: 5px;
+    text-align: left;
+}
+td:first-child, th:first-child {
+    border-left: 1px #dedede solid;
+}
+th {
+    border-top: 1px #dedede solid;
+}
+
+tbody tr:nth-child(odd) {
+    background-color: #f4f5ff;
+}
+</style>
+<body>
+    LLM: 
+    
+<h1>output-libtiff-tifffdopen / 01</h1>
+Bug: False
+<br>
+Crash reason: NO_SEMANTIC_ERR
+<br>
+<br>
+
+<h2>Triage</h2>
+<pre>
+
+</pre>
+<br>
+
+
+
+
+
+<h3>Final code</h3>
+
+<pre>
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;string&gt;
+#include &lt;vector&gt;
+#include &lt;tiffio.h&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
+  FuzzedDataProvider stream(data, size);
+  
+  // Create a temporary file
+  FILE *fp = tmpfile();
+  if (fp == nullptr) {
+    return 0;
+  }
+
+  // We will split the data into two parts. The first part is written to the file, 
+  // the second part is used to create the &#39;mode&#39; string for TIFFFdOpen.
+  const auto first_part_size = stream.ConsumeIntegralInRange&lt;int&gt;(0, size);
+  std::vector&lt;uint8_t&gt; first_part = stream.ConsumeBytes&lt;uint8_t&gt;(first_part_size);
+  
+  if (!first_part.empty()) {
+    // Write the data into file
+    fwrite(first_part.data(), first_part.size(), 1, fp);
+  }
+  
+  // Create the file mode string. We limit its length to prevent excessively long strings.
+  std::string mode = stream.ConsumeBytesAsString(10);
+
+  // Use the file descriptor to open the TIFF file
+  int fd = fileno(fp);
+  TIFF* tiff = TIFFFdOpen(fd, &#34;sample.tiff&#34;, mode.c_str());
+  
+  if (tiff) {
+    TIFFClose(tiff);
+  }
+
+  // Close the temporary file
+  fclose(fp);
+
+  return 0;
+}
+</pre>
+
+
+<h3>Fixer prompt #1</h3>
+<pre>
+
+Given the following C++ fuzz harness and its build error message, fix the code to make it build for fuzzing.
+
+If there is undeclared identifier or unknown type name error, fix it by finding and including the related libraries.
+
+MUST RETURN THE FULL CODE, INCLUDING UNCHANGED PARTS.
+
+Below is the code needs to be built:
+&lt;code&gt;
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;string&gt;
+#include &lt;tiffio.h&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
+  FuzzedDataProvider stream(data, size);
+  
+  // Create a temporary file
+  FILE *fp = tmpfile();
+  if (fp == nullptr) {
+    return 0;
+  }
+
+  // We will split the data into two parts. The first part is written to the file, 
+  // the second part is used to create the &#39;mode&#39; string for TIFFFdOpen.
+  const auto first_part_size = stream.ConsumeIntegralInRange&lt;int&gt;(0, size);
+  std::vector&lt;uint8_t&gt; first_part = stream.ConsumeBytes(first_part_size);
+  
+  if (!first_part.empty()) {
+    // Write the data into file
+    fwrite(first_part.data(), first_part.size(), 1, fp);
+  }
+  
+  // Create the file mode string. We limit its length to prevent excessively long strings.
+  std::string mode = stream.ConsumeBytesAsString(10);
+
+  // Use the file descriptor to open the TIFF file
+  int fd = fileno(fp);
+  TIFF* tiff = TIFFFdOpen(fd, &#34;sample.tiff&#34;, mode.c_str());
+  
+  if (tiff) {
+    TIFFClose(tiff);
+  }
+
+  // Close the temporary file
+  fclose(fp);
+
+  return 0;
+}
+&lt;/code&gt;
+
+Below is the error to fix:
+The code has the following build issues:
+&lt;error&gt;
+/src/libtiff/contrib/oss-fuzz/tiff_read_rgba_fuzzer.cc:19:44: error: no matching member function for call to &#39;ConsumeBytes&#39;
+   19 |   std::vector&lt;uint8_t&gt; first_part = stream.ConsumeBytes(first_part_size);
+      |                                     ~~~~~~~^~~~~~~~~~~~
+/usr/local/lib/clang/18/include/fuzzer/FuzzedDataProvider.h:108:36: note: candidate template ignored: couldn&#39;t infer template argument &#39;T&#39;
+  108 | std::vector&lt;T&gt; FuzzedDataProvider::ConsumeBytes(size_t num_bytes) {
+      |                                    ^
+/usr/local/lib/clang/18/include/fuzzer/FuzzedDataProvider.h:352:36: note: candidate function template not viable: requires 2 arguments, but 1 was provided
+  352 | std::vector&lt;T&gt; FuzzedDataProvider::ConsumeBytes(size_t size, size_t num_bytes) {
+      |                                    ^            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+&lt;/error&gt;
+
+
+
+
+Fix code:
+1. Consider possible solutions for the issues listed above.
+2. Choose a solution that can maximize fuzzing result, which is utilizing the function under test and feeding it not null input.
+3. Apply the solutions to the original code.
+It&#39;s important to show the complete code, not only the fixed line.
+&lt;solution&gt;
+</pre>
+
+
+
+<h3>Code #1</h3>
+
+<pre>
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;string&gt;
+#include &lt;vector&gt;
+#include &lt;tiffio.h&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
+  FuzzedDataProvider stream(data, size);
+  
+  // Create a temporary file
+  FILE *fp = tmpfile();
+  if (fp == nullptr) {
+    return 0;
+  }
+
+  // We will split the data into two parts. The first part is written to the file, 
+  // the second part is used to create the &#39;mode&#39; string for TIFFFdOpen.
+  const auto first_part_size = stream.ConsumeIntegralInRange&lt;int&gt;(0, size);
+  std::vector&lt;uint8_t&gt; first_part = stream.ConsumeBytes&lt;uint8_t&gt;(first_part_size);
+  
+  if (!first_part.empty()) {
+    // Write the data into file
+    fwrite(first_part.data(), first_part.size(), 1, fp);
+  }
+  
+  // Create the file mode string. We limit its length to prevent excessively long strings.
+  std::string mode = stream.ConsumeBytesAsString(10);
+
+  // Use the file descriptor to open the TIFF file
+  int fd = fileno(fp);
+  TIFF* tiff = TIFFFdOpen(fd, &#34;sample.tiff&#34;, mode.c_str());
+  
+  if (tiff) {
+    TIFFClose(tiff);
+  }
+
+  // Close the temporary file
+  fclose(fp);
+
+  return 0;
+}
+</pre>
+
+
+<h2>Logs</h2>
+<pre>
+Fixing /home/chyun/oss-fuzz-gen/results4/output-libtiff-tifffdopen/fixed_targets/01.cc with gpt-4, attempt 1.
+Successfully built /home/chyun/oss-fuzz-gen/results4/output-libtiff-tifffdopen/fixed_targets/01.cc with gpt-4 in 1 iterations of fixing.
+Triaging the crash related to /home/chyun/oss-fuzz-gen/results4/output-libtiff-tifffdopen/fixed_targets/01.cc with gpt-4.
+Warning: no crash info in libtiff-tifffdopen-01.
+Result for libtiff-tifffdopen-01: crashes=False, coverage=0.008258621331051673 (222/26881), coverage diff=0.003160034619487551 (157/49683)
+
+</pre>
+
+<h2>Run logs</h2>
+<pre>
+INFO:__main__:Running: docker run --privileged --shm-size=2g --platform linux/amd64 --rm -e FUZZING_ENGINE=libfuzzer -e SANITIZER=address -e RUN_FUZZER_MODE=interactive -e HELPER=True -v /home/chyun/oss-fuzz-gen/results4/output-libtiff-tifffdopen/corpora/01.cc:/tmp/tiff_read_rgba_fuzzer_corpus -v /tmp/tmpiv7_3_tu/build/out/libtiff-tifffdopen-01:/out -t gcr.io/oss-fuzz-base/base-runner run_fuzzer tiff_read_rgba_fuzzer -print_final_stats=1 -max_total_time=30 -len_control=0 -timeout=30.
+vm.mmap_rnd_bits = 28
+rm: cannot remove &#39;/tmp/tiff_read_rgba_fuzzer_corpus&#39;: Device or resource busy
+Using seed corpus: tiff_read_rgba_fuzzer_seed_corpus.zip
+/out/tiff_read_rgba_fuzzer -rss_limit_mb=2560 -timeout=25 -print_final_stats=1 -max_total_time=30 -len_control=0 -timeout=30 /tmp/tiff_read_rgba_fuzzer_corpus -dict=tiff_read_rgba_fuzzer.dict &lt; /dev/null
+Dictionary: 40 entries
+INFO: Running with entropic power schedule (0xFF, 100).
+INFO: Seed: 1086658434
+INFO: Loaded 1 modules   (26881 inline 8-bit counters): 26881 [0x56549c156e78, 0x56549c15d779), 
+INFO: Loaded 1 PC tables (26881 PCs): 26881 [0x56549c15d780,0x56549c1c6790), 
+INFO:     6502 files found in /tmp/tiff_read_rgba_fuzzer_corpus
+INFO: -max_len is not provided; libFuzzer will not generate inputs larger than 16832 bytes
+TIFFClientOpenExt: &#34;&#34;: Bad mode.
+INFO: seed corpus: files: 6502 min: 1b max: 16832b total: 6363517b rss: 39Mb
+TIFFClientOpenExt: &#34;&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;��&#34;: Bad mode.
+TIFFClientOpenExt: &#34;II+&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;II+&#34;: Bad mode.
+TIFFClientOpenExt: &#34;II+&#34;: Bad mode.
+TIFFClientOpenExt: &#34;M&#34;: Bad mode.
+TIFFClientOpenExt: &#34;&#34;: Bad mode.
+TIFFClientOpenExt: &#34;II+&#34;: Bad mode.
+TIFFClientOpenExt: &#34;II+&#34;: Bad mode.
+TIFFClientOpenExt: &#34;II+&#34;: Bad mode.
+TIFFClientOpenExt: &#34;&#34;: Bad mode.
+TIFFClientOpenExt: &#34;ti&#34;: Bad mode.
+TIFFClientOpenExt: &#34;&#34;: Bad mode.
+TIFFClientOpenExt: &#34;c�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;foo.if���&#34;: Bad mode.
+TIFFClientOpenExt: &#34;���PD��&#34;: Bad mode.
+TIFFClientOpenExt: &#34;#�����5�-&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;II*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;II*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenExt: &#34;I*&#34;: Bad mode.
+TIFFClientOpenEx
+...truncated...
+ntOpenExt: &#34;Dbb&#34;: Bad mode.
+TIFFClientOpenExt: &#34;&#34;: Bad mode.
+TIFFClientOpenExt: &#34;1rD&#34;: Bad mode.
+TIFFClientOpenExt: &#34;1arD&#34;: Bad mode.
+TIFFClientOpenExt: &#34;&#34;arD&#34;: Bad mode.
+TIFFClientOpenExt: &#34;&#34;a&#34;: Bad mode.
+TIFFClientOpenExt: &#34;&#34;�a&#34;: Bad mode.
+TIFFClientOpenExt: &#34;&#34;: Bad mode.
+TIFFClientOpenExt: &#34;&#34;: Bad mode.
+TIFFClientOpenExt: &#34;&#39;OOO&#34;: Bad mode.
+sample.tiff: Cannot read TIFF header.
+TIFFClientOpenExt: &#34;{OO�&#39;OO&#34;: Bad mode.
+sample.tiff: Cannot read TIFF header.
+TIFFClientOpenExt: &#34;mMM&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�mMM&#34;: Bad mode.
+TIFFClientOpenExt: &#34;&#34;: Bad mode.
+TIFFClientOpenExt: &#34;&#34;: Bad mode.
+TIFFClientOpenExt: &#34;&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�����&#34;: Bad mode.
+TIFFClientOpenExt: &#34;88888888&#34;: Bad mode.
+TIFFClientOpenExt: &#34;8&#34;: Bad mode.
+TIFFClientOpenExt: &#34;8&#34;: Bad mode.
+TIFFClientOpenExt: &#34;-&#34;: Bad mode.
+TIFFClientOpenExt: &#34;-&#34;: Bad mode.
+TIFFClientOpenExt: &#34;cc&#34;: Bad mode.
+TIFFClientOpenExt: &#34;&#34;: Bad mode.
+TIFFClientOpenExt: &#34;&#34;: Bad mode.
+sample.tiff: Cannot read TIFF header.
+TIFFClientOpenExt: &#34;3rr(M&#34;: Bad mode.
+TIFFClientOpenExt: &#34;3&#34;: Bad mode.
+TIFFClientOpenExt: &#34;3I&amp;&#34;: Bad mode.
+TIFFClientOpenExt: &#34;3I&amp;&#34;: Bad mode.
+TIFFClientOpenExt: &#34;&#34;: Bad mode.
+TIFFClientOpenExt: &#34;&#34;: Bad mode.
+TIFFClientOpenExt: &#34;&#34;: Bad mode.
+TIFFClientOpenExt: &#34;&#34;: Bad mode.
+TIFFClientOpenExt: &#34;&#34;: Bad mode.
+TIFFClientOpenExt: &#34;&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;&#34;: Bad mode.
+TIFFClientOpenExt: &#34;&#34;: Bad mode.
+TIFFClientOpenExt: &#34;&#34;: Bad mode.
+TIFFClientOpenExt: &#34;&#34;: Bad mode.
+TIFFClientOpenExt: &#34;&#34;: Bad mode.
+TIFFClientOpenExt: &#34;&#34;: Bad mode.
+TIFFClientOpenExt: &#34;&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+sample.tiff: Warning, H(ost) mode is deprecated. Since libtiff 4.5.1, it is an alias of &#39;B&#39; / FILLORDER_MSB2LSB..
+TIFFClientOpenExt: &#34;���&#34;: Bad mode.
+TIFFClientOpenExt: &#34;����������&#34;: Bad mode.
+TIFFClientOpenExt: &#34;����������&#34;: Bad mode.
+TIFFClientOpenExt: &#34;((((((((((&#34;: Bad mode.
+sample.tiff: Warning, H(ost) mode is deprecated. Since libtiff 4.5.1, it is an alias of &#39;B&#39; / FILLORDER_MSB2LSB..
+sample.tiff: Warning, H(ost) mode is deprecated. Since libtiff 4.5.1, it is an alias of &#39;B&#39; / FILLORDER_MSB2LSB..
+TIFFClientOpenExt: &#34;LrrDL&#34;: Bad mode.
+TIFFClientOpenExt: &#34;DLrD&#34;: Bad mode.
+TIFFClientOpenExt: &#34;DLrD&#34;: Bad mode.
+sample.tiff: Cannot read TIFF header.
+sample.tiff: Cannot read TIFF header.
+sample.tiff: Cannot read TIFF header.
+sample.tiff: Cannot read TIFF header.
+TIFFClientOpenExt: &#34;����������&#34;: Bad mode.
+TIFFClientOpenExt: &#34;&#34;b&#34;: Bad mode.
+TIFFClientOpenExt: &#34;&#34;.b&#34;: Bad mode.
+TIFFClientOpenExt: &#34;&#34;.b&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�a&#34;.&#34;: Bad mode.
+TIFFClientOpenExt: &#34;&#34;: Bad mode.
+TIFFClientOpenExt: &#34;+&#34;: Bad mode.
+TIFFClientOpenExt: &#34;+&#34;: Bad mode.
+TIFFClientOpenExt: &#34;&#34;: Bad mode.
+TIFFClientOpenExt: &#34;&#34;: Bad mode.
+TIFFClientOpenExt: &#34;hrmmmmmmmm&#34;: Bad mode.
+TIFFClientOpenExt: &#34;m%m&#34;: Bad mode.
+TIFFClientOpenExt: &#34;mmm%m&gt;&#34;: Bad mode.
+TIFFClientOpenExt: &#34;&gt;&#34;: Bad mode.
+TIFFClientOpenExt: &#34;&#34;: Bad mode.
+TIFFClientOpenExt: &#34;&#34;: Bad mode.
+TIFFClientOpenExt: &#34;vmmmmmmmm&#34;: Bad mode.
+TIFFClientOpenExt: &#34;vmmmmm&#34;: Bad mode.
+TIFFClientOpenExt: &#34;mm&#34;: Bad mode.
+TIFFClientOpenExt: &#34;mm&#34;: Bad mode.
+TIFFClientOpenExt: &#34;im&#34;: Bad mode.
+TIFFClientOpenExt: &#34;b&#34;: Bad mode.
+TIFFClientOpenExt: &#34;(b&#34;: Bad mode.
+TIFFClientOpenExt: &#34;(!!!!!!!!!&#34;: Bad mode.
+TIFFClientOpenExt: &#34;(!!!!!!!&#34;: Bad mode.
+TIFFClientOpenExt: &#34;(!!!!!!!&#34;: Bad mode.
+sample.tiff: Cannot read TIFF header.
+sample.tiff: Cannot read TIFF header.
+sample.tiff: Cannot read TIFF header.
+sample.tiff: Cannot read TIFF header.
+sample.tiff: Cannot read TIFF header.
+sample.tiff: Warning, H(ost) mode is deprecated. Since libtiff 4.5.1, it is an alias of &#39;B&#39; / FILLORDER_MSB2LSB..
+sample.tiff: Warning, H(ost) mode is deprecated. Since libtiff 4.5.1, it is an alias of &#39;B&#39; / FILLORDER_MSB2LSB..
+TIFFClientOpenExt: &#34;=H&#34;: Bad mode.
+TIFFClientOpenExt: &#34;&#34;: Bad mode.
+TIFFClientOpenExt: &#34;&#34;: Bad mode.
+TIFFClientOpenExt: &#34;&#34;: Bad mode.
+TIFFClientOpenExt: &#34;BB�M&#34;: Bad mode.
+TIFFClientOpenExt: &#34;BB�M&#34;: Bad mode.
+TIFFClientOpenExt: &#34;B$BBBBBBBB&#34;: Bad mode.
+TIFFClientOpenExt: &#34;����������&#34;: Bad mode.
+TIFFClientOpenExt: &#34;mmm&#34;: Bad mode.
+TIFFClientOpenExt: &#34;mmm&#34;: Bad mode.
+TIFFClientOpenExt: &#34;mm&#34;: Bad mode.
+TIFFClientOpenExt: &#34;mmm&#34;: Bad mode.
+TIFFClientOpenExt: &#34;mmi&#34;: Bad mode.
+TIFFClientOpenExt: &#34;&#34;: Bad mode.
+TIFFClientOpenExt: &#34;&#34;: Bad mode.
+TIFFClientOpenExt: &#34;&#34;: Bad mode.
+TIFFClientOpenExt: &#34;&#34;: Bad mode.
+sample.tiff: Cannot read TIFF header.
+sample.tiff: Cannot read TIFF header.
+sample.tiff: Cannot read TIFF header.
+sample.tiff: Cannot read TIFF header.
+TIFFClientOpenExt: &#34;����������&#34;: Bad mode.
+TIFFClientOpenExt: &#34;brbbbV&#34;: Bad mode.
+TIFFClientOpenExt: &#34;&#34;: Bad mode.
+TIFFClientOpenExt: &#34;&#34;: Bad mode.
+TIFFClientOpenExt: &#34;&#34;: Bad mode.
+TIFFClientOpenExt: &#34;&#34;: Bad mode.
+TIFFClientOpenExt: &#34;#w#�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;#w�#&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�w�#&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�#&#34;: Bad mode.
+sample.tiff: Cannot read TIFF header.
+sample.tiff: Cannot read TIFF header.
+sample.tiff: Cannot read TIFF header.
+TIFFClientOpenExt: &#34;7&#34;: Bad mode.
+TIFFClientOpenExt: &#34;7&#34;: Bad mode.
+sample.tiff: Warning, H(ost) mode is deprecated. Since libtiff 4.5.1, it is an alias of &#39;B&#39; / FILLORDER_MSB2LSB..
+sample.tiff: Warning, H(ost) mode is deprecated. Since libtiff 4.5.1, it is an alias of &#39;B&#39; / FILLORDER_MSB2LSB..
+TIFFClientOpenExt: &#34;zhrmHmmH&#34;: Bad mode.
+TIFFClientOpenExt: &#34;zhrmHmmmH&#34;: Bad mode.
+TIFFClientOpenExt: &#34;&#34;: Bad mode.
+TIFFClientOpenExt: &#34;&#34;: Bad mode.
+TIFFClientOpenExt: &#34;&#34;: Bad mode.
+TIFFClientOpenExt: &#34;&#34;: Bad mode.
+TIFFClientOpenExt: &#34;@J&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�J&#34;: Bad mode.
+TIFFClientOpenExt: &#34;&#34;: Bad mode.
+TIFFClientOpenExt: &#34;yBBB�B&#34;: Bad mode.
+TIFFClientOpenExt: &#34;yBBB�B&#34;: Bad mode.
+TIFFClientOpenExt: &#34;qBBB�B&#34;: Bad mode.
+TIFFClientOpenExt: &#34;BB&#34;: Bad mode.
+TIFFClientOpenExt: &#34;BB&#34;: Bad mode.
+sample.tiff: Cannot read TIFF header.
+sample.tiff: Cannot read TIFF header.
+sample.tiff: Cannot read TIFF header.
+sample.tiff: Cannot read TIFF header.
+sample.tiff: Cannot read TIFF header.
+TIFFClientOpenExt: &#34;hhhh&#34;: Bad mode.
+TIFFClientOpenExt: &#34;hh&#34;: Bad mode.
+TIFFClientOpenExt: &#34;hh&#34;: Bad mode.
+TIFFClientOpenExt: &#34;hh&#34;: Bad mode.
+TIFFClientOpenExt: &#34;h`&#34;: Bad mode.
+TIFFClientOpenExt: &#34;wC1C$w)&#34;: Bad mode.
+TIFFClientOpenExt: &#34;����DDDDD&#34;: Bad mode.
+TIFFClientOpenExt: &#34;����DDDDD&#34;: Bad mode.
+TIFFClientOpenExt: &#34;����DDD�D&#34;: Bad mode.
+TIFFClientOpenExt: &#34;����DDD&#34;: Bad mode.
+TIFFClientOpenExt: &#34;����DDD&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�wwwwwwwww&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�wwwwwwwww&#34;: Bad mode.
+TIFFClientOpenExt: &#34;o�-�������&#34;: Bad mode.
+TIFFClientOpenExt: &#34;����&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�w�LLLL&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�w�LLLL&#34;: Bad mode.
+sample.tiff: Cannot read TIFF header.
+sample.tiff: Cannot read TIFF header.
+TIFFClientOpenExt: &#34;3rr&#34;: Bad mode.
+TIFFClientOpenExt: &#34;3r(&#34;: Bad mode.
+TIFFClientOpenExt: &#34;&#34;: Bad mode.
+#204844	DONE   cov: 222 ft: 336 corp: 110/2503b lim: 16832 exec/s: 6607 rss: 72Mb
+###### Recommended dictionary. ######
+&#34;\001\000\001\003&#34; # Uses: 452
+&#34;\001\000\000\001&#34; # Uses: 479
+&#34;\000\000\000\311&#34; # Uses: 394
+&#34;\000\000\000\000&#34; # Uses: 374
+&#34;\025\002&#34; # Uses: 459
+&#34;\000\000\000\000\000\000\000\000&#34; # Uses: 323
+&#34;\001\000\000\000\000\000\000\230&#34; # Uses: 311
+&#34;\002\001\000\000&#34; # Uses: 355
+&#34;\001\000\000\000\000\000\000\000&#34; # Uses: 283
+&#34;\000\003&#34; # Uses: 344
+&#34;\377\377\377\377\377\377\377\230&#34; # Uses: 273
+&#34;\377\377\377\377\377\377\377\035&#34; # Uses: 251
+&#34;\377\377\377\377\377\377\377\377&#34; # Uses: 265
+&#34;\032\202&#34; # Uses: 331
+&#34;\225\000\000\000\000\000\000\000&#34; # Uses: 187
+&#34;\376\377\377\375&#34; # Uses: 207
+###### End of recommended dictionary. ######
+Done 204844 runs in 31 second(s)
+stat::number_of_executed_units: 204844
+stat::average_exec_per_sec:     6607
+stat::new_units_added:          802
+stat::slowest_unit_time_sec:    0
+stat::peak_rss_mb:              72
+
+</pre>
+
+
+</body>

@@ -1,0 +1,675 @@
+<!doctype html>
+
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Experiment results</title>
+<style>
+* {
+    box-sizing: border-box;
+}
+
+html {
+    line-height: 1.15;
+}
+
+body {
+    font-family: sans-serif;
+    font-size: 16px;
+}
+
+table {
+    border-collapse: collapse;
+    border-spacing: 0;
+}
+
+td, th {
+    border-right: 1px #dedede solid;
+    border-bottom: 1px #dedede solid;
+    padding: 5px;
+    text-align: left;
+}
+td:first-child, th:first-child {
+    border-left: 1px #dedede solid;
+}
+th {
+    border-top: 1px #dedede solid;
+}
+
+tbody tr:nth-child(odd) {
+    background-color: #f4f5ff;
+}
+</style>
+<body>
+    LLM: 
+    
+<h1>output-libtiff-tifffdopen / 01</h1>
+Bug: False
+<br>
+Crash reason: NO_SEMANTIC_ERR
+<br>
+<br>
+
+<h2>Triage</h2>
+<pre>
+
+</pre>
+<br>
+
+
+
+
+
+<h3>Final code</h3>
+
+<pre>
+#include &lt;tiffio.h&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+#include &lt;cstdlib&gt;
+#include &lt;string&gt;
+#include &lt;fcntl.h&gt;
+#include &lt;unistd.h&gt;
+
+#define MAX_BUF_SIZE 1024
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  FuzzedDataProvider fdp(data, size);
+
+  std::string mode(1, fdp.ConsumeIntegral&lt;char&gt;());
+  std::string extra_chars = fdp.ConsumeRemainingBytesAsString();
+
+  int fd = open(&#34;/tmp/temp.tiff&#34;, O_CREAT | O_TRUNC | O_WRONLY, S_IRUSR | S_IWUSR);
+  if (fd == -1) return 0;
+
+  write(fd, extra_chars.data(), extra_chars.size());
+
+  lseek(fd, SEEK_SET, 0);
+
+  TIFF* out_tif = TIFFFdOpen(fd, &#34;dummy&#34;, mode.c_str());
+
+  if (out_tif) {
+    TIFFClose(out_tif);
+  }
+
+  close(fd);
+  return 0;
+}
+</pre>
+
+
+<h3>Fixer prompt #1</h3>
+<pre>
+
+Given the following C++ fuzz harness and its build error message, fix the code to make it build for fuzzing.
+
+If there is undeclared identifier or unknown type name error, fix it by finding and including the related libraries.
+
+MUST RETURN THE FULL CODE, INCLUDING UNCHANGED PARTS.
+
+Below is the code needs to be built:
+&lt;code&gt;
+#include &lt;tiffio.h&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+#include &lt;cstdlib&gt;
+#include &lt;string&gt;
+#include &lt;fcntl.h&gt;
+#include &lt;unistd.h&gt;
+
+#define MAX_BUF_SIZE 1024
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  FuzzedDataProvider fdp(data, size);
+
+  const std::string mode = fdp.ConsumeChar();
+  const std::string extra_chars = fdp.ConsumeChars&lt;uint8_t&gt;(fdp.remaining_bytes());
+
+  int fd = open(&#34;/tmp/temp.tiff&#34;, O_CREAT | O_TRUNC | O_WRONLY, S_IRUSR | S_IWUSR);
+  if (fd == -1) return 0;
+
+  write(fd, extra_chars.data(), extra_chars.size());
+
+  lseek(fd, SEEK_SET, 0);
+
+  TIFF* out_tif = TIFFFdOpen(fd, &#34;dummy&#34;, mode.c_str());
+
+  if (out_tif) {
+    TIFFClose(out_tif);
+  }
+
+  close(fd);
+  return 0;
+}
+&lt;/code&gt;
+
+Below is the error to fix:
+The code has the following build issues:
+&lt;error&gt;
+/src/libtiff/contrib/oss-fuzz/tiff_read_rgba_fuzzer.cc:13:32: error: no member named &#39;ConsumeChar&#39; in &#39;FuzzedDataProvider&#39;
+   13 |   const std::string mode = fdp.ConsumeChar();
+      |                            ~~~ ^
+/src/libtiff/contrib/oss-fuzz/tiff_read_rgba_fuzzer.cc:14:52: error: unexpected type name &#39;uint8_t&#39;: expected expression
+   14 |   const std::string extra_chars = fdp.ConsumeChars&lt;uint8_t&gt;(fdp.remaining_bytes());
+      |                                                    ^
+/src/libtiff/contrib/oss-fuzz/tiff_read_rgba_fuzzer.cc:14:39: error: no member named &#39;ConsumeChars&#39; in &#39;FuzzedDataProvider&#39;
+   14 |   const std::string extra_chars = fdp.ConsumeChars&lt;uint8_t&gt;(fdp.remaining_bytes());
+      |                                   ~~~ ^
+&lt;/error&gt;
+
+
+
+
+Fix code:
+1. Consider possible solutions for the issues listed above.
+2. Choose a solution that can maximize fuzzing result, which is utilizing the function under test and feeding it not null input.
+3. Apply the solutions to the original code.
+It&#39;s important to show the complete code, not only the fixed line.
+&lt;solution&gt;
+</pre>
+
+
+
+<h3>Code #1</h3>
+
+<pre>
+#include &lt;tiffio.h&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+#include &lt;cstdlib&gt;
+#include &lt;string&gt;
+#include &lt;fcntl.h&gt;
+#include &lt;unistd.h&gt;
+
+#define MAX_BUF_SIZE 1024
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  FuzzedDataProvider fdp(data, size);
+
+  std::string mode(1, fdp.ConsumeIntegral&lt;char&gt;());
+  std::string extra_chars = fdp.ConsumeRemainingBytesAsString();
+
+  int fd = open(&#34;/tmp/temp.tiff&#34;, O_CREAT | O_TRUNC | O_WRONLY, S_IRUSR | S_IWUSR);
+  if (fd == -1) return 0;
+
+  write(fd, extra_chars.data(), extra_chars.size());
+
+  lseek(fd, SEEK_SET, 0);
+
+  TIFF* out_tif = TIFFFdOpen(fd, &#34;dummy&#34;, mode.c_str());
+
+  if (out_tif) {
+    TIFFClose(out_tif);
+  }
+
+  close(fd);
+  return 0;
+}
+&lt;/solution&gt;
+</pre>
+
+
+<h2>Logs</h2>
+<pre>
+Fixing /home/chyun/oss-fuzz-gen/results2/output-libtiff-tifffdopen/fixed_targets/01.cc with gpt-4, attempt 1.
+Successfully built /home/chyun/oss-fuzz-gen/results2/output-libtiff-tifffdopen/fixed_targets/01.cc with gpt-4 in 1 iterations of fixing.
+Triaging the crash related to /home/chyun/oss-fuzz-gen/results2/output-libtiff-tifffdopen/fixed_targets/01.cc with gpt-4.
+Warning: no crash info in libtiff-tifffdopen-01.
+Warning: No cov info in run result of libtiff-tifffdopen-01.
+
+</pre>
+
+<h2>Run logs</h2>
+<pre>
+INFO:__main__:Running: docker run --privileged --shm-size=2g --platform linux/amd64 --rm -e FUZZING_ENGINE=libfuzzer -e SANITIZER=address -e RUN_FUZZER_MODE=interactive -e HELPER=True -v /home/chyun/oss-fuzz-gen/results2/output-libtiff-tifffdopen/corpora/01.cc:/tmp/tiff_read_rgba_fuzzer_corpus -v /tmp/tmpa872gqz1/build/out/libtiff-tifffdopen-01:/out -t gcr.io/oss-fuzz-base/base-runner run_fuzzer tiff_read_rgba_fuzzer -print_final_stats=1 -max_total_time=30 -len_control=0 -timeout=30.
+vm.mmap_rnd_bits = 28
+rm: cannot remove &#39;/tmp/tiff_read_rgba_fuzzer_corpus&#39;: Device or resource busy
+Using seed corpus: tiff_read_rgba_fuzzer_seed_corpus.zip
+/out/tiff_read_rgba_fuzzer -rss_limit_mb=2560 -timeout=25 -print_final_stats=1 -max_total_time=30 -len_control=0 -timeout=30 /tmp/tiff_read_rgba_fuzzer_corpus -dict=tiff_read_rgba_fuzzer.dict &lt; /dev/null
+Dictionary: 40 entries
+INFO: Running with entropic power schedule (0xFF, 100).
+INFO: Seed: 3788749324
+INFO: Loaded 1 modules   (26828 inline 8-bit counters): 26828 [0x55734a347eb8, 0x55734a34e784), 
+INFO: Loaded 1 PC tables (26828 PCs): 26828 [0x55734a34e788,0x55734a3b7448), 
+INFO:     6502 files found in /tmp/tiff_read_rgba_fuzzer_corpus
+INFO: -max_len is not provided; libFuzzer will not generate inputs larger than 16832 bytes
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+INFO: seed corpus: files: 6502 min: 1b max: 16832b total: 6363517b rss: 38Mb
+TIFFClientOpenExt: &#34;&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;&#34;: Bad mode.
+TIFFClientOpenExt: &#34;&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;&#34;: Bad mode.
+TIFFClientOpenExt: &#34;&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode
+...truncated...
+: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;&#34;: Bad mode.
+TIFFClientOpenExt: &#34;&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;1&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;
+&#34;: Bad mode.
+TIFFClientOpenExt: &#34;
+&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+dummy: Cannot read TIFF header.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;&#34;: Bad mode.
+TIFFClientOpenExt: &#34;&#34;: Bad mode.
+TIFFClientOpenExt: &#34;i&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;&#34;: Bad mode.
+TIFFClientOpenExt: &#34;&#34;: Bad mode.
+TIFFClientOpenExt: &#34;&#34;: Bad mode.
+TIFFClientOpenExt: &#34;&#34;: Bad mode.
+TIFFClientOpenExt: &#34;&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;&#34;: Bad mode.
+dummy: Cannot read TIFF header.
+dummy: Cannot read TIFF header.
+dummy: Cannot read TIFF header.
+dummy: Cannot read TIFF header.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;\&#34;: Bad mode.
+TIFFClientOpenExt: &#34;\&#34;: Bad mode.
+TIFFClientOpenExt: &#34;\&#34;: Bad mode.
+TIFFClientOpenExt: &#34;\&#34;: Bad mode.
+TIFFClientOpenExt: &#34;\&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;v&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+dummy: Cannot read TIFF header.
+dummy: Cannot read TIFF header.
+dummy: Cannot read TIFF header.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+dummy: Cannot read TIFF header.
+dummy: Cannot read TIFF header.
+dummy: Cannot read TIFF header.
+dummy: Cannot read TIFF header.
+dummy: Cannot read TIFF header.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;&#34;: Bad mode.
+TIFFClientOpenExt: &#34;&#34;: Bad mode.
+TIFFClientOpenExt: &#34;&#34;: Bad mode.
+TIFFClientOpenExt: &#34;&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;&#34;: Bad mode.
+TIFFClientOpenExt: &#34;&#34;: Bad mode.
+TIFFClientOpenExt: &#34;~&#34;: Bad mode.
+TIFFClientOpenExt: &#34;~&#34;: Bad mode.
+TIFFClientOpenExt: &#34;~&#34;: Bad mode.
+TIFFClientOpenExt: &#34;&#34;: Bad mode.
+TIFFClientOpenExt: &#34;&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+dummy: Cannot read TIFF header.
+dummy: Cannot read TIFF header.
+TIFFClientOpenExt: &#34;&#34;: Bad mode.
+TIFFClientOpenExt: &#34;&#34;: Bad mode.
+TIFFClientOpenExt: &#34;&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;Z&#34;: Bad mode.
+TIFFClientOpenExt: &#34;i&#34;: Bad mode.
+TIFFClientOpenExt: &#34;i&#34;: Bad mode.
+TIFFClientOpenExt: &#34;i&#34;: Bad mode.
+TIFFClientOpenExt: &#34;&#34;: Bad mode.
+TIFFClientOpenExt: &#34;&#34;: Bad mode.
+TIFFClientOpenExt: &#34;&#34;: Bad mode.
+TIFFClientOpenExt: &#34;&#34;: Bad mode.
+TIFFClientOpenExt: &#34;&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+dummy: Cannot read TIFF header.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;&#34;: Bad mode.
+TIFFClientOpenExt: &#34;&#34;: Bad mode.
+TIFFClientOpenExt: &#34;&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;c&#34;: Bad mode.
+dummy: Cannot read TIFF header.
+TIFFClientOpenExt: &#34;&#34;: Bad mode.
+TIFFClientOpenExt: &#34;&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;&#34;: Bad mode.
+TIFFClientOpenExt: &#34;F&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;B&#34;: Bad mode.
+TIFFClientOpenExt: &#34;b&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+dummy: Cannot read TIFF header.
+dummy: Cannot read TIFF header.
+dummy: Cannot read TIFF header.
+dummy: Cannot read TIFF header.
+dummy: Cannot read TIFF header.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+TIFFClientOpenExt: &#34;�&#34;: Bad mode.
+dummy: Cannot read TIFF header.
+dummy: Cannot read TIFF header.
+#101527	DONE   cov: 178 ft: 183 corp: 7/640b lim: 16832 exec/s: 3275 rss: 74Mb
+###### Recommended dictionary. ######
+&#34;\377\377\000\027&#34; # Uses: 769
+###### End of recommended dictionary. ######
+Done 101527 runs in 31 second(s)
+stat::number_of_executed_units: 101527
+stat::average_exec_per_sec:     3275
+stat::new_units_added:          61
+stat::slowest_unit_time_sec:    0
+stat::peak_rss_mb:              74
+
+</pre>
+
+
+</body>
