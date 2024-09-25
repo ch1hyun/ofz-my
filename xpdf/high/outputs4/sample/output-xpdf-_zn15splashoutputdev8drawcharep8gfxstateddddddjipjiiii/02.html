@@ -1,0 +1,1005 @@
+<!doctype html>
+
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Experiment results</title>
+<style>
+* {
+    box-sizing: border-box;
+}
+
+html {
+    line-height: 1.15;
+}
+
+body {
+    font-family: sans-serif;
+    font-size: 16px;
+}
+
+table {
+    border-collapse: collapse;
+    border-spacing: 0;
+}
+
+td, th {
+    border-right: 1px #dedede solid;
+    border-bottom: 1px #dedede solid;
+    padding: 5px;
+    text-align: left;
+}
+td:first-child, th:first-child {
+    border-left: 1px #dedede solid;
+}
+th {
+    border-top: 1px #dedede solid;
+}
+
+tbody tr:nth-child(odd) {
+    background-color: #f4f5ff;
+}
+</style>
+<body>
+    LLM: 
+    
+<h1>output-xpdf-_zn15splashoutputdev8drawcharep8gfxstateddddddjipjiiii / 02</h1>
+Bug: False
+<br>
+Crash reason: FP_NEAR_INIT_CRASH
+<br>
+<br>
+
+<h2>Triage</h2>
+<pre>
+Crash is caused by bug in fuzz driver.
+
+The driver code is attempting to create a new &#39;SplashOutputDev&#39; object without properly initializing it. The &#39;SplashOutputDev&#39; constructor is being called with parameters that might not be properly initialized or valid, causing a null-dereference when the object is used later. This is evident from the crash log where the &#39;SplashOutputDev::SplashOutputDev&#39; function is involved in the crash. The driver should ensure that all necessary parameters are properly initialized before creating the &#39;SplashOutputDev&#39; object.
+</pre>
+<br>
+
+
+
+
+
+<h3>Final code</h3>
+
+<pre>
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+#include &#34;Object.h&#34;
+#include &#34;Stream.h&#34;
+#include &#34;Dict.h&#34;
+#include &#34;/src/xpdf-4.05/xpdf/XRef.h&#34;
+#include &#34;SplashOutputDev.h&#34;
+#include &#34;GfxState.h&#34;
+#include &#34;GlobalParams.h&#34;
+#include &#34;PDFDoc.h&#34;
+#include &#34;SplashBitmap.h&#34;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  if (size &lt; 20) {  
+    return 0;  
+  }  
+
+  // Set up a FuzzedDataProvider object with the given input data.
+  FuzzedDataProvider fdp(data, size);
+
+  // Check if there is enough data left to consume
+  if (fdp.remaining_bytes() &lt; sizeof(double) * 6 + sizeof(CharCode) + sizeof(int) * 3 + sizeof(GBool) * 3) {
+    return 0;
+  }
+
+  // Initialize basic parameters needed to call drawChar(GfxState *, double, double, double, double, double, double, CharCode, int, Unicode *, int, GBool, GBool, GBool).
+  double x = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  double y = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  double dx = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  double dy = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  double originX = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  double originY = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  CharCode code = fdp.ConsumeIntegral&lt;CharCode&gt;();
+  int nBytes = fdp.ConsumeIntegral&lt;int&gt;();
+  Unicode u = fdp.ConsumeIntegral&lt;Unicode&gt;();
+  int uLen  = fdp.ConsumeIntegral&lt;int&gt;();
+  GBool abortCheckCbk = fdp.ConsumeIntegral&lt;GBool&gt;();
+  GBool abortCheckCbkData = fdp.ConsumeIntegral&lt;GBool&gt;();
+  GBool isDot = fdp.ConsumeIntegral&lt;GBool&gt;();
+
+  // Initialize necessary objects: PDFDoc, OutputDev and GfxState
+  globalParams = new GlobalParams(&#34;/usr/local/etc/xpdfrc&#34;);
+  globalParams-&gt;setupBaseFonts(&#34;/usr/share/ghostscript/9.25/Resource/cidfmap&#34;);
+
+  GString *password = new GString(&#34;password&#34;);
+  GString *ownerPassword = new GString(&#34;ownerPassword&#34;);
+  
+  // Add missing lines to create PDFDoc, OutputDev and GfxState objects
+  PDFDoc *doc = new PDFDoc(new GString(&#34;dummy.pdf&#34;), password, ownerPassword);
+  SplashOutputDev *outputDev = new SplashOutputDev(splashModeRGB8, 4, gFalse, gFalse);
+  outputDev-&gt;startDoc(doc-&gt;getXRef());
+  GfxState *state = new GfxState(72, 72, doc-&gt;getCatalog()-&gt;getPage(1)-&gt;getCropBox(), 0, gFalse);
+  
+  // Call the function under test
+  outputDev-&gt;drawChar(state, x, y, dx, dy, originX, originY, code, nBytes, &amp;u, uLen, abortCheckCbk, abortCheckCbkData, isDot);
+  
+  // Clean up
+  delete state;
+  delete outputDev;
+  delete doc;
+  delete ownerPassword;
+  delete password;
+  delete globalParams;
+
+  return 0;
+}
+</pre>
+
+
+<h3>Fixer prompt #1</h3>
+<pre>
+
+Given the following C++ fuzz harness and its build error message, fix the code to make it build for fuzzing.
+
+If there is undeclared identifier or unknown type name error, fix it by finding and including the related libraries.
+
+MUST RETURN THE FULL CODE, INCLUDING UNCHANGED PARTS.
+
+Below is the code needs to be built:
+&lt;code&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+#include &#34;SplashOutputDev.h&#34;
+#include &#34;GfxState.h&#34;
+#include &#34;GlobalParams.h&#34;
+#include &#34;PDFDoc.h&#34;
+#include &#34;SplashBitmap.h&#34;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  if (size &lt; 20) {  
+    return 0;  
+  }  
+
+  // Set up a FuzzedDataProvider object with the given input data.
+  FuzzedDataProvider fdp(data, size);
+
+  // Initialize basic parameters needed to call drawChar(GfxState *, double, double, double, double, double, double, CharCode, int, Unicode *, int, GBool, GBool, GBool).
+  double x = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  double y = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  double dx = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  double dy = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  double originX = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  double originY = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  CharCode code = fdp.ConsumeIntegral&lt;CharCode&gt;();
+  int nBytes = fdp.ConsumeIntegral&lt;int&gt;();
+  Unicode u = fdp.ConsumeIntegral&lt;Unicode&gt;();
+  int uLen  = fdp.ConsumeIntegral&lt;int&gt;();
+  GBool abortCheckCbk = fdp.ConsumeIntegral&lt;GBool&gt;();
+  GBool abortCheckCbkData = fdp.ConsumeIntegral&lt;GBool&gt;();
+  GBool isDot = fdp.ConsumeIntegral&lt;GBool&gt;();
+
+  // Initialize necessary objects: PDFDoc, OutputDev and GfxState
+  globalParams = new GlobalParams(&#34;/usr/local/etc/xpdfrc&#34;);
+  globalParams-&gt;setupBaseFonts(&#34;/usr/share/ghostscript/9.25/Resource/cidfmap&#34;);
+
+  GString *password = new GString(&#34;password&#34;);
+  GString *owner
+&lt;/code&gt;
+
+Below is the error to fix:
+The code has the following build issues:
+&lt;error&gt;
+In file included from fuzz_JBIG2.cc:2:
+In file included from ../xpdf/SplashOutputDev.h:17:
+../xpdf/OutputDev.h:99:28: error: unknown type name &#39;Ref&#39;
+   99 |   virtual void startStream(Ref streamRef, GfxState *state) {}
+      |                            ^
+../xpdf/OutputDev.h:100:26: error: unknown type name &#39;Ref&#39;
+  100 |   virtual void endStream(Ref streamRef) {}
+      |                          ^
+../xpdf/OutputDev.h:156:61: error: unknown type name &#39;Object&#39;
+  156 |   virtual void tilingPatternFill(GfxState *state, Gfx *gfx, Object *strRef,
+      |                                                             ^
+../xpdf/OutputDev.h:157:37: error: unknown type name &#39;Dict&#39;
+  157 |                                  int paintType, int tilingType, Dict *resDict,
+      |                                                                 ^
+../xpdf/OutputDev.h:198:47: error: unknown type name &#39;Object&#39;
+  198 |   virtual void drawImageMask(GfxState *state, Object *ref, Stream *str,
+      |                                               ^
+../xpdf/OutputDev.h:202:6: error: unknown type name &#39;Object&#39;
+  202 |                                         Object *ref, Stream *str,
+      |                                         ^
+../xpdf/OutputDev.h:205:43: error: unknown type name &#39;Object&#39;
+  205 |   virtual void drawImage(GfxState *state, Object *ref, Stream *str,
+      |                                           ^
+../xpdf/OutputDev.h:208:49: error: unknown type name &#39;Object&#39;
+  208 |   virtual void drawMaskedImage(GfxState *state, Object *ref, Stream *str,
+      |                                                 ^
+../xpdf/OutputDev.h:211:11: error: unknown type name &#39;Object&#39;
+  211 |                                Object *maskRef, Stream *maskStr,
+      |                                ^
+../xpdf/OutputDev.h:214:53: error: unknown type name &#39;Object&#39;
+  214 |   virtual void drawSoftMaskedImage(GfxState *state, Object *ref, Stream *str,
+      |                                                     ^
+../xpdf/OutputDev.h:217:8: error: unknown type name &#39;Object&#39;
+  217 |                                    Object *maskRef, Stream *maskStr,
+      |                                    ^
+../xpdf/OutputDev.h:224:42: error: unknown type name &#39;Dict&#39;
+  224 |   virtual void opiBegin(GfxState *state, Dict *opiDict);
+      |                                          ^
+../xpdf/OutputDev.h:225:40: error: unknown type name &#39;Dict&#39;
+  225 |   virtual void opiEnd(GfxState *state, Dict *opiDict);
+      |                                        ^
+../xpdf/OutputDev.h:234:25: error: unknown type name &#39;Ref&#39;
+  234 |   virtual void drawForm(Ref id) {}
+      |                         ^
+../xpdf/OutputDev.h:254:62: error: unknown type name &#39;Dict&#39;
+  254 |   virtual void beginStructureItem(const char *tag, int mcid, Dict *dict) {}
+      |                                                              ^
+fuzz_JBIG2.cc:36:17: error: expected &#39;;&#39; at end of declaration
+   36 |   GString *owner
+      |                 ^
+      |                 ;
+fuzz_JBIG2.cc:36:17: error: expected &#39;}&#39;
+fuzz_JBIG2.cc:8:73: note: to match this &#39;{&#39;
+    8 | extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+      |                                                                         ^
+&lt;/error&gt;
+
+
+Below are instructions to assist you in fixing the error.
+&lt;instruction&gt;
+IMPORTANT: ALWAYS INCLUDE STANDARD LIBRARIES BEFORE PROJECT-SPECIFIC (xpdf) LIBRARIES. This order prevents errors like &#34;unknown type name&#34; for basic types. Additionally, include project-specific libraries that contain declarations before those thatuse these declared symbols.
+&lt;/instruction&gt;
+
+Fix code:
+1. Consider possible solutions for the issues listed above.
+2. Choose a solution that can maximize fuzzing result, which is utilizing the function under test and feeding it not null input.
+3. Apply the solutions to the original code.
+It&#39;s important to show the complete code, not only the fixed line.
+&lt;solution&gt;
+</pre>
+
+
+
+<h3>Code #1</h3>
+
+<pre>
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+#include &#34;Object.h&#34;
+#include &#34;Stream.h&#34;
+#include &#34;Dict.h&#34;
+#include &#34;Ref.h&#34;
+#include &#34;SplashOutputDev.h&#34;
+#include &#34;GfxState.h&#34;
+#include &#34;GlobalParams.h&#34;
+#include &#34;PDFDoc.h&#34;
+#include &#34;SplashBitmap.h&#34;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  if (size &lt; 20) {  
+    return 0;  
+  }  
+
+  // Set up a FuzzedDataProvider object with the given input data.
+  FuzzedDataProvider fdp(data, size);
+
+  // Initialize basic parameters needed to call drawChar(GfxState *, double, double, double, double, double, double, CharCode, int, Unicode *, int, GBool, GBool, GBool).
+  double x = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  double y = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  double dx = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  double dy = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  double originX = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  double originY = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  CharCode code = fdp.ConsumeIntegral&lt;CharCode&gt;();
+  int nBytes = fdp.ConsumeIntegral&lt;int&gt;();
+  Unicode u = fdp.ConsumeIntegral&lt;Unicode&gt;();
+  int uLen  = fdp.ConsumeIntegral&lt;int&gt;();
+  GBool abortCheckCbk = fdp.ConsumeIntegral&lt;GBool&gt;();
+  GBool abortCheckCbkData = fdp.ConsumeIntegral&lt;GBool&gt;();
+  GBool isDot = fdp.ConsumeIntegral&lt;GBool&gt;();
+
+  // Initialize necessary objects: PDFDoc, OutputDev and GfxState
+  globalParams = new GlobalParams(&#34;/usr/local/etc/xpdfrc&#34;);
+  globalParams-&gt;setupBaseFonts(&#34;/usr/share/ghostscript/9.25/Resource/cidfmap&#34;);
+
+  GString *password = new GString(&#34;password&#34;);
+  GString *ownerPassword = new GString(&#34;ownerPassword&#34;);
+}
+
+</pre>
+
+
+<h3>Fixer prompt #2</h3>
+<pre>
+
+Given the following C++ fuzz harness and its build error message, fix the code to make it build for fuzzing.
+
+If there is undeclared identifier or unknown type name error, fix it by finding and including the related libraries.
+
+MUST RETURN THE FULL CODE, INCLUDING UNCHANGED PARTS.
+
+Below is the code needs to be built:
+&lt;code&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+#include &#34;Object.h&#34;
+#include &#34;Stream.h&#34;
+#include &#34;Dict.h&#34;
+#include &#34;Ref.h&#34;
+#include &#34;SplashOutputDev.h&#34;
+#include &#34;GfxState.h&#34;
+#include &#34;GlobalParams.h&#34;
+#include &#34;PDFDoc.h&#34;
+#include &#34;SplashBitmap.h&#34;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  if (size &lt; 20) {  
+    return 0;  
+  }  
+
+  // Set up a FuzzedDataProvider object with the given input data.
+  FuzzedDataProvider fdp(data, size);
+
+  // Initialize basic parameters needed to call drawChar(GfxState *, double, double, double, double, double, double, CharCode, int, Unicode *, int, GBool, GBool, GBool).
+  double x = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  double y = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  double dx = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  double dy = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  double originX = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  double originY = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  CharCode code = fdp.ConsumeIntegral&lt;CharCode&gt;();
+  int nBytes = fdp.ConsumeIntegral&lt;int&gt;();
+  Unicode u = fdp.ConsumeIntegral&lt;Unicode&gt;();
+  int uLen  = fdp.ConsumeIntegral&lt;int&gt;();
+  GBool abortCheckCbk = fdp.ConsumeIntegral&lt;GBool&gt;();
+  GBool abortCheckCbkData = fdp.ConsumeIntegral&lt;GBool&gt;();
+  GBool isDot = fdp.ConsumeIntegral&lt;GBool&gt;();
+
+  // Initialize necessary objects: PDFDoc, OutputDev and GfxState
+  globalParams = new GlobalParams(&#34;/usr/local/etc/xpdfrc&#34;);
+  globalParams-&gt;setupBaseFonts(&#34;/usr/share/ghostscript/9.25/Resource/cidfmap&#34;);
+
+  GString *password = new GString(&#34;password&#34;);
+  GString *ownerPassword = new GString(&#34;ownerPassword&#34;);
+}
+&lt;/code&gt;
+
+Below is the error to fix:
+The code has the following build issues:
+&lt;error&gt;
+fuzz_JBIG2.cc:5:10: fatal error: &#39;Ref.h&#39; file not found
+    5 | #include &#34;Ref.h&#34;
+      |          ^~~~~~~
+&lt;/error&gt;
+
+
+Below are instructions to assist you in fixing the error.
+&lt;instruction&gt;
+IMPORTANT: DO NOT include the header file Ref.h in the generated fuzz target again, the file does not exist in the project-under-test.
+If the non-existent &lt;filepath&gt;Ref.h&lt;/filepath&gt; was included for the declaration of &lt;code&gt;void SplashOutputDev::drawChar(GfxState *, double, double, double, double, double, double, CharCode, int, Unicode *, int, GBool, GBool, GBool)&lt;/code&gt;, you must replace it with the EXACT path of the actual file &lt;filepath&gt;#include &#34;/src/xpdf-4.05/xpdf/OutputDev.h&#34;&lt;/filepath&gt;. For example:
+&lt;code&gt;
+#include &#34;#include &#34;/src/xpdf-4.05/xpdf/OutputDev.h&#34;&#34;
+&lt;/code&gt;
+Otherwise, consider replacing it with some of the following statementsthat may be correct alternatives:
+&lt;code&gt;
+#include &#34;/src/xpdf-4.05/xpdf/XRef.h&#34;
+#include &#34;/src/freetype/src/bdf/bdf.h&#34;
+#include &#34;/src/freetype/src/pcf/pcf.h&#34;
+#include &#34;/src/freetype/src/sdf/ftsdf.h&#34;
+#include &#34;/src/freetype/src/psaux/psft.h&#34;
+&lt;/code&gt;
+
+&lt;/instruction&gt;
+
+Fix code:
+1. Consider possible solutions for the issues listed above.
+2. Choose a solution that can maximize fuzzing result, which is utilizing the function under test and feeding it not null input.
+3. Apply the solutions to the original code.
+It&#39;s important to show the complete code, not only the fixed line.
+&lt;solution&gt;
+</pre>
+
+
+
+<h3>Code #2</h3>
+
+<pre>
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+#include &#34;Object.h&#34;
+#include &#34;Stream.h&#34;
+#include &#34;Dict.h&#34;
+#include &#34;/src/xpdf-4.05/xpdf/XRef.h&#34;
+#include &#34;SplashOutputDev.h&#34;
+#include &#34;GfxState.h&#34;
+#include &#34;GlobalParams.h&#34;
+#include &#34;PDFDoc.h&#34;
+#include &#34;SplashBitmap.h&#34;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  if (size &lt; 20) {  
+    return 0;  
+  }  
+
+  // Set up a FuzzedDataProvider object with the given input data.
+  FuzzedDataProvider fdp(data, size);
+
+  // Initialize basic parameters needed to call drawChar(GfxState *, double, double, double, double, double, double, CharCode, int, Unicode *, int, GBool, GBool, GBool).
+  double x = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  double y = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  double dx = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  double dy = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  double originX = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  double originY = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  CharCode code = fdp.ConsumeIntegral&lt;CharCode&gt;();
+  int nBytes = fdp.ConsumeIntegral&lt;int&gt;();
+  Unicode u = fdp.ConsumeIntegral&lt;Unicode&gt;();
+  int uLen  = fdp.ConsumeIntegral&lt;int&gt;();
+  GBool abortCheckCbk = fdp.ConsumeIntegral&lt;GBool&gt;();
+  GBool abortCheckCbkData = fdp.ConsumeIntegral&lt;GBool&gt;();
+  GBool isDot = fdp.ConsumeIntegral&lt;GBool&gt;();
+
+  // Initialize necessary objects: PDFDoc, OutputDev and GfxState
+  globalParams = new GlobalParams(&#34;/usr/local/etc/xpdfrc&#34;);
+  globalParams-&gt;setupBaseFonts(&#34;/usr/share/ghostscript/9.25/Resource/cidfmap&#34;);
+
+  GString *password = new GString(&#34;password&#34;);
+  GString *ownerPassword = new GString(&#34;ownerPassword&#34;);
+}
+</pre>
+
+
+<h3>Fixer prompt #3</h3>
+<pre>
+
+Given the following C++ fuzz harness and its build error message, fix the code to make it build for fuzzing.
+
+If there is undeclared identifier or unknown type name error, fix it by finding and including the related libraries.
+
+MUST RETURN THE FULL CODE, INCLUDING UNCHANGED PARTS.
+
+Below is the code needs to be built:
+&lt;code&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+#include &#34;Object.h&#34;
+#include &#34;Stream.h&#34;
+#include &#34;Dict.h&#34;
+#include &#34;/src/xpdf-4.05/xpdf/XRef.h&#34;
+#include &#34;SplashOutputDev.h&#34;
+#include &#34;GfxState.h&#34;
+#include &#34;GlobalParams.h&#34;
+#include &#34;PDFDoc.h&#34;
+#include &#34;SplashBitmap.h&#34;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  if (size &lt; 20) {  
+    return 0;  
+  }  
+
+  // Set up a FuzzedDataProvider object with the given input data.
+  FuzzedDataProvider fdp(data, size);
+
+  // Initialize basic parameters needed to call drawChar(GfxState *, double, double, double, double, double, double, CharCode, int, Unicode *, int, GBool, GBool, GBool).
+  double x = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  double y = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  double dx = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  double dy = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  double originX = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  double originY = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  CharCode code = fdp.ConsumeIntegral&lt;CharCode&gt;();
+  int nBytes = fdp.ConsumeIntegral&lt;int&gt;();
+  Unicode u = fdp.ConsumeIntegral&lt;Unicode&gt;();
+  int uLen  = fdp.ConsumeIntegral&lt;int&gt;();
+  GBool abortCheckCbk = fdp.ConsumeIntegral&lt;GBool&gt;();
+  GBool abortCheckCbkData = fdp.ConsumeIntegral&lt;GBool&gt;();
+  GBool isDot = fdp.ConsumeIntegral&lt;GBool&gt;();
+
+  // Initialize necessary objects: PDFDoc, OutputDev and GfxState
+  globalParams = new GlobalParams(&#34;/usr/local/etc/xpdfrc&#34;);
+  globalParams-&gt;setupBaseFonts(&#34;/usr/share/ghostscript/9.25/Resource/cidfmap&#34;);
+
+  GString *password = new GString(&#34;password&#34;);
+  GString *ownerPassword = new GString(&#34;ownerPassword&#34;);
+}
+&lt;/code&gt;
+
+Below is the error to fix:
+The code can build successfully but has a runtime issue: Fuzzing crashed immediately at runtime (ASAN-ERROR: AddressSanitizer: unknown-crash on address 0x7fb78624fa28 at pc 0x563f4291a0f8 bp 0x7ffcbd0b8370 sp 0x7ffcbd0b8368), indicating fuzz target code for invoking the function under test is incorrect or unrobust.
+&lt;error&gt;
+Crash stacks:
+Stack 0:
+#0 0x563f4291a0f7 in ConsumeIntegralInRange&lt;unsigned int&gt; /usr/local/lib/clang/18/include/fuzzer/FuzzedDataProvider.h:224:5
+#1 0x563f4291a0f7 in ConsumeIntegral&lt;unsigned int&gt; /usr/local/lib/clang/18/include/fuzzer/FuzzedDataProvider.h:195:10
+#2 0x563f4291a0f7 in LLVMFuzzerTestOneInput /src/xpdf-4.05/build/fuzz_JBIG2.cc:27:23
+#3 0x563f427cc560 in fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:614:13
+#4 0x563f427cbd85 in fuzzer::Fuzzer::RunOne(unsigned char const*, unsigned long, bool, fuzzer::InputInfo*, bool, bool*) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:516:7
+#5 0x563f427cd555 in fuzzer::Fuzzer::MutateAndTestOne() /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:760:19
+#6 0x563f427ce345 in fuzzer::Fuzzer::Loop(std::__Fuzzer::vector&lt;fuzzer::SizedFile, std::__Fuzzer::allocator&lt;fuzzer::SizedFile&gt;&gt;&amp;) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:905:5
+#7 0x563f427bc656 in fuzzer::FuzzerDriver(int*, char***, int (*)(unsigned char const*, unsigned long)) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:914:6
+#8 0x563f427e8b82 in main /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMain.cpp:20:10
+#9 0x7fb786a1f082 in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x24082) (BuildId: 0702430aef5fa3dda43986563e9ffcc47efbd75e)
+#10 0x563f427ad7cd in _start (/out/fuzz_JBIG2+0x1397cd)
+&lt;/error&gt;
+
+
+
+
+Fix code:
+1. Consider possible solutions for the issues listed above.
+2. Choose a solution that can maximize fuzzing result, which is utilizing the function under test and feeding it not null input.
+3. Apply the solutions to the original code.
+It&#39;s important to show the complete code, not only the fixed line.
+&lt;solution&gt;
+</pre>
+
+
+
+<h3>Code #3</h3>
+
+<pre>
+The error message indicates that the crash is occurring when trying to consume an integral value from the FuzzedDataProvider. This could be because the data being fed to the fuzzer is not large enough to consume the required amount of data. 
+
+A potential fix could be to add a check to ensure that the FuzzedDataProvider has enough data left before trying to consume the integral. 
+
+Here is the fixed code:
+
+```cpp
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+#include &#34;Object.h&#34;
+#include &#34;Stream.h&#34;
+#include &#34;Dict.h&#34;
+#include &#34;/src/xpdf-4.05/xpdf/XRef.h&#34;
+#include &#34;SplashOutputDev.h&#34;
+#include &#34;GfxState.h&#34;
+#include &#34;GlobalParams.h&#34;
+#include &#34;PDFDoc.h&#34;
+#include &#34;SplashBitmap.h&#34;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  if (size &lt; 20) {  
+    return 0;  
+  }  
+
+  // Set up a FuzzedDataProvider object with the given input data.
+  FuzzedDataProvider fdp(data, size);
+
+  // Check if there is enough data left to consume
+  if (fdp.remaining_bytes() &lt; sizeof(double) * 6 + sizeof(CharCode) + sizeof(int) * 3 + sizeof(GBool) * 3) {
+    return 0;
+  }
+
+  // Initialize basic parameters needed to call drawChar(GfxState *, double, double, double, double, double, double, CharCode, int, Unicode *, int, GBool, GBool, GBool).
+  double x = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  double y = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  double dx = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  double dy = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  double originX = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  double originY = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  CharCode code = fdp.ConsumeIntegral&lt;CharCode&gt;();
+  int nBytes = fdp.ConsumeIntegral&lt;int&gt;();
+  Unicode u = fdp.ConsumeIntegral&lt;Unicode&gt;();
+  int uLen  = fdp.ConsumeIntegral&lt;int&gt;();
+  GBool abortCheckCbk = fdp.ConsumeIntegral&lt;GBool&gt;();
+  GBool abortCheckCbkData = fdp.ConsumeIntegral&lt;GBool&gt;();
+  GBool isDot = fdp.ConsumeIntegral&lt;GBool&gt;();
+
+  // Initialize necessary objects: PDFDoc, OutputDev and GfxState
+  globalParams = new GlobalParams(&#34;/usr/local/etc/xpdfrc&#34;);
+  globalParams-&gt;setupBaseFonts(&#34;/usr/share/ghostscript/9.25/Resource/cidfmap&#34;);
+
+  GString *password = new GString(&#34;password&#34;);
+  GString *ownerPassword = new GString(&#34;ownerPassword&#34;);
+}
+```
+
+This fix adds a check to ensure that there is enough data left in the FuzzedDataProvider before trying to consume the integral. This will prevent the fuzzer from crashing when there is not enough data left.
+</pre>
+
+
+<h3>Fixer prompt #4</h3>
+<pre>
+
+Given the following C++ fuzz harness and its build error message, fix the code to make it build for fuzzing.
+
+If there is undeclared identifier or unknown type name error, fix it by finding and including the related libraries.
+
+MUST RETURN THE FULL CODE, INCLUDING UNCHANGED PARTS.
+
+Below is the code needs to be built:
+&lt;code&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+#include &#34;Object.h&#34;
+#include &#34;Stream.h&#34;
+#include &#34;Dict.h&#34;
+#include &#34;/src/xpdf-4.05/xpdf/XRef.h&#34;
+#include &#34;SplashOutputDev.h&#34;
+#include &#34;GfxState.h&#34;
+#include &#34;GlobalParams.h&#34;
+#include &#34;PDFDoc.h&#34;
+#include &#34;SplashBitmap.h&#34;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  if (size &lt; 20) {  
+    return 0;  
+  }  
+
+  // Set up a FuzzedDataProvider object with the given input data.
+  FuzzedDataProvider fdp(data, size);
+
+  // Check if there is enough data left to consume
+  if (fdp.remaining_bytes() &lt; sizeof(double) * 6 + sizeof(CharCode) + sizeof(int) * 3 + sizeof(GBool) * 3) {
+    return 0;
+  }
+
+  // Initialize basic parameters needed to call drawChar(GfxState *, double, double, double, double, double, double, CharCode, int, Unicode *, int, GBool, GBool, GBool).
+  double x = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  double y = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  double dx = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  double dy = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  double originX = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  double originY = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  CharCode code = fdp.ConsumeIntegral&lt;CharCode&gt;();
+  int nBytes = fdp.ConsumeIntegral&lt;int&gt;();
+  Unicode u = fdp.ConsumeIntegral&lt;Unicode&gt;();
+  int uLen  = fdp.ConsumeIntegral&lt;int&gt;();
+  GBool abortCheckCbk = fdp.ConsumeIntegral&lt;GBool&gt;();
+  GBool abortCheckCbkData = fdp.ConsumeIntegral&lt;GBool&gt;();
+  GBool isDot = fdp.ConsumeIntegral&lt;GBool&gt;();
+
+  // Initialize necessary objects: PDFDoc, OutputDev and GfxState
+  globalParams = new GlobalParams(&#34;/usr/local/etc/xpdfrc&#34;);
+  globalParams-&gt;setupBaseFonts(&#34;/usr/share/ghostscript/9.25/Resource/cidfmap&#34;);
+
+  GString *password = new GString(&#34;password&#34;);
+  GString *ownerPassword = new GString(&#34;ownerPassword&#34;);
+}
+&lt;/code&gt;
+
+Below is the error to fix:
+The code can build successfully but has a runtime issue: Fuzzing crashed immediately at runtime (ASAN-ERROR: AddressSanitizer: unknown-crash on address 0x000000000020 at pc 0x55b01dc8d139 bp 0x7ffcd3d8c130 sp 0x7ffcd3d8c128), indicating fuzz target code for invoking the function under test is incorrect or unrobust.
+&lt;error&gt;
+Crash stacks:
+Stack 0:
+#0 0x55b01dc8d138 in FuzzedDataProvider /usr/local/lib/clang/18/include/fuzzer/FuzzedDataProvider.h:36:9
+#1 0x55b01dc8d138 in LLVMFuzzerTestOneInput /src/xpdf-4.05/build/fuzz_JBIG2.cc:18:22
+#2 0x55b01db3f560 in fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:614:13
+#3 0x55b01db3ed85 in fuzzer::Fuzzer::RunOne(unsigned char const*, unsigned long, bool, fuzzer::InputInfo*, bool, bool*) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:516:7
+#4 0x55b01db40555 in fuzzer::Fuzzer::MutateAndTestOne() /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:760:19
+#5 0x55b01db41345 in fuzzer::Fuzzer::Loop(std::__Fuzzer::vector&lt;fuzzer::SizedFile, std::__Fuzzer::allocator&lt;fuzzer::SizedFile&gt;&gt;&amp;) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:905:5
+#6 0x55b01db2f656 in fuzzer::FuzzerDriver(int*, char***, int (*)(unsigned char const*, unsigned long)) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:914:6
+#7 0x55b01db5bb82 in main /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMain.cpp:20:10
+#8 0x7f8534c01082 in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x24082) (BuildId: 0702430aef5fa3dda43986563e9ffcc47efbd75e)
+#9 0x55b01db207cd in _start (/out/fuzz_JBIG2+0x1397cd)
+&lt;/error&gt;
+
+
+
+
+Fix code:
+1. Consider possible solutions for the issues listed above.
+2. Choose a solution that can maximize fuzzing result, which is utilizing the function under test and feeding it not null input.
+3. Apply the solutions to the original code.
+It&#39;s important to show the complete code, not only the fixed line.
+&lt;solution&gt;
+</pre>
+
+
+
+<h3>Code #4</h3>
+
+<pre>
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+#include &#34;Object.h&#34;
+#include &#34;Stream.h&#34;
+#include &#34;Dict.h&#34;
+#include &#34;/src/xpdf-4.05/xpdf/XRef.h&#34;
+#include &#34;SplashOutputDev.h&#34;
+#include &#34;GfxState.h&#34;
+#include &#34;GlobalParams.h&#34;
+#include &#34;PDFDoc.h&#34;
+#include &#34;SplashBitmap.h&#34;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  if (size &lt; 20) {  
+    return 0;  
+  }  
+
+  // Set up a FuzzedDataProvider object with the given input data.
+  FuzzedDataProvider fdp(data, size);
+
+  // Check if there is enough data left to consume
+  if (fdp.remaining_bytes() &lt; sizeof(double) * 6 + sizeof(CharCode) + sizeof(int) * 3 + sizeof(GBool) * 3) {
+    return 0;
+  }
+
+  // Initialize basic parameters needed to call drawChar(GfxState *, double, double, double, double, double, double, CharCode, int, Unicode *, int, GBool, GBool, GBool).
+  double x = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  double y = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  double dx = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  double dy = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  double originX = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  double originY = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  CharCode code = fdp.ConsumeIntegral&lt;CharCode&gt;();
+  int nBytes = fdp.ConsumeIntegral&lt;int&gt;();
+  Unicode u = fdp.ConsumeIntegral&lt;Unicode&gt;();
+  int uLen  = fdp.ConsumeIntegral&lt;int&gt;();
+  GBool abortCheckCbk = fdp.ConsumeIntegral&lt;GBool&gt;();
+  GBool abortCheckCbkData = fdp.ConsumeIntegral&lt;GBool&gt;();
+  GBool isDot = fdp.ConsumeIntegral&lt;GBool&gt;();
+
+  // Initialize necessary objects: PDFDoc, OutputDev and GfxState
+  globalParams = new GlobalParams(&#34;/usr/local/etc/xpdfrc&#34;);
+  globalParams-&gt;setupBaseFonts(&#34;/usr/share/ghostscript/9.25/Resource/cidfmap&#34;);
+
+  GString *password = new GString(&#34;password&#34;);
+  GString *ownerPassword = new GString(&#34;ownerPassword&#34;);
+  
+  // Add missing lines to create PDFDoc, OutputDev and GfxState objects
+  PDFDoc *doc = new PDFDoc(new GString(&#34;dummy.pdf&#34;), password, ownerPassword);
+  SplashOutputDev *outputDev = new SplashOutputDev(splashModeRGB8, 4, gFalse, gFalse);
+  outputDev-&gt;startDoc(doc-&gt;getXRef());
+  GfxState *state = new GfxState(72, 72, doc-&gt;getPageCropBox(1), 0, gFalse);
+  
+  // Call the function under test
+  outputDev-&gt;drawChar(state, x, y, dx, dy, originX, originY, code, nBytes, &amp;u, uLen, abortCheckCbk, abortCheckCbkData, isDot);
+  
+  // Clean up
+  delete state;
+  delete outputDev;
+  delete doc;
+  delete ownerPassword;
+  delete password;
+  delete globalParams;
+
+  return 0;
+}
+&lt;/solution&gt;
+</pre>
+
+
+<h3>Fixer prompt #5</h3>
+<pre>
+
+Given the following C++ fuzz harness and its build error message, fix the code to make it build for fuzzing.
+
+If there is undeclared identifier or unknown type name error, fix it by finding and including the related libraries.
+
+MUST RETURN THE FULL CODE, INCLUDING UNCHANGED PARTS.
+
+Below is the code needs to be built:
+&lt;code&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+#include &#34;Object.h&#34;
+#include &#34;Stream.h&#34;
+#include &#34;Dict.h&#34;
+#include &#34;/src/xpdf-4.05/xpdf/XRef.h&#34;
+#include &#34;SplashOutputDev.h&#34;
+#include &#34;GfxState.h&#34;
+#include &#34;GlobalParams.h&#34;
+#include &#34;PDFDoc.h&#34;
+#include &#34;SplashBitmap.h&#34;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  if (size &lt; 20) {  
+    return 0;  
+  }  
+
+  // Set up a FuzzedDataProvider object with the given input data.
+  FuzzedDataProvider fdp(data, size);
+
+  // Check if there is enough data left to consume
+  if (fdp.remaining_bytes() &lt; sizeof(double) * 6 + sizeof(CharCode) + sizeof(int) * 3 + sizeof(GBool) * 3) {
+    return 0;
+  }
+
+  // Initialize basic parameters needed to call drawChar(GfxState *, double, double, double, double, double, double, CharCode, int, Unicode *, int, GBool, GBool, GBool).
+  double x = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  double y = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  double dx = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  double dy = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  double originX = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  double originY = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  CharCode code = fdp.ConsumeIntegral&lt;CharCode&gt;();
+  int nBytes = fdp.ConsumeIntegral&lt;int&gt;();
+  Unicode u = fdp.ConsumeIntegral&lt;Unicode&gt;();
+  int uLen  = fdp.ConsumeIntegral&lt;int&gt;();
+  GBool abortCheckCbk = fdp.ConsumeIntegral&lt;GBool&gt;();
+  GBool abortCheckCbkData = fdp.ConsumeIntegral&lt;GBool&gt;();
+  GBool isDot = fdp.ConsumeIntegral&lt;GBool&gt;();
+
+  // Initialize necessary objects: PDFDoc, OutputDev and GfxState
+  globalParams = new GlobalParams(&#34;/usr/local/etc/xpdfrc&#34;);
+  globalParams-&gt;setupBaseFonts(&#34;/usr/share/ghostscript/9.25/Resource/cidfmap&#34;);
+
+  GString *password = new GString(&#34;password&#34;);
+  GString *ownerPassword = new GString(&#34;ownerPassword&#34;);
+  
+  // Add missing lines to create PDFDoc, OutputDev and GfxState objects
+  PDFDoc *doc = new PDFDoc(new GString(&#34;dummy.pdf&#34;), password, ownerPassword);
+  SplashOutputDev *outputDev = new SplashOutputDev(splashModeRGB8, 4, gFalse, gFalse);
+  outputDev-&gt;startDoc(doc-&gt;getXRef());
+  GfxState *state = new GfxState(72, 72, doc-&gt;getPageCropBox(1), 0, gFalse);
+  
+  // Call the function under test
+  outputDev-&gt;drawChar(state, x, y, dx, dy, originX, originY, code, nBytes, &amp;u, uLen, abortCheckCbk, abortCheckCbkData, isDot);
+  
+  // Clean up
+  delete state;
+  delete outputDev;
+  delete doc;
+  delete ownerPassword;
+  delete password;
+  delete globalParams;
+
+  return 0;
+}
+&lt;/code&gt;
+
+Below is the error to fix:
+The code has the following build issues:
+&lt;error&gt;
+fuzz_JBIG2.cc:51:47: error: no member named &#39;getPageCropBox&#39; in &#39;PDFDoc&#39;
+   51 |   GfxState *state = new GfxState(72, 72, doc-&gt;getPageCropBox(1), 0, gFalse);
+      |                                          ~~~  ^
+&lt;/error&gt;
+
+
+
+
+Fix code:
+1. Consider possible solutions for the issues listed above.
+2. Choose a solution that can maximize fuzzing result, which is utilizing the function under test and feeding it not null input.
+3. Apply the solutions to the original code.
+It&#39;s important to show the complete code, not only the fixed line.
+&lt;solution&gt;
+</pre>
+
+
+
+<h3>Code #5</h3>
+
+<pre>
+&lt;code&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+#include &#34;Object.h&#34;
+#include &#34;Stream.h&#34;
+#include &#34;Dict.h&#34;
+#include &#34;/src/xpdf-4.05/xpdf/XRef.h&#34;
+#include &#34;SplashOutputDev.h&#34;
+#include &#34;GfxState.h&#34;
+#include &#34;GlobalParams.h&#34;
+#include &#34;PDFDoc.h&#34;
+#include &#34;SplashBitmap.h&#34;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  if (size &lt; 20) {  
+    return 0;  
+  }  
+
+  // Set up a FuzzedDataProvider object with the given input data.
+  FuzzedDataProvider fdp(data, size);
+
+  // Check if there is enough data left to consume
+  if (fdp.remaining_bytes() &lt; sizeof(double) * 6 + sizeof(CharCode) + sizeof(int) * 3 + sizeof(GBool) * 3) {
+    return 0;
+  }
+
+  // Initialize basic parameters needed to call drawChar(GfxState *, double, double, double, double, double, double, CharCode, int, Unicode *, int, GBool, GBool, GBool).
+  double x = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  double y = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  double dx = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  double dy = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  double originX = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  double originY = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  CharCode code = fdp.ConsumeIntegral&lt;CharCode&gt;();
+  int nBytes = fdp.ConsumeIntegral&lt;int&gt;();
+  Unicode u = fdp.ConsumeIntegral&lt;Unicode&gt;();
+  int uLen  = fdp.ConsumeIntegral&lt;int&gt;();
+  GBool abortCheckCbk = fdp.ConsumeIntegral&lt;GBool&gt;();
+  GBool abortCheckCbkData = fdp.ConsumeIntegral&lt;GBool&gt;();
+  GBool isDot = fdp.ConsumeIntegral&lt;GBool&gt;();
+
+  // Initialize necessary objects: PDFDoc, OutputDev and GfxState
+  globalParams = new GlobalParams(&#34;/usr/local/etc/xpdfrc&#34;);
+  globalParams-&gt;setupBaseFonts(&#34;/usr/share/ghostscript/9.25/Resource/cidfmap&#34;);
+
+  GString *password = new GString(&#34;password&#34;);
+  GString *ownerPassword = new GString(&#34;ownerPassword&#34;);
+  
+  // Add missing lines to create PDFDoc, OutputDev and GfxState objects
+  PDFDoc *doc = new PDFDoc(new GString(&#34;dummy.pdf&#34;), password, ownerPassword);
+  SplashOutputDev *outputDev = new SplashOutputDev(splashModeRGB8, 4, gFalse, gFalse);
+  outputDev-&gt;startDoc(doc-&gt;getXRef());
+  GfxState *state = new GfxState(72, 72, doc-&gt;getCatalog()-&gt;getPage(1)-&gt;getCropBox(), 0, gFalse);
+  
+  // Call the function under test
+  outputDev-&gt;drawChar(state, x, y, dx, dy, originX, originY, code, nBytes, &amp;u, uLen, abortCheckCbk, abortCheckCbkData, isDot);
+  
+  // Clean up
+  delete state;
+  delete outputDev;
+  delete doc;
+  delete ownerPassword;
+  delete password;
+  delete globalParams;
+
+  return 0;
+}
+&lt;/code&gt;
+&lt;/solution&gt;
+</pre>
+
+
+<h2>Logs</h2>
+<pre>
+Fixing /home/chyun/oss-fuzz-gen/results4/output-xpdf-_zn15splashoutputdev8drawcharep8gfxstateddddddjipjiiii/fixed_targets/02.cc with gpt-4, attempt 1.
+Fixing /home/chyun/oss-fuzz-gen/results4/output-xpdf-_zn15splashoutputdev8drawcharep8gfxstateddddddjipjiiii/fixed_targets/02.cc with gpt-4, attempt 2.
+Fixing /home/chyun/oss-fuzz-gen/results4/output-xpdf-_zn15splashoutputdev8drawcharep8gfxstateddddddjipjiiii/fixed_targets/02.cc with gpt-4, attempt 3.
+Fixing /home/chyun/oss-fuzz-gen/results4/output-xpdf-_zn15splashoutputdev8drawcharep8gfxstateddddddjipjiiii/fixed_targets/02.cc with gpt-4, attempt 4.
+Fixing /home/chyun/oss-fuzz-gen/results4/output-xpdf-_zn15splashoutputdev8drawcharep8gfxstateddddddjipjiiii/fixed_targets/02.cc with gpt-4, attempt 5.
+Successfully built /home/chyun/oss-fuzz-gen/results4/output-xpdf-_zn15splashoutputdev8drawcharep8gfxstateddddddjipjiiii/fixed_targets/02.cc with gpt-4 in 5 iterations of fixing.
+Triaging the crash related to /home/chyun/oss-fuzz-gen/results4/output-xpdf-_zn15splashoutputdev8drawcharep8gfxstateddddddjipjiiii/fixed_targets/02.cc with gpt-4.
+Warning: Failed to fix semantic error FP_NEAR_INIT_CRASH in xpdf-zn15splashoutputdev8drawcharep8gfxstateddddddjipjiiii-02.
+
+</pre>
+
+<h2>Run logs</h2>
+<pre>
+INFO:__main__:Running: docker run --privileged --shm-size=2g --platform linux/amd64 --rm -e FUZZING_ENGINE=libfuzzer -e SANITIZER=address -e RUN_FUZZER_MODE=interactive -e HELPER=True -v /home/chyun/oss-fuzz-gen/results4/output-xpdf-_zn15splashoutputdev8drawcharep8gfxstateddddddjipjiiii/corpora/02.cc:/tmp/fuzz_JBIG2_corpus -v /tmp/tmpdu_u7a3b/build/out/xpdf-zn15splashoutputdev8drawcharep8gfxstateddddddjipjiiii-02:/out -t gcr.io/oss-fuzz-base/base-runner run_fuzzer fuzz_JBIG2 -print_final_stats=1 -max_total_time=30 -len_control=0 -timeout=30.
+vm.mmap_rnd_bits = 28
+rm: cannot remove &#39;/tmp/fuzz_JBIG2_corpus&#39;: Device or resource busy
+/out/fuzz_JBIG2 -rss_limit_mb=2560 -timeout=25 -print_final_stats=1 -max_total_time=30 -len_control=0 -timeout=30 /tmp/fuzz_JBIG2_corpus -detect_leaks=0 &lt; /dev/null
+INFO: Running with entropic power schedule (0xFF, 100).
+INFO: Seed: 4148343025
+INFO: Loaded 1 modules   (57786 inline 8-bit counters): 57786 [0x5621e4423b78, 0x5621e4431d32), 
+INFO: Loaded 1 PC tables (57786 PCs): 57786 [0x5621e4431d38,0x5621e45138d8), 
+INFO:        0 files found in /tmp/fuzz_JBIG2_corpus
+INFO: -max_len is not provided; libFuzzer will not generate inputs larger than 4096 bytes
+INFO: A corpus is not provided, starting from an empty corpus
+#2	INITED cov: 2 ft: 2 corp: 1/1b exec/s: 0 rss: 35Mb
+Config Error: No display font for &#39;Courier&#39;
+Config Error: No display font for &#39;Courier-Bold&#39;
+Config Error: No display font for &#39;Courier-BoldOblique&#39;
+Config Error: No display font for &#39;Courier-Oblique&#39;
+Config Error: No display font for &#39;Helvetica&#39;
+Config Error: No display font for &#39;Helvetica-Bold&#39;
+Config Error: No display font for &#39;Helvetica-BoldOblique&#39;
+Config Error: No display font for &#39;Helvetica-Oblique&#39;
+Config Error: No display font for &#39;Symbol&#39;
+Config Error: No display font for &#39;Times-Bold&#39;
+Config Error: No display font for &#39;Times-BoldItalic&#39;
+Config Error: No display font for &#39;Times-Italic&#39;
+Config Error: No display font for &#39;Times-Roman&#39;
+Config Error: No display font for &#39;ZapfDingbats&#39;
+I/O Error: Couldn&#39;t open file &#39;dummy.pdf&#39;
+AddressSanitizer:DEADLYSIGNAL
+=================================================================
+[1m[31m==16==ERROR: AddressSanitizer: SEGV on unknown address 0x000000000000 (pc 0x5621e3f92f28 bp 0x7ffdb36f1f60 sp 0x7ffdb36f1f00 T0)
+[1m[0m==16==The signal is caused by a READ memory access.
+==16==Hint: address points to the zero page.
+SCARINESS: 10 (null-deref)
+    #0 0x5621e3f92f28 in splashColorCopy /src/xpdf-4.05/splash/SplashTypes.h:85:13
+    #1 0x5621e3f92f28 in SplashOutputDev::SplashOutputDev(SplashColorMode, int, int, unsigned char*, int, int) /src/xpdf-4.05/xpdf/SplashOutputDev.cc:632:3
+    #2 0x5621e3cf7c99 in LLVMFuzzerTestOneInput /src/xpdf-4.05/build/fuzz_JBIG2.cc:49:36
+    #3 0x5621e3ba9660 in fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:614:13
+    #4 0x5621e3ba8e85 in fuzzer::Fuzzer::RunOne(unsigned char const*, unsigned long, bool, fuzzer::InputInfo*, bool, bool*) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:516:7
+    #5 0x5621e3baa655 in fuzzer::Fuzzer::MutateAndTestOne() /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:760:19
+    #6 0x5621e3bab445 in fuzzer::Fuzzer::Loop(std::__Fuzzer::vector&lt;fuzzer::SizedFile, std::__Fuzzer::allocator&lt;fuzzer::SizedFile&gt;&gt;&amp;) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:905:5
+    #7 0x5621e3b99756 in fuzzer::FuzzerDriver(int*, char***, int (*)(unsigned char const*, unsigned long)) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:914:6
+    #8 0x5621e3bc5c82 in main /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMain.cpp:20:10
+    #9 0x7f2b32c30082 in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x24082) (BuildId: 0702430aef5fa3dda43986563e9ffcc47efbd75e)
+    #10 0x5621e3b8a8cd in _start (/out/fuzz_JBIG2+0x29f8cd)
+
+DEDUP_TOKEN: splashColorCopy--SplashOutputDev::SplashOutputDev(SplashColorMode, int, int, unsigned char*, int, int)--LLVMFuzzerTestOneInput
+AddressSanitizer can not provide additional info.
+SUMMARY: AddressSanitizer: SEGV /src/xpdf-4.05/splash/SplashTypes.h:85:13 in splashColorCopy
+==16==ABORTING
+MS: 4 InsertByte-InsertByte-CopyPart-InsertRepeatedBytes-; base unit: adc83b19e793491b1c6ea0fd8b46cd9f32e592fc
+0xa,0xa5,0x23,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,
+\012\245#\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377
+artifact_prefix=&#39;./&#39;; Test unit written to ./crash-8cefd9074f1e80a599f7d483e3da9025b5dd528b
+Base64: CqUj//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////8=
+stat::number_of_executed_units: 6
+stat::average_exec_per_sec:     0
+stat::new_units_added:          0
+stat::slowest_unit_time_sec:    0
+stat::peak_rss_mb:              40
+
+</pre>
+
+
+</body>

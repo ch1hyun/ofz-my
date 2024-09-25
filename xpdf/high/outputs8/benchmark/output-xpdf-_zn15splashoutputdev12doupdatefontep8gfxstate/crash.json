@@ -1,0 +1,43 @@
+{
+    "samples": [
+
+    {
+        "benchmark": "output-xpdf-_zn15splashoutputdev12doupdatefontep8gfxstate",
+        "sample": "01",
+        "status": "Done",
+        "compiles": "True",
+        "crashes": "False",
+        "crash_reason": "NO_SEMANTIC_ERR",
+        "bug": "True",
+        "coverage": "0.00",
+        "coverage_diff": "0.0",
+        "coverage_report": "#",
+        "stacktrace": "/stacktrace",
+        "target_binary": "/target_binary",
+        "reproducer": "/artifacts",
+        "run_log": "run.log",
+        "source_code": "#include <fuzzer/FuzzedDataProvider.h>\\n\\n#include <stddef.h>\\n#include <stdint.h>\\n\\n#include \"GfxState.h\"\\n#include \"GlobalParams.h\"\\n#include \"Object.h\"\\n#include \"PDFDoc.h\"\\n#include \"Splash.h\"\\n#include \"SplashBitmap.h\"\\n#include \"SplashOutputDev.h\"\\n#include \"GString.h\"\\n\\nextern \"C\" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {\\n  FuzzedDataProvider fdp(data, size);\\n\\n  double hdpi = fdp.ConsumeFloatingPoint<double>();\\n  double vdpi = fdp.ConsumeFloatingPoint<double>();\\n  bool useMediaBox = fdp.ConsumeBool();\\n  bool crop = fdp.ConsumeBool();\\n  bool printing = fdp.ConsumeBool();\\n  std::vector<char> payload = fdp.ConsumeRemainingBytes<char>();\\n\\n  Object xpdf_obj;\\n  xpdf_obj.initNull();\\n  BaseStream *stream = new MemStream(payload.data(), 0, payload.size(), &xpdf_obj);\\n\\n  globalParams = new GlobalParams(NULL);\\n  globalParams->setErrQuiet(1);\\n  globalParams->setupBaseFonts(NULL);\\n  char yes[] = \"yes\";\\n  globalParams->setEnableFreeType(yes); // Yes, it's a string and not a bool.\\n  globalParams->setErrQuiet(1);\\n\\n  PDFDoc *doc = NULL;\\n  try {\\n    doc = new PDFDoc(stream);\\n    if (doc->isOk() == gTrue) {\\n      SplashColor paperColor = {0xff, 0xff, 0xff};\\n      SplashOutputDev *splashOut = new SplashOutputDev(splashModeRGB8, 1, gFalse, paperColor);\\n      splashOut->setNoComposite(gTrue);\\n      splashOut->startDoc(doc->getXRef());\\n      for (size_t i = 1; i <= doc->getNumPages(); ++i) {\\n        double pg_wd = doc->getPageCropWidth(i);\\n        double pg_ht = doc->getPageCropHeight(i);\\n        PDFRectangle page_box(0, 0, pg_wd, pg_ht);\\n        int rotate = 0; // Added this line to declare rotate\\n        GBool upsideDown = gFalse; // Added this line to declare upsideDown\\n        GfxState *state = new GfxState(hdpi, vdpi, &page_box, rotate, upsideDown); // Fixed this line\\n        splashOut->updateFont(state); // Changed this line from doUpdateFont to updateFont\\n      }\\n    }\\n  } catch (...) {\\n    delete doc;\\n    delete globalParams;\\n    return 0;\\n  }\\n\\n  delete doc;\\n  delete globalParams;\\n  return 0;\\n}",
+        "model": ""
+    },
+
+    {
+        "benchmark": "output-xpdf-_zn15splashoutputdev12doupdatefontep8gfxstate",
+        "sample": "02",
+        "status": "Done",
+        "compiles": "False",
+        "crashes": "False",
+        "crash_reason": "-",
+        "bug": "True",
+        "coverage": "0.00",
+        "coverage_diff": "0.0",
+        "coverage_report": "#",
+        "stacktrace": "/stacktrace",
+        "target_binary": "/target_binary",
+        "reproducer": "/artifacts",
+        "run_log": "run.log",
+        "source_code": "#include <fuzzer/FuzzedDataProvider.h>\\n\\n#include <stddef.h>\\n#include <stdint.h>\\n#include <string.h>\\n#include <cstddef>\\n#include <cstdio>\\n#include <vector>\\n\\n#include \"GfxState.h\"\\n#include \"GlobalParams.h\"\\n#include \"Object.h\"\\n#include \"PDFDoc.h\"\\n#include \"Stream.h\"\\n#include \"XRef.h\"\\n#include \"/src/xpdf-4.05/xpdf/SplashOutputDev.h\"\\n#include \"Splash.h\"\\n#include \"SplashBitmap.h\"\\n\\nextern \"C\" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {\\n  if (size < 20) {\\n   return 0;\\n  }\\n\\n  FuzzedDataProvider stream(data, size);\\n  std::vector<unsigned char> new_data = stream.ConsumeBytes<unsigned char>(size);\\n\\n  globalParams = new GlobalParams(NULL);\\n  globalParams->setErrQuiet(false);\\n  globalParams->setupBaseFonts(NULL);\\n\\n  SplashColor paperColor;\\n  paperColor[0] = 255; // white\\n  paperColor[1] = 255;\\n  paperColor[2] = 255;\\n  paperColor[3] = 255;\\n\\n  SplashOutputDev splashOut(splashModeBGR8, 4, false, paperColor, true, false);\\n  splashOut.startDoc(NULL);\\n\\n  // create dummy object\\n  Object obj;\\n  obj.initNull();\\n  BaseStream *str = new MemStream(reinterpret_cast<char *>(new_data.data()), 0, new_data.size(), &obj);\\n  auto *doc = new PDFDoc(str, NULL, NULL, NULL);\\n  \\n  // Use getMediaBox instead of getPageMediaBox\\n  GfxState *state = new GfxState(72.0, 72.0, doc->getMediaBox(0), 0, gFalse);\\n  \\n  // Use updateFont instead of doUpdateFont\\n  splashOut.updateFont(state); \\n\\n  delete state;\\n  delete doc;\\n  delete globalParams;\\n  \\n  return 0;\\n}",
+        "model": ""
+    }
+
+    ]
+}
