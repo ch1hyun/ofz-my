@@ -1,0 +1,1083 @@
+<!doctype html>
+
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Experiment results</title>
+<style>
+* {
+    box-sizing: border-box;
+}
+
+html {
+    line-height: 1.15;
+}
+
+body {
+    font-family: sans-serif;
+    font-size: 16px;
+}
+
+table {
+    border-collapse: collapse;
+    border-spacing: 0;
+}
+
+td, th {
+    border-right: 1px #dedede solid;
+    border-bottom: 1px #dedede solid;
+    padding: 5px;
+    text-align: left;
+}
+td:first-child, th:first-child {
+    border-left: 1px #dedede solid;
+}
+th {
+    border-top: 1px #dedede solid;
+}
+
+tbody tr:nth-child(odd) {
+    background-color: #f4f5ff;
+}
+</style>
+<body>
+    LLM: 
+    
+<h1>output-xpdf-_zn6pdfdoc12displaypagesep9outputdeviiddiiiipfipves2_ / 02</h1>
+Bug: False
+<br>
+Crash reason: NO_SEMANTIC_ERR
+<br>
+<br>
+
+
+
+
+
+
+
+
+
+<h3>Final code</h3>
+
+<pre>
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+#include &lt;aconf.h&gt;
+#include &lt;png.h&gt;
+#include &lt;stddef.h&gt;
+#include &lt;stdint.h&gt;
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;string.h&gt;
+#include &lt;vector&gt;
+
+#include &#34;GString.h&#34;
+#include &#34;GlobalParams.h&#34;
+#include &#34;JBIG2Stream.h&#34;
+#include &#34;Object.h&#34;
+#include &#34;PDFDoc.h&#34;
+#include &#34;Splash.h&#34;
+#include &#34;SplashBitmap.h&#34;
+#include &#34;SplashOutputDev.h&#34;
+#include &#34;Stream.h&#34;
+#include &#34;config.h&#34;
+#include &#34;gfile.h&#34;
+#include &#34;gmem.h&#34;
+#include &#34;gmempp.h&#34;
+#include &#34;parseargs.h&#34;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  FuzzedDataProvider fdp(data, size);
+  double hdpi = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  double vdpi = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  int rotate = fdp.ConsumeIntegral&lt;int&gt;();
+  bool useMediaBox = fdp.ConsumeBool();
+  bool crop = fdp.ConsumeBool();
+  bool printing = fdp.ConsumeBool();
+  std::vector&lt;char&gt; payload = fdp.ConsumeRemainingBytes&lt;char&gt;();
+
+  Object xpdf_obj;
+  xpdf_obj.initNull();
+  BaseStream *stream = new MemStream(payload.data(), 0, payload.size(), &amp;xpdf_obj);
+
+  Object info, xfa;
+  Object *acroForm;
+  GlobalParams *globalParams = new GlobalParams(NULL);
+  globalParams-&gt;setErrQuiet(1);
+  globalParams-&gt;setupBaseFonts(NULL);
+  char yes[] = &#34;yes&#34;;
+  globalParams-&gt;setEnableFreeType(yes); // Yes, it&#39;s a string and not a bool.
+  globalParams-&gt;setErrQuiet(1);
+
+  PDFDoc *doc = NULL;
+  try {
+    doc = new PDFDoc(stream); // Fixed: Allocate memory for PDFDoc object
+    if (doc-&gt;isOk() == gTrue) {
+      doc-&gt;getNumPages();
+      doc-&gt;getOutline();
+      doc-&gt;getStructTreeRoot();
+      doc-&gt;getXRef();
+      doc-&gt;okToPrint(gTrue);
+      doc-&gt;okToCopy(gTrue);
+      doc-&gt;okToChange(gTrue);
+      doc-&gt;okToAddNotes(gTrue);
+      doc-&gt;isLinearized();
+      doc-&gt;getPDFVersion();
+
+      GString *metadata;
+      if ((metadata = doc-&gt;readMetadata())) {
+        (void)metadata-&gt;getCString();
+      }
+      delete metadata;
+
+      Object info;
+      doc-&gt;getDocInfo(&amp;info);
+      if (info.isDict()) {
+        info.getDict();
+      }
+      info.free();
+
+      if ((acroForm = doc-&gt;getCatalog()-&gt;getAcroForm())-&gt;isDict()) {
+        acroForm-&gt;dictLookup(&#34;XFA&#34;, &amp;xfa);
+        xfa.free();
+      }
+
+      SplashColor paperColor = {0xff, 0xff, 0xff};
+      SplashOutputDev *splashOut = new SplashOutputDev(splashModeRGB8, 1, gFalse, paperColor);
+      splashOut-&gt;setNoComposite(gTrue);
+      splashOut-&gt;startDoc(doc-&gt;getXRef());
+      doc-&gt;displayPages(splashOut, 1, doc-&gt;getNumPages(), hdpi, vdpi, rotate, useMediaBox, crop, printing, nullptr, nullptr);
+      (void)splashOut-&gt;getBitmap();
+
+      delete splashOut;
+    }
+  } catch (...) {
+  }
+
+  delete doc; // Fixed: Free the allocated memory for PDFDoc object
+  delete globalParams;
+
+  return 0;
+}
+</pre>
+
+
+<h3>Fixer prompt #1</h3>
+<pre>
+
+Given the following C++ fuzz harness and its build error message, fix the code to make it build for fuzzing.
+
+If there is undeclared identifier or unknown type name error, fix it by finding and including the related libraries.
+
+MUST RETURN THE FULL CODE, INCLUDING UNCHANGED PARTS.
+
+Below is the code needs to be built:
+&lt;code&gt;
+&lt;solution&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+#include &lt;aconf.h&gt;
+#include &lt;png.h&gt;
+#include &lt;stddef.h&gt;
+#include &lt;stdint.h&gt;
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;string.h&gt;
+#include &lt;vector&gt;
+
+#include &#34;GString.h&#34;
+#include &#34;GlobalParams.h&#34;
+#include &#34;JBIG2Stream.h&#34;
+#include &#34;Object.h&#34;
+#include &#34;PDFDoc.h&#34;
+#include &#34;Splash.h&#34;
+#include &#34;SplashBitmap.h&#34;
+#include &#34;SplashOutputDev.h&#34;
+#include &#34;Stream.h&#34;
+#include &#34;config.h&#34;
+#include &#34;gfile.h&#34;
+#include &#34;gmem.h&#34;
+#include &#34;gmempp.h&#34;
+#include &#34;parseargs.h&#34;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  FuzzedDataProvider fdp(data, size);
+  double hdpi = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  double vdpi = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  int rotate = fdp.ConsumeIntegral&lt;int&gt;();
+  bool useMediaBox = fdp.ConsumeBool();
+  bool crop = fdp.ConsumeBool();
+  bool printing = fdp.ConsumeBool();
+  std::vector&lt;char&gt; payload = fdp.ConsumeRemainingBytes&lt;char&gt;();
+
+  Object xpdf_obj;
+  xpdf_obj.initNull();
+  BaseStream *stream = new MemStream(payload.data(), 0, payload.size(), &amp;xpdf_obj);
+
+  Object info, xfa;
+  Object *acroForm;
+  globalParams = new GlobalParams(NULL);
+  globalParams-&gt;setErrQuiet(1);
+  globalParams-&gt;setupBaseFonts(NULL);
+  char yes[] = &#34;yes&#34;;
+  globalParams-&gt;setEnableFreeType(yes); // Yes, it&#39;s a string and not a bool.
+  globalParams-&gt;setErrQuiet(1);
+
+  PDFDoc *doc = NULL;
+  try {
+    PDFDoc doc(stream);
+    if (doc.isOk() == gTrue) {
+      doc.getNumPages();
+      doc.getOutline();
+      doc.getStructTreeRoot();
+      doc.getXRef();
+      doc.okToPrint(gTrue);
+      doc.okToCopy(gTrue);
+      doc.okToChange(gTrue);
+      doc.okToAddNotes(gTrue);
+      doc.isLinearized();
+      doc.getPDFVersion();
+
+      GString *metadata;
+      if ((metadata = doc.readMetadata())) {
+        (void)metadata-&gt;getCString();
+      }
+      delete metadata;
+
+      Object info;
+      doc.getDocInfo(&amp;info);
+      if (info.isDict()) {
+        info.getDict();
+      }
+      info.free();
+
+      if ((acroForm = doc.getCatalog()-&gt;getAcroForm())-&gt;isDict()) {
+        acroForm-&gt;dictLookup(&#34;XFA&#34;, &amp;xfa);
+        xfa.free();
+      }
+
+      SplashColor paperColor = {0xff, 0xff, 0xff};
+      SplashOutputDev *splashOut = new SplashOutputDev(splashModeRGB8, 1, gFalse, paperColor);
+      splashOut-&gt;setNoComposite(gTrue);
+      splashOut-&gt;startDoc(doc.getXRef());
+      doc.displayPages(splashOut, 1, doc.getNumPages(), hdpi, vdpi, rotate, useMediaBox, crop, printing, nullptr, nullptr);
+      (void)splashOut-&gt;getBitmap();
+
+      delete splashOut;
+    }
+  } catch (...) {
+  }
+
+  delete globalParams;
+
+  return 0;
+}
+&lt;/code&gt;
+
+Below is the error to fix:
+The code has the following build issues:
+&lt;error&gt;
+fuzz_JBIG2.cc:1:1: error: expected unqualified-id
+    1 | &lt;solution&gt;
+      | ^
+In file included from fuzz_JBIG2.cc:2:
+In file included from /usr/local/lib/clang/18/include/fuzzer/FuzzedDataProvider.h:27:
+/usr/local/bin/../include/c++/v1/vector:843:7: error: use of undeclared identifier &#39;__sanitizer_annotate_contiguous_container&#39;
+  843 |       __sanitizer_annotate_contiguous_container(__beg, __end, __old_mid, __new_mid);
+      |       ^
+&lt;/error&gt;
+
+
+
+
+Fix code:
+1. Consider possible solutions for the issues listed above.
+2. Choose a solution that can maximize fuzzing result, which is utilizing the function under test and feeding it not null input.
+3. Apply the solutions to the original code.
+It&#39;s important to show the complete code, not only the fixed line.
+&lt;solution&gt;
+</pre>
+
+
+
+<h3>Code #1</h3>
+
+<pre>
+```cpp
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+#include &lt;aconf.h&gt;
+#include &lt;png.h&gt;
+#include &lt;stddef.h&gt;
+#include &lt;stdint.h&gt;
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;string.h&gt;
+#include &lt;vector&gt;
+
+#include &#34;GString.h&#34;
+#include &#34;GlobalParams.h&#34;
+#include &#34;JBIG2Stream.h&#34;
+#include &#34;Object.h&#34;
+#include &#34;PDFDoc.h&#34;
+#include &#34;Splash.h&#34;
+#include &#34;SplashBitmap.h&#34;
+#include &#34;SplashOutputDev.h&#34;
+#include &#34;Stream.h&#34;
+#include &#34;config.h&#34;
+#include &#34;gfile.h&#34;
+#include &#34;gmem.h&#34;
+#include &#34;gmempp.h&#34;
+#include &#34;parseargs.h&#34;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  FuzzedDataProvider fdp(data, size);
+  double hdpi = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  double vdpi = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  int rotate = fdp.ConsumeIntegral&lt;int&gt;();
+  bool useMediaBox = fdp.ConsumeBool();
+  bool crop = fdp.ConsumeBool();
+  bool printing = fdp.ConsumeBool();
+  std::vector&lt;char&gt; payload = fdp.ConsumeRemainingBytes&lt;char&gt;();
+
+  Object xpdf_obj;
+  xpdf_obj.initNull();
+  BaseStream *stream = new MemStream(payload.data(), 0, payload.size(), &amp;xpdf_obj);
+
+  Object info, xfa;
+  Object *acroForm;
+  GlobalParams *globalParams = new GlobalParams(NULL);
+  globalParams-&gt;setErrQuiet(1);
+  globalParams-&gt;setupBaseFonts(NULL);
+  char yes[] = &#34;yes&#34;;
+  globalParams-&gt;setEnableFreeType(yes); // Yes, it&#39;s a string and not a bool.
+  globalParams-&gt;setErrQuiet(1);
+
+  PDFDoc *doc = NULL;
+  try {
+    PDFDoc doc(stream);
+    if (doc-&gt;isOk() == gTrue) {
+      doc-&gt;getNumPages();
+      doc-&gt;getOutline();
+      doc-&gt;getStructTreeRoot();
+      doc-&gt;getXRef();
+      doc-&gt;okToPrint(gTrue);
+      doc-&gt;okToCopy(gTrue);
+      doc-&gt;okToChange(gTrue);
+      doc-&gt;okToAddNotes(gTrue);
+      doc-&gt;isLinearized();
+      doc-&gt;getPDFVersion();
+
+      GString *metadata;
+      if ((metadata = doc-&gt;readMetadata())) {
+        (void)metadata-&gt;getCString();
+      }
+      delete metadata;
+
+      Object info;
+      doc-&gt;getDocInfo(&amp;info);
+      if (info.isDict()) {
+        info.getDict();
+      }
+      info.free();
+
+      if ((acroForm = doc-&gt;getCatalog()-&gt;getAcroForm())-&gt;isDict()) {
+        acroForm-&gt;dictLookup(&#34;XFA&#34;, &amp;xfa);
+        xfa.free();
+      }
+
+      SplashColor paperColor = {0xff, 0xff, 0xff};
+      SplashOutputDev *splashOut = new SplashOutputDev(splashModeRGB8, 1, gFalse, paperColor);
+      splashOut-&gt;setNoComposite(gTrue);
+      splashOut-&gt;startDoc(doc-&gt;getXRef());
+      doc-&gt;displayPages(splashOut, 1, doc-&gt;getNumPages(), hdpi, vdpi, rotate, useMediaBox, crop, printing, nullptr, nullptr);
+      (void)splashOut-&gt;getBitmap();
+
+      delete splashOut;
+    }
+  } catch (...) {
+  }
+
+  delete globalParams;
+
+  return 0;
+}
+```
+</pre>
+
+
+<h3>Fixer prompt #2</h3>
+<pre>
+
+Given the following C++ fuzz harness and its build error message, fix the code to make it build for fuzzing.
+
+If there is undeclared identifier or unknown type name error, fix it by finding and including the related libraries.
+
+MUST RETURN THE FULL CODE, INCLUDING UNCHANGED PARTS.
+
+Below is the code needs to be built:
+&lt;code&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+#include &lt;aconf.h&gt;
+#include &lt;png.h&gt;
+#include &lt;stddef.h&gt;
+#include &lt;stdint.h&gt;
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;string.h&gt;
+#include &lt;vector&gt;
+
+#include &#34;GString.h&#34;
+#include &#34;GlobalParams.h&#34;
+#include &#34;JBIG2Stream.h&#34;
+#include &#34;Object.h&#34;
+#include &#34;PDFDoc.h&#34;
+#include &#34;Splash.h&#34;
+#include &#34;SplashBitmap.h&#34;
+#include &#34;SplashOutputDev.h&#34;
+#include &#34;Stream.h&#34;
+#include &#34;config.h&#34;
+#include &#34;gfile.h&#34;
+#include &#34;gmem.h&#34;
+#include &#34;gmempp.h&#34;
+#include &#34;parseargs.h&#34;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  FuzzedDataProvider fdp(data, size);
+  double hdpi = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  double vdpi = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  int rotate = fdp.ConsumeIntegral&lt;int&gt;();
+  bool useMediaBox = fdp.ConsumeBool();
+  bool crop = fdp.ConsumeBool();
+  bool printing = fdp.ConsumeBool();
+  std::vector&lt;char&gt; payload = fdp.ConsumeRemainingBytes&lt;char&gt;();
+
+  Object xpdf_obj;
+  xpdf_obj.initNull();
+  BaseStream *stream = new MemStream(payload.data(), 0, payload.size(), &amp;xpdf_obj);
+
+  Object info, xfa;
+  Object *acroForm;
+  GlobalParams *globalParams = new GlobalParams(NULL);
+  globalParams-&gt;setErrQuiet(1);
+  globalParams-&gt;setupBaseFonts(NULL);
+  char yes[] = &#34;yes&#34;;
+  globalParams-&gt;setEnableFreeType(yes); // Yes, it&#39;s a string and not a bool.
+  globalParams-&gt;setErrQuiet(1);
+
+  PDFDoc *doc = NULL;
+  try {
+    PDFDoc doc(stream);
+    if (doc-&gt;isOk() == gTrue) {
+      doc-&gt;getNumPages();
+      doc-&gt;getOutline();
+      doc-&gt;getStructTreeRoot();
+      doc-&gt;getXRef();
+      doc-&gt;okToPrint(gTrue);
+      doc-&gt;okToCopy(gTrue);
+      doc-&gt;okToChange(gTrue);
+      doc-&gt;okToAddNotes(gTrue);
+      doc-&gt;isLinearized();
+      doc-&gt;getPDFVersion();
+
+      GString *metadata;
+      if ((metadata = doc-&gt;readMetadata())) {
+        (void)metadata-&gt;getCString();
+      }
+      delete metadata;
+
+      Object info;
+      doc-&gt;getDocInfo(&amp;info);
+      if (info.isDict()) {
+        info.getDict();
+      }
+      info.free();
+
+      if ((acroForm = doc-&gt;getCatalog()-&gt;getAcroForm())-&gt;isDict()) {
+        acroForm-&gt;dictLookup(&#34;XFA&#34;, &amp;xfa);
+        xfa.free();
+      }
+
+      SplashColor paperColor = {0xff, 0xff, 0xff};
+      SplashOutputDev *splashOut = new SplashOutputDev(splashModeRGB8, 1, gFalse, paperColor);
+      splashOut-&gt;setNoComposite(gTrue);
+      splashOut-&gt;startDoc(doc-&gt;getXRef());
+      doc-&gt;displayPages(splashOut, 1, doc-&gt;getNumPages(), hdpi, vdpi, rotate, useMediaBox, crop, printing, nullptr, nullptr);
+      (void)splashOut-&gt;getBitmap();
+
+      delete splashOut;
+    }
+  } catch (...) {
+  }
+
+  delete globalParams;
+
+  return 0;
+}
+&lt;/code&gt;
+
+Below is the error to fix:
+The code has the following build issues:
+&lt;error&gt;
+fuzz_JBIG2.cc:53:12: error: member reference type &#39;PDFDoc&#39; is not a pointer; did you mean to use &#39;.&#39;?
+   53 |     if (doc-&gt;isOk() == gTrue) {
+      |         ~~~^~
+      |            .
+fuzz_JBIG2.cc:54:10: error: member reference type &#39;PDFDoc&#39; is not a pointer; did you mean to use &#39;.&#39;?
+   54 |       doc-&gt;getNumPages();
+      |       ~~~^~
+      |          .
+fuzz_JBIG2.cc:55:10: error: member reference type &#39;PDFDoc&#39; is not a pointer; did you mean to use &#39;.&#39;?
+   55 |       doc-&gt;getOutline();
+      |       ~~~^~
+      |          .
+fuzz_JBIG2.cc:56:10: error: member reference type &#39;PDFDoc&#39; is not a pointer; did you mean to use &#39;.&#39;?
+   56 |       doc-&gt;getStructTreeRoot();
+      |       ~~~^~
+      |          .
+fuzz_JBIG2.cc:57:10: error: member reference type &#39;PDFDoc&#39; is not a pointer; did you mean to use &#39;.&#39;?
+   57 |       doc-&gt;getXRef();
+      |       ~~~^~
+      |          .
+fuzz_JBIG2.cc:58:10: error: member reference type &#39;PDFDoc&#39; is not a pointer; did you mean to use &#39;.&#39;?
+   58 |       doc-&gt;okToPrint(gTrue);
+      |       ~~~^~
+      |          .
+fuzz_JBIG2.cc:59:10: error: member reference type &#39;PDFDoc&#39; is not a pointer; did you mean to use &#39;.&#39;?
+   59 |       doc-&gt;okToCopy(gTrue);
+      |       ~~~^~
+      |          .
+fuzz_JBIG2.cc:60:10: error: member reference type &#39;PDFDoc&#39; is not a pointer; did you mean to use &#39;.&#39;?
+   60 |       doc-&gt;okToChange(gTrue);
+      |       ~~~^~
+      |          .
+fuzz_JBIG2.cc:61:10: error: member reference type &#39;PDFDoc&#39; is not a pointer; did you mean to use &#39;.&#39;?
+   61 |       doc-&gt;okToAddNotes(gTrue);
+      |       ~~~^~
+      |          .
+fuzz_JBIG2.cc:62:10: error: member reference type &#39;PDFDoc&#39; is not a pointer; did you mean to use &#39;.&#39;?
+   62 |       doc-&gt;isLinearized();
+      |       ~~~^~
+      |          .
+fuzz_JBIG2.cc:63:10: error: member reference type &#39;PDFDoc&#39; is not a pointer; did you mean to use &#39;.&#39;?
+   63 |       doc-&gt;getPDFVersion();
+      |       ~~~^~
+      |          .
+fuzz_JBIG2.cc:66:26: error: member reference type &#39;PDFDoc&#39; is not a pointer; did you mean to use &#39;.&#39;?
+   66 |       if ((metadata = doc-&gt;readMetadata())) {
+      |                       ~~~^~
+      |                          .
+fuzz_JBIG2.cc:72:10: error: member reference type &#39;PDFDoc&#39; is not a pointer; did you mean to use &#39;.&#39;?
+   72 |       doc-&gt;getDocInfo(&amp;info);
+      |       ~~~^~
+      |          .
+fuzz_JBIG2.cc:78:26: error: member reference type &#39;PDFDoc&#39; is not a pointer; did you mean to use &#39;.&#39;?
+   78 |       if ((acroForm = doc-&gt;getCatalog()-&gt;getAcroForm())-&gt;isDict()) {
+      |                       ~~~^~
+      |                          .
+fuzz_JBIG2.cc:86:30: error: member reference type &#39;PDFDoc&#39; is not a pointer; did you mean to use &#39;.&#39;?
+   86 |       splashOut-&gt;startDoc(doc-&gt;getXRef());
+      |                           ~~~^~
+      |                              .
+fuzz_JBIG2.cc:87:10: error: member reference type &#39;PDFDoc&#39; is not a pointer; did you mean to use &#39;.&#39;?
+   87 |       doc-&gt;displayPages(splashOut, 1, doc-&gt;getNumPages(), hdpi, vdpi, rotate, useMediaBox, crop, printing, nullptr, nullptr);
+      |       ~~~^~
+      |          .
+fuzz_JBIG2.cc:87:42: error: member reference type &#39;PDFDoc&#39; is not a pointer; did you mean to use &#39;.&#39;?
+   87 |       doc-&gt;displayPages(splashOut, 1, doc-&gt;getNumPages(), hdpi, vdpi, rotate, useMediaBox, crop, printing, nullptr, nullptr);
+      |                                       ~~~^~
+      |                                          .
+&lt;/error&gt;
+
+
+
+
+Fix code:
+1. Consider possible solutions for the issues listed above.
+2. Choose a solution that can maximize fuzzing result, which is utilizing the function under test and feeding it not null input.
+3. Apply the solutions to the original code.
+It&#39;s important to show the complete code, not only the fixed line.
+&lt;solution&gt;
+</pre>
+
+
+
+<h3>Code #2</h3>
+
+<pre>
+```cpp
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+
+#include &lt;aconf.h&gt;
+#include &lt;png.h&gt;
+#include &lt;stddef.h&gt;
+#include &lt;stdint.h&gt;
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;string.h&gt;
+#include &lt;vector&gt;
+
+#include &#34;GString.h&#34;
+#include &#34;GlobalParams.h&#34;
+#include &#34;JBIG2Stream.h&#34;
+#include &#34;Object.h&#34;
+#include &#34;PDFDoc.h&#34;
+#include &#34;Splash.h&#34;
+#include &#34;SplashBitmap.h&#34;
+#include &#34;SplashOutputDev.h&#34;
+#include &#34;Stream.h&#34;
+#include &#34;config.h&#34;
+#include &#34;gfile.h&#34;
+#include &#34;gmem.h&#34;
+#include &#34;gmempp.h&#34;
+#include &#34;parseargs.h&#34;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  FuzzedDataProvider fdp(data, size);
+  double hdpi = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  double vdpi = fdp.ConsumeFloatingPoint&lt;double&gt;();
+  int rotate = fdp.ConsumeIntegral&lt;int&gt;();
+  bool useMediaBox = fdp.ConsumeBool();
+  bool crop = fdp.ConsumeBool();
+  bool printing = fdp.ConsumeBool();
+  std::vector&lt;char&gt; payload = fdp.ConsumeRemainingBytes&lt;char&gt;();
+
+  Object xpdf_obj;
+  xpdf_obj.initNull();
+  BaseStream *stream = new MemStream(payload.data(), 0, payload.size(), &amp;xpdf_obj);
+
+  Object info, xfa;
+  Object *acroForm;
+  GlobalParams *globalParams = new GlobalParams(NULL);
+  globalParams-&gt;setErrQuiet(1);
+  globalParams-&gt;setupBaseFonts(NULL);
+  char yes[] = &#34;yes&#34;;
+  globalParams-&gt;setEnableFreeType(yes); // Yes, it&#39;s a string and not a bool.
+  globalParams-&gt;setErrQuiet(1);
+
+  PDFDoc *doc = NULL;
+  try {
+    doc = new PDFDoc(stream); // Fixed: Allocate memory for PDFDoc object
+    if (doc-&gt;isOk() == gTrue) {
+      doc-&gt;getNumPages();
+      doc-&gt;getOutline();
+      doc-&gt;getStructTreeRoot();
+      doc-&gt;getXRef();
+      doc-&gt;okToPrint(gTrue);
+      doc-&gt;okToCopy(gTrue);
+      doc-&gt;okToChange(gTrue);
+      doc-&gt;okToAddNotes(gTrue);
+      doc-&gt;isLinearized();
+      doc-&gt;getPDFVersion();
+
+      GString *metadata;
+      if ((metadata = doc-&gt;readMetadata())) {
+        (void)metadata-&gt;getCString();
+      }
+      delete metadata;
+
+      Object info;
+      doc-&gt;getDocInfo(&amp;info);
+      if (info.isDict()) {
+        info.getDict();
+      }
+      info.free();
+
+      if ((acroForm = doc-&gt;getCatalog()-&gt;getAcroForm())-&gt;isDict()) {
+        acroForm-&gt;dictLookup(&#34;XFA&#34;, &amp;xfa);
+        xfa.free();
+      }
+
+      SplashColor paperColor = {0xff, 0xff, 0xff};
+      SplashOutputDev *splashOut = new SplashOutputDev(splashModeRGB8, 1, gFalse, paperColor);
+      splashOut-&gt;setNoComposite(gTrue);
+      splashOut-&gt;startDoc(doc-&gt;getXRef());
+      doc-&gt;displayPages(splashOut, 1, doc-&gt;getNumPages(), hdpi, vdpi, rotate, useMediaBox, crop, printing, nullptr, nullptr);
+      (void)splashOut-&gt;getBitmap();
+
+      delete splashOut;
+    }
+  } catch (...) {
+  }
+
+  delete doc; // Fixed: Free the allocated memory for PDFDoc object
+  delete globalParams;
+
+  return 0;
+}
+```
+</pre>
+
+
+<h2>Logs</h2>
+<pre>
+Fixing /home/chyun/oss-fuzz-gen1/results11/output-xpdf-_zn6pdfdoc12displaypagesep9outputdeviiddiiiipfipves2_/fixed_targets/02.cc with gpt-3.5-turbo, attempt 1.
+Fixing /home/chyun/oss-fuzz-gen1/results11/output-xpdf-_zn6pdfdoc12displaypagesep9outputdeviiddiiiipfipves2_/fixed_targets/02.cc with gpt-3.5-turbo, attempt 2.
+Successfully built /home/chyun/oss-fuzz-gen1/results11/output-xpdf-_zn6pdfdoc12displaypagesep9outputdeviiddiiiipfipves2_/fixed_targets/02.cc with gpt-3.5-turbo in 2 iterations of fixing.
+Triaging the crash related to /home/chyun/oss-fuzz-gen1/results11/output-xpdf-_zn6pdfdoc12displaypagesep9outputdeviiddiiiipfipves2_/fixed_targets/02.cc with gpt-3.5-turbo.
+Warning: no crash info in xpdf-zn6pdfdoc12displaypagesep9outputdeviiddiiiipfipves2-02.
+Result for xpdf-zn6pdfdoc12displaypagesep9outputdeviiddiiiipfipves2-02: crashes=False, coverage=0.008832120573137217 (511/57857), coverage diff=0.0002644739372956338 (33/124776)
+
+</pre>
+
+<h2>Run logs</h2>
+<pre>
+Unable to find image &#39;gcr.io/oss-fuzz-base/base-runner:latest&#39; locally
+latest: Pulling from oss-fuzz-base/base-runner
+b549f31133a9: Already exists
+66ae0fb2b9ad: Already exists
+fe2e6b7e72ce: Already exists
+68b62927ba07: Pulling fs layer
+e1ab4e29652a: Pulling fs layer
+ac90eafc7c78: Pulling fs layer
+b629503a4879: Pulling fs layer
+7c27a787f3cf: Pulling fs layer
+6267aec1cd42: Pulling fs layer
+60ed9f3fca65: Pulling fs layer
+4426941ccd74: Pulling fs layer
+3d54ba9c09c8: Pulling fs layer
+ad4490aa495f: Pulling fs layer
+944b72915c02: Pulling fs layer
+81ceba5d2486: Pulling fs layer
+d4bd0f9d0a98: Pulling fs layer
+7e62453c0ab5: Pulling fs layer
+2cd6b7c8bdae: Pulling fs layer
+6267aec1cd42: Waiting
+831191dee985: Pulling fs layer
+fa62a444653f: Pulling fs layer
+ac90eafc7c78: Download complete
+fa62a444653f: Waiting
+60ed9f3fca65: Waiting
+4426941ccd74: Waiting
+d4bd0f9d0a98: Waiting
+81ceba5d2486: Waiting
+7e62453c0ab5: Waiting
+3d54ba9c09c8: Waiting
+2cd6b7c8bdae: Waiting
+ad4490aa495f: Waiting
+831191dee985: Waiting
+944b72915c02: Waiting
+b629503a4879: Waiting
+7c27a787f3cf: Waiting
+68b62927ba07: Verifying Checksum
+68b62927ba07: Download complete
+68b62927ba07: Pull complete
+e1ab4e29652a: Verifying Checksum
+e1ab4e29652a: Download complete
+e1ab4e29652a: Pull complete
+ac90eafc7c78: Pull complete
+6267aec1cd42: Verifying Checksum
+6267aec1cd42: Download complete
+60ed9f3fca65: Verifying Checksum
+60ed9f3fca65: Download complete
+7c27a787f3cf: Download complete
+3d54ba9c09c8: Verifying Checksum
+3d54ba9c09c8: Download complete
+b629503a4879: Verifying Checksum
+b629503a4879: Download complete
+944b72915c02: Verifying Checksum
+944b72915c02: Download complete
+4426941ccd74: Verifying Checksum
+4426941ccd74: Download complete
+81ceba5d2486: Verifying Checksum
+81ceba5d2486: Download complete
+b629503a4879: Pull complete
+7c27a787f3cf: Pull complete
+6267aec1cd42: Pull complete
+60ed9f3fca65: Pull complete
+4426941ccd74: Pull complete
+3d54ba9c09c8: Pull complete
+ad4490aa495f: Verifying Checksum
+ad4490aa495f: Download complete
+d4bd0f9d0a98: Verifying Checksum
+d4bd0f9d0a98: Download complete
+831191dee985: Verifying Checksum
+831191dee985: Download complete
+fa62a444653f: Verifying Checksum
+fa62a444653f: Download complete
+2cd6b7c8bdae: Verifying Checksum
+2cd6b7c8bdae: Download complete
+ad4490aa495f: Pull complete
+944b72915c02: Pull complete
+81ceba5d2486: Pull complete
+7e62453c0ab5: Verifying Checksum
+7e62453c0ab5: Download complete
+d4bd0f9d0a98: Pull complete
+7e62453c0ab5: Pull complete
+2cd6b7c8bdae: Pull complete
+831191dee985: Pull complete
+fa62a444653f: Pull complete
+Digest: sha256:bc2f843a0e4aea9328785a992ab8e12a1336c8778c09c29838fab500a54bdbf9
+Status: Downloaded newer image for gcr.io/oss-fuzz-base/base-runner:latest
+INFO:__main__:Running: docker run --privileged --shm-size=2g --platform linux/amd64 --rm -e FUZZING_ENGINE=libfuzzer -e SANITIZER=address -e RUN_FUZZER_MODE=interactive -e HELPER=True -v /home/chyun/oss-fuzz-gen1/results11/output-xpdf-_zn6pdfdoc12displaypagesep9outputdeviiddiiiipfipves2_/corpora/02.cc:/tmp/fuzz_JBIG2_corpus -v /tmp/tmph337hj9e/build/out/xpdf-zn6pdfdoc12displaypagesep9outputdeviiddiiiipfipves2-02:/out -t gcr.io/oss-fuzz-base/base-runner run_fuzzer fuzz_JBIG2 -print_final_stats=1 -max_total_time=30 -len_control=0 -timeout=30.
+vm.mmap_rnd_bits = 28
+rm: cannot remove &#39;/tmp/fuzz_JBIG2_corpus&#39;: Device or resource busy
+/out/fuzz_JBIG2 -rss_limit_mb=2560 -timeout=25 -print_final_stats=1 -max_total_time=30 -len_control=0 -timeout=30 /tmp/fuzz_JBIG2_corpus -detect_leaks=0 &lt; /dev/null
+INFO: Running with entropic power schedule (0xFF, 100).
+INFO: Seed: 2309967737
+INFO: Loaded 1 modules   (57857 inline 8-bit counters): 57857 [0x55c41eecfcf8, 0x55c41eeddef9), 
+INFO: Loaded 1 PC tables (57857 PCs): 57857 [0x55c41eeddf00,0x55c41efbff10), 
+INFO:        0 files found in /tmp/fuzz_JBIG2_corpus
+INFO: -max_len is not provided; libFuzzer will not generate inputs larger than 4096 bytes
+Config Error: No display font for &#39;Courier&#39;
+Config Error: No display font for &#39;Courier-Bold&#39;
+Config Error: No display font for &#39;Courier-BoldOblique&#39;
+Config Error: No display font for &#39;Courier-Oblique&#39;
+Config Error: No display font for &#39;Helvetica&#39;
+Config Error: No display font for &#39;Helvetica-Bold&#39;
+Config Error: No display font for &#39;Helvetica-BoldOblique&#39;
+Config Error: No display font for &#39;Helvetica-Oblique&#39;
+Config Error: No display font for &#39;Symbol&#39;
+Config Error: No display font for &#39;Times-Bold&#39;
+Config Error: No display font for &#39;Times-BoldItalic&#39;
+Config Error: No display font for &#39;Times-Italic&#39;
+Config Error: No display font for &#39;Times-Roman&#39;
+Config Error: No display font for &#39;ZapfDingbats&#39;
+Syntax Warning: May not be a PDF file (continuing anyway)
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: PDF file is damaged - attempting to reconstruct xref table...
+Syntax Error: Couldn&#39;t find trailer dictionary
+Syntax Error: Couldn&#39;t read xref table
+INFO: A corpus is not provided, starting from an empty corpus
+Config Error: No display font for &#39;Courier&#39;
+Config Error: No display font for &#39;Courier-Bold&#39;
+Config Error: No display font for &#39;Courier-BoldOblique&#39;
+Config Error: No display font for &#39;Courier-Oblique&#39;
+Config Error: No display font for &#39;Helvetica&#39;
+Config Error: No display font for &#39;Helvetica-Bold&#39;
+Config Error: No display font for &#39;Helvetica-BoldOblique&#39;
+Config Error: No display font for &#39;Helvetica-Oblique&#39;
+Config Error: No display font for &#39;Symbol&#39;
+Config Error: No display font for &#39;Times-Bold&#39;
+Config Error: No display font for &#39;Times-BoldItalic&#39;
+Config Error: No display font for &#39;Times-Italic&#39;
+Config Error: No display font for &#39;Times-Roman&#39;
+Config Error: No display font for &#39;ZapfDingbats&#39;
+Syntax Warning: May not be a PDF file (continuing anyway)
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: PDF file is damaged - attempting to reconstruct xref table...
+Syntax Error: Couldn&#39;t find trailer dictionary
+Syntax Error: Couldn&#39;t read xref table
+#2	INITED cov: 344 ft: 345 corp: 1/1b exec/s: 0 rss: 42Mb
+Config Error: No display font for &#39;Courier&#39;
+Config Error: No display font for &#39;Courier-Bold&#39;
+Config Error: No display font for &#39;Courier-BoldOblique&#39;
+Config Error: No display font for &#39;Courier-Oblique&#39;
+Config Error: No display font for &#39;Helvetica&#39;
+Config Error: No display font for &#39;Helvetica-Bold&#39;
+Config Error: No display font for &#39;Helvetica-BoldOblique&#39;
+Config Error: No display font for &#39;Helvetica-Oblique&#39;
+Config Error: No display font for &#39;Symbol&#39;
+Config Error: No display font for &#39;Times-Bold&#39;
+Config Error: No display font for &#39;Times-BoldItalic&#39;
+Config Error: No display font for &#39;Times-Italic&#39;
+Config Error: No display font for &#39;Times-Roman&#39;
+Config Error: No display font for &#39;ZapfDingbats&#39;
+Syntax Warning: May not be a PDF file (continuing anyway)
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: PDF file is damaged - attempting to reconstruct xref table...
+Syntax Error: Couldn&#39;t find trailer dictionary
+Syntax Error: Couldn&#39;t read xref table
+#3	NEW    cov: 345 ft: 347 corp: 2/3b lim: 4096 exec/s: 0 rss: 44Mb L: 2/2 MS: 1 CopyPart-
+Config Error: No display font for &#39;Courier&#39;
+Config Error: No display font for &#39;Courier-Bold&#39;
+Config Error: No display font for &#39;Courier-BoldOblique&#39;
+Config Error: No display font for &#39;Courier-Oblique&#39;
+Config Error: No display font for &#39;Helvetica&#39;
+Config Error: No display font for &#39;Helvetica-Bold&#39;
+Config Error: No display font for &#39;Helvetica-BoldOblique&#39;
+Config Error: No display font for &#39;Helvetica-Oblique&#39;
+Config Error: No display font for &#39;Symbol&#39;
+Config Error: No display font for &#39;Times-Bold&#39;
+Config Error: No display font for &#39;Times-BoldItalic&#39;
+Config Error: No display font for &#39;Times-Italic&#39;
+Config Error: No display font for &#39;Times-Roman&#39;
+Config Error: No display font for &#39;ZapfDingbats&#39;
+Syntax Warning: May not be a PDF file (continuing anyway)
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: PDF file is damaged - attempting to reconstruct xref table...
+Syntax Error: Couldn&#39;t find trailer dictionary
+Syntax Error: Couldn&#39;t read xref table
+Config Error: No display font for &#39;Courier&#39;
+Config Error: No display font for &#39;Courier-Bold&#39;
+Config Error: No display font for &#39;Courier-BoldOblique&#39;
+Config Error: No display font for &#39;Courier-Oblique&#39;
+Config Error: No display font f
+...truncated...
+ontinuing anyway)
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: PDF file is damaged - attempting to reconstruct xref table...
+Syntax Error: Couldn&#39;t find trailer dictionary
+Syntax Error: Couldn&#39;t read xref table
+Config Error: No display font for &#39;Courier&#39;
+Config Error: No display font for &#39;Courier-Bold&#39;
+Config Error: No display font for &#39;Courier-BoldOblique&#39;
+Config Error: No display font for &#39;Courier-Oblique&#39;
+Config Error: No display font for &#39;Helvetica&#39;
+Config Error: No display font for &#39;Helvetica-Bold&#39;
+Config Error: No display font for &#39;Helvetica-BoldOblique&#39;
+Config Error: No display font for &#39;Helvetica-Oblique&#39;
+Config Error: No display font for &#39;Symbol&#39;
+Config Error: No display font for &#39;Times-Bold&#39;
+Config Error: No display font for &#39;Times-BoldItalic&#39;
+Config Error: No display font for &#39;Times-Italic&#39;
+Config Error: No display font for &#39;Times-Roman&#39;
+Config Error: No display font for &#39;ZapfDingbats&#39;
+Syntax Warning: May not be a PDF file (continuing anyway)
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: PDF file is damaged - attempting to reconstruct xref table...
+Syntax Error: Couldn&#39;t find trailer dictionary
+Syntax Error: Couldn&#39;t read xref table
+Config Error: No display font for &#39;Courier&#39;
+Config Error: No display font for &#39;Courier-Bold&#39;
+Config Error: No display font for &#39;Courier-BoldOblique&#39;
+Config Error: No display font for &#39;Courier-Oblique&#39;
+Config Error: No display font for &#39;Helvetica&#39;
+Config Error: No display font for &#39;Helvetica-Bold&#39;
+Config Error: No display font for &#39;Helvetica-BoldOblique&#39;
+Config Error: No display font for &#39;Helvetica-Oblique&#39;
+Config Error: No display font for &#39;Symbol&#39;
+Config Error: No display font for &#39;Times-Bold&#39;
+Config Error: No display font for &#39;Times-BoldItalic&#39;
+Config Error: No display font for &#39;Times-Italic&#39;
+Config Error: No display font for &#39;Times-Roman&#39;
+Config Error: No display font for &#39;ZapfDingbats&#39;
+Syntax Warning: May not be a PDF file (continuing anyway)
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: PDF file is damaged - attempting to reconstruct xref table...
+Syntax Error: Couldn&#39;t find trailer dictionary
+Syntax Error: Couldn&#39;t read xref table
+Config Error: No display font for &#39;Courier&#39;
+Config Error: No display font for &#39;Courier-Bold&#39;
+Config Error: No display font for &#39;Courier-BoldOblique&#39;
+Config Error: No display font for &#39;Courier-Oblique&#39;
+Config Error: No display font for &#39;Helvetica&#39;
+Config Error: No display font for &#39;Helvetica-Bold&#39;
+Config Error: No display font for &#39;Helvetica-BoldOblique&#39;
+Config Error: No display font for &#39;Helvetica-Oblique&#39;
+Config Error: No display font for &#39;Symbol&#39;
+Config Error: No display font for &#39;Times-Bold&#39;
+Config Error: No display font for &#39;Times-BoldItalic&#39;
+Config Error: No display font for &#39;Times-Italic&#39;
+Config Error: No display font for &#39;Times-Roman&#39;
+Config Error: No display font for &#39;ZapfDingbats&#39;
+Syntax Warning: May not be a PDF file (continuing anyway)
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: PDF file is damaged - attempting to reconstruct xref table...
+Syntax Error: Couldn&#39;t find trailer dictionary
+Syntax Error: Couldn&#39;t read xref table
+Config Error: No display font for &#39;Courier&#39;
+Config Error: No display font for &#39;Courier-Bold&#39;
+Config Error: No display font for &#39;Courier-BoldOblique&#39;
+Config Error: No display font for &#39;Courier-Oblique&#39;
+Config Error: No display font for &#39;Helvetica&#39;
+Config Error: No display font for &#39;Helvetica-Bold&#39;
+Config Error: No display font for &#39;Helvetica-BoldOblique&#39;
+Config Error: No display font for &#39;Helvetica-Oblique&#39;
+Config Error: No display font for &#39;Symbol&#39;
+Config Error: No display font for &#39;Times-Bold&#39;
+Config Error: No display font for &#39;Times-BoldItalic&#39;
+Config Error: No display font for &#39;Times-Italic&#39;
+Config Error: No display font for &#39;Times-Roman&#39;
+Config Error: No display font for &#39;ZapfDingbats&#39;
+Syntax Warning: May not be a PDF file (continuing anyway)
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: PDF file is damaged - attempting to reconstruct xref table...
+Syntax Error: Couldn&#39;t find trailer dictionary
+Syntax Error: Couldn&#39;t read xref table
+Config Error: No display font for &#39;Courier&#39;
+Config Error: No display font for &#39;Courier-Bold&#39;
+Config Error: No display font for &#39;Courier-BoldOblique&#39;
+Config Error: No display font for &#39;Courier-Oblique&#39;
+Config Error: No display font for &#39;Helvetica&#39;
+Config Error: No display font for &#39;Helvetica-Bold&#39;
+Config Error: No display font for &#39;Helvetica-BoldOblique&#39;
+Config Error: No display font for &#39;Helvetica-Oblique&#39;
+Config Error: No display font for &#39;Symbol&#39;
+Config Error: No display font for &#39;Times-Bold&#39;
+Config Error: No display font for &#39;Times-BoldItalic&#39;
+Config Error: No display font for &#39;Times-Italic&#39;
+Config Error: No display font for &#39;Times-Roman&#39;
+Config Error: No display font for &#39;ZapfDingbats&#39;
+Syntax Warning: May not be a PDF file (continuing anyway)
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: PDF file is damaged - attempting to reconstruct xref table...
+Syntax Error: Couldn&#39;t find trailer dictionary
+Syntax Error: Couldn&#39;t read xref table
+Config Error: No display font for &#39;Courier&#39;
+Config Error: No display font for &#39;Courier-Bold&#39;
+Config Error: No display font for &#39;Courier-BoldOblique&#39;
+Config Error: No display font for &#39;Courier-Oblique&#39;
+Config Error: No display font for &#39;Helvetica&#39;
+Config Error: No display font for &#39;Helvetica-Bold&#39;
+Config Error: No display font for &#39;Helvetica-BoldOblique&#39;
+Config Error: No display font for &#39;Helvetica-Oblique&#39;
+Config Error: No display font for &#39;Symbol&#39;
+Config Error: No display font for &#39;Times-Bold&#39;
+Config Error: No display font for &#39;Times-BoldItalic&#39;
+Config Error: No display font for &#39;Times-Italic&#39;
+Config Error: No display font for &#39;Times-Roman&#39;
+Config Error: No display font for &#39;ZapfDingbats&#39;
+Syntax Warning: May not be a PDF file (continuing anyway)
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: PDF file is damaged - attempting to reconstruct xref table...
+Syntax Error: Couldn&#39;t find trailer dictionary
+Syntax Error: Couldn&#39;t read xref table
+Config Error: No display font for &#39;Courier&#39;
+Config Error: No display font for &#39;Courier-Bold&#39;
+Config Error: No display font for &#39;Courier-BoldOblique&#39;
+Config Error: No display font for &#39;Courier-Oblique&#39;
+Config Error: No display font for &#39;Helvetica&#39;
+Config Error: No display font for &#39;Helvetica-Bold&#39;
+Config Error: No display font for &#39;Helvetica-BoldOblique&#39;
+Config Error: No display font for &#39;Helvetica-Oblique&#39;
+Config Error: No display font for &#39;Symbol&#39;
+Config Error: No display font for &#39;Times-Bold&#39;
+Config Error: No display font for &#39;Times-BoldItalic&#39;
+Config Error: No display font for &#39;Times-Italic&#39;
+Config Error: No display font for &#39;Times-Roman&#39;
+Config Error: No display font for &#39;ZapfDingbats&#39;
+Syntax Warning: May not be a PDF file (continuing anyway)
+Syntax Error: Couldn&#39;t read xref table
+Syntax Warning: PDF file is damaged - attempting to reconstruct xref table...
+Syntax Error: Couldn&#39;t find trailer dictionary
+Syntax Error: Couldn&#39;t read xref table
+#4240	DONE   cov: 511 ft: 897 corp: 130/41Kb lim: 4096 exec/s: 136 rss: 60Mb
+###### Recommended dictionary. ######
+&#34;\001\000\000\023&#34; # Uses: 33
+&#34;\007\000&#34; # Uses: 24
+&#34;s}&#34; # Uses: 29
+&#34;\001\010&#34; # Uses: 27
+&#34;\020\000\000\000\000\000\000\000&#34; # Uses: 29
+&#34;\000\001\000\000\000\000\000\000&#34; # Uses: 20
+&#34;\027\000&#34; # Uses: 30
+&#34;\001\000\000\000\000\000\000\015&#34; # Uses: 23
+&#34;llo&#34; # Uses: 20
+&#34;\014\000\000\000\000\000\000\000&#34; # Uses: 25
+&#34;startxref&#34; # Uses: 19
+&#34;lb&#34; # Uses: 11
+&#34;\001 &#34; # Uses: 8
+&#34;%PDF-&#34; # Uses: 6
+&#34;\024\000\000\000&#34; # Uses: 10
+&#34;\377\377\377\037&#34; # Uses: 2
+&#34;\037\000\000\000\000\000\000\000&#34; # Uses: 3
+&#34;\024\000\000\000\000\000\000\000&#34; # Uses: 5
+&#34;\001\000\000\000\000\000\000\014&#34; # Uses: 5
+&#34;\000\000\000\000\000\000\000\036&#34; # Uses: 3
+&#34;\006\000&#34; # Uses: 10
+&#34;arrowh&#34; # Uses: 3
+&#34;\005\000&#34; # Uses: 2
+&#34;rehiragana&#34; # Uses: 6
+###### End of recommended dictionary. ######
+Done 4240 runs in 31 second(s)
+stat::number_of_executed_units: 4240
+stat::average_exec_per_sec:     136
+stat::new_units_added:          216
+stat::slowest_unit_time_sec:    0
+stat::peak_rss_mb:              60
+
+</pre>
+
+
+</body>
