@@ -345,29 +345,37 @@ def _fuzzing_pipelines(benchmark: Benchmark, model: models.LLM,
     results = p.starmap(_fuzzing_pipeline, task_args)
   return AggregatedResult.from_experiment_result(results)
 
+
 def insert_timestamp(filename: str, function_signature: str):
     fs = function_signature.split("::")[-1]
     fs = fs[:fs.find("(")]
     logger.info(f'[HERE!!!!!!!!!!!!!] >> {fs} @#!@^#$&!@%$&^!@%$&!@%&#%@!&$%@!$')
     lines = list()
+    isCall = 0
     with open(filename, 'r') as fn:
         lines = fn.readlines()
-
+    for i in range(len(lines)):
+        if ("#include <" in lines[i]):
+          lines.insert(i+1, "#include <chrono>\n#include <iostream>\n")
+          break
     for i in range(len(lines)):
         logger.info(f'[HERE FILE] >>> {lines[i]}')
         if ("LLVMFuzzerTestOneInput" in lines[i]):
-            lines.insert(i + 1, 'printf("Hello World-1 !!\\n");\n')
-        elif (fs in lines[i]):
-            lines.insert(i + 1, 'printf("Hello World-3 !!\\n");\n')
-            lines.insert(i, 'printf("Hello World-4 !!\\n");\n')
+            lines.insert(i + 1, 'auto start_target = std::chrono::high_resolution_clock::now();\n')
+            isCall = 1
+        elif (fs in lines[i] and isCall == 1):
+            lines.insert(i + 1 , '\tauto end_func = std::chrono::high_resolution_clock::now();\n')
+            lines.insert(i - 1 , '\tauto start_func = std::chrono::high_resolution_clock::now();\n')
             break
     for i in range(len(lines) - 1, -1, -1):
         if ("return 0" in lines[i]):
-            lines.insert(i, 'printf("Hello World-2 !! \\n");\n')
+            lines.insert(i - 1, 'std::cout<<"Target runtime : "<<(end_target-start_target).count<<", Function runtime : "<<(end_func - start_func).count<<", rate : "<<((double)((end_func - start_func).count))/((double)((end_target-start_target).count))<<endl;\n')
+            lines.insert(i - 1, 'auto end_target = std::chrono::high_resolution_clock::now();\n')
             break
 
     with open(filename, 'w') as fn:
         fn.write("".join(lines))
+
 
 def run(benchmark: Benchmark, model: models.LLM, args: argparse.Namespace,
         work_dirs: WorkDirs) -> Optional[AggregatedResult]:
@@ -382,7 +390,7 @@ def run(benchmark: Benchmark, model: models.LLM, args: argparse.Namespace,
   if args.agent:
     # TODO(dongge): Make this default when it is ready.
     return _fuzzing_pipelines(benchmark, model, args, work_dirs)
-    
+
   generated_targets = generate_targets_for_analysis(
       model=model,
       benchmark=benchmark,
@@ -394,11 +402,10 @@ def run(benchmark: Benchmark, model: models.LLM, args: argparse.Namespace,
       cloud_experiment_bucket=args.cloud_experiment_bucket)
 
   logging.info('Generated %d targets', len(generated_targets))
-
   if not generated_targets:
     return None
-
-  # TODO file handle
+  
+    # TODO file handle
   for filename in generated_targets:
       insert_timestamp(filename, benchmark.function_signature)
 
