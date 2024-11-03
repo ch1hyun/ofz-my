@@ -1,3 +1,4 @@
+##### builder_runner.py  #####
 # Copyright 2024 Google LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -444,55 +445,6 @@ class BuilderRunner:
     return ParseResult(cov_pcs, total_pcs, crashes, '',
                        SemanticCheckResult(SemanticCheckResult.NO_SEMANTIC_ERR))
 
-  def add_timestamp(self,
-                    generated_oss_fuzz_project: str,
-                    target_path: str,
-                    fc: int):
-    fs = self.benchmark.function_signature.split("::")[-1]
-    fs = fs[:fs.find("(")]
-    logger.info(f"add_timestamp function has start-> {fs}, {generated_oss_fuzz_project} at {target_path}, fixcount: {fc}\n")
-    lines = list()
-    isMain = False
-    get_function = False
-    with open(target_path, 'r') as fn:
-      lines = fn.readlines()
-    
-    sentence = "\n".join(lines)
-
-    if "#include <chrono>" in sentence:
-      return
-    
-    for i in range(len(lines)):
-      if("std::cout" in lines[i]):
-        lines[i] = ""
-    
-    for i in range(len(lines)):
-      if("#include <" in lines[i]):
-        lines.insert(i+1, "#include <chrono>\n#ifndef iostream\n#include <iostream>\n#endif\n")
-        break
-    for i in range(len(lines)):
-      if(isMain and fs in lines[i].split('//')[0]):
-        lines.insert(i+1, '\tauto end_func = std::chrono::high_resolution_clock::now();\n')
-        lines.insert(i, '\tauto start_func = std::chrono::high_resolution_clock::now();\n')
-        get_function = True
-        break
-      elif ("LLVMFuzzerTestOneInput" in lines[i].split('//')[0]):
-        lines.insert(i+1, 'auto start_target = std::chrono::high_resolution_clock::now();\n')
-        isMain = True
-    for i in range(len(lines) - 1, -1, -1):
-        if ("return 0" in lines[i]):
-            lines.insert(i - 1, 'std::cout<<"Target runtime : "<<std::chrono::duration_cast<std::chrono::nanoseconds>(end_target-start_target).count()<<", Function runtime : "<<std::chrono::duration_cast<std::chrono::nanoseconds>(end_func - start_func).count()<<std::endl;\n')
-            lines.insert(i - 1, 'auto end_target = std::chrono::high_resolution_clock::now();\n')
-            break
-    if(get_function):
-      with open(target_path, 'w') as fn:
-        fn.write("".join(lines))
-    lines2 = list()
-    with open(target_path, 'r') as fn2:
-      lines2 = fn2.readlines()
-    for i in range (len(lines2)):
-      logger.info(f'{lines2[i]}')
-
   def build_and_run(
       self,
       generated_project: str,
@@ -507,18 +459,10 @@ class BuilderRunner:
 
     if not self._pre_build_check(target_path, build_result):
       return build_result, None
-    try:
-      build_result, run_result = self.build_and_run_local(generated_project, target_path, iteration,
-                                      build_result, language)
-      if(build_result.succeeded and run_result and run_result.succeeded):
-        logger.info(f'\n\n\n@@@@@@@ run succeded -> {generated_project}, {target_path}, {iteration} @@@@@@@\n\n\n')
-        logger.info(f'{generated_project} - {target_path} - {iteration + 10}\n')
-        self.add_timestamp(generated_project, target_path,iteration)
-        build_result2 = BuildResult()
-        return self.build_and_run_local(generated_project, target_path, iteration+10,
-                                        build_result2, language)
-      return build_result, run_result
 
+    try:
+      return self.build_and_run_local(generated_project, target_path, iteration,
+                                      build_result, language)
     except Exception as err:
       logger.warning(
           'Error occurred when building and running fuzz target locally'
@@ -556,11 +500,9 @@ class BuilderRunner:
 
     run_result = RunResult()
 
-    logger.info(f'\nLOGGER FILE NAME!! : {self.work_dirs.run_logs_target(benchmark_target_name, iteration)}\n\n')
     self.run_target_local(
         generated_project, benchmark_target_name,
         self.work_dirs.run_logs_target(benchmark_target_name, iteration))
-
     run_result.coverage, run_result.coverage_summary = (self.get_coverage_local(
         generated_project, benchmark_target_name))
 
@@ -841,6 +783,54 @@ class BuilderRunner:
 
     return local_textcov, coverage_summary
 
+  def add_timestamp(self,
+                    generated_oss_fuzz_project: str,
+                    target_path: str,):
+    fs = self.benchmark.function_signature.split("::")[-1]
+    fs = fs[:fs.find("(")]
+    logger.info(f"add_timestamp function has start-> {fs}, {generated_oss_fuzz_project} at {target_path}")
+    lines = list()
+    isMain = False
+    get_function = False
+    with open(target_path, 'r') as fn:
+      lines = fn.readlines()
+    
+    sentence = "\n".join(lines)
+
+    if "#include <chrono>" in sentence:
+      return
+    
+    for i in range(len(lines)):
+      if("std::cout" in lines[i]):
+        lines[i] = ""
+    
+    for i in range(len(lines)):
+      if("#include <" in lines[i]):
+        lines.insert(i+1, "#include <chrono>\n#ifndef iostream\n#include <iostream>\n#endif\n")
+        break
+    for i in range(len(lines)):
+      if(isMain and fs in lines[i].split('//')[0]):
+        lines.insert(i+1, '\tauto end_func = std::chrono::high_resolution_clock::now();\n')
+        lines.insert(i, '\tauto start_func = std::chrono::high_resolution_clock::now();\n')
+        get_function = True
+        break
+      elif ("LLVMFuzzerTestOneInput" in lines[i].split('//')[0]):
+        lines.insert(i+1, 'auto start_target = std::chrono::high_resolution_clock::now();\n')
+        isMain = True
+    for i in range(len(lines) - 1, -1, -1):
+        if ("return 0" in lines[i]):
+            lines.insert(i - 1, 'std::cout<<"Target runtime : "<<std::chrono::duration_cast<std::chrono::nanoseconds>(end_target-start_target).count()<<", Function runtime : "<<std::chrono::duration_cast<std::chrono::nanoseconds>(end_func - start_func).count()<<std::endl;\n')
+            lines.insert(i - 1, 'auto end_target = std::chrono::high_resolution_clock::now();\n')
+            break
+    if(get_function):
+      with open(target_path, 'w') as fn:
+        fn.write("".join(lines))
+    lines2 = list()
+    with open(target_path, 'r') as fn2:
+      lines2 = fn2.readlines()
+    for i in range (len(lines2)):
+      logger.info(f'{lines2[i]}')
+
 
 class CloudBuilderRunner(BuilderRunner):
   """Cloud BuilderRunner."""
@@ -913,7 +903,6 @@ class CloudBuilderRunner(BuilderRunner):
     try:
       return self.build_and_run_cloud(generated_project, target_path, iteration,
                                       build_result, language, cloud_build_tags)
-
     except Exception as err:
       logger.warning(
           'Error occurred when building and running fuzz target on cloud'
