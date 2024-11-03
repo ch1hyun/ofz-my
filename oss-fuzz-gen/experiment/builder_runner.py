@@ -449,19 +449,25 @@ class BuilderRunner:
                     target_path: str):
     fs = self.benchmark.function_signature.split("::")[-1]
     fs = fs[:fs.find("(")]
-    logger.info(f"add_timestamp function has start-> {fs}\n")
+    logger.info(f"add_timestamp function has start-> {fs}, {generated_oss_fuzz_project} at {target_path}\n")
     lines = list()
     isMain = False
     get_function = False
     with open(target_path, 'r') as fn:
       lines = fn.readlines()
+    
+    sentence = "\n".join(lines)
 
+    if "#include <chrono>" in sentence:
+      return
+    
     for i in range(len(lines)):
-      if("#include <chrono>" in lines[i]):
-        return
+      if("std::cout" in lines[i]):
+        lines[i] = ""
+    
     for i in range(len(lines)):
       if("#include <" in lines[i]):
-        lines.insert(i+1, "#include <chrono>\n#include <iostream>\n")
+        lines.insert(i+1, "#include <chrono>\n#ifndef iostream\n#include <iostream>\n#endif\n")
         break
     for i in range(len(lines)):
       if(isMain and fs in lines[i]):
