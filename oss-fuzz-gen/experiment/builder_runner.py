@@ -1,4 +1,6 @@
-##### builder_runner.py  #####
+##### builder_runner.py
+
+
 # Copyright 2024 Google LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -810,6 +812,10 @@ class BuilderRunner:
         break
     for i in range(len(lines)):
       if(isMain and fs in lines[i].split('//')[0]):
+        while(1):
+          if ";" or "return " in lines[i].split('//')[0] :
+            break
+          i += 1
         lines.insert(i+1, '\tauto end_func = std::chrono::high_resolution_clock::now();\n')
         lines.insert(i, '\tauto start_func = std::chrono::high_resolution_clock::now();\n')
         get_function = True
