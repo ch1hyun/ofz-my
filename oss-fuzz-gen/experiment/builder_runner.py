@@ -446,10 +446,11 @@ class BuilderRunner:
 
   def add_timestamp(self,
                     generated_oss_fuzz_project: str,
-                    target_path: str):
+                    target_path: str,
+                    fc: int):
     fs = self.benchmark.function_signature.split("::")[-1]
     fs = fs[:fs.find("(")]
-    logger.info(f"add_timestamp function has start-> {fs}, {generated_oss_fuzz_project} at {target_path}\n")
+    logger.info(f"add_timestamp function has start-> {fs}, {generated_oss_fuzz_project} at {target_path}, fixcount: {fc}\n")
     lines = list()
     isMain = False
     get_function = False
@@ -470,12 +471,12 @@ class BuilderRunner:
         lines.insert(i+1, "#include <chrono>\n#ifndef iostream\n#include <iostream>\n#endif\n")
         break
     for i in range(len(lines)):
-      if(isMain and fs in lines[i]):
+      if(isMain and fs in lines[i].split('//')[0]):
         lines.insert(i+1, '\tauto end_func = std::chrono::high_resolution_clock::now();\n')
         lines.insert(i, '\tauto start_func = std::chrono::high_resolution_clock::now();\n')
         get_function = True
         break
-      elif ("LLVMFuzzerTestOneInput" in lines[i]):
+      elif ("LLVMFuzzerTestOneInput" in lines[i].split('//')[0]):
         lines.insert(i+1, 'auto start_target = std::chrono::high_resolution_clock::now();\n')
         isMain = True
     for i in range(len(lines) - 1, -1, -1):
@@ -507,8 +508,17 @@ class BuilderRunner:
     if not self._pre_build_check(target_path, build_result):
       return build_result, None
     try:
-      return self.build_and_run_local(generated_project, target_path, iteration,
+      build_result, run_result = self.build_and_run_local(generated_project, target_path, iteration,
                                       build_result, language)
+      if(build_result.succeeded and run_result and run_result.succeeded):
+        logger.info(f'\n\n\n@@@@@@@ run succeded -> {generated_project}, {target_path}, {iteration} @@@@@@@\n\n\n')
+        logger.info(f'{generated_project} - {target_path} - {iteration + 10}\n')
+        self.add_timestamp(generated_project, target_path,iteration)
+        build_result2 = BuildResult()
+        return self.build_and_run_local(generated_project, target_path, iteration+10,
+                                        build_result2, language)
+      return build_result, run_result
+
     except Exception as err:
       logger.warning(
           'Error occurred when building and running fuzz target locally'
@@ -527,11 +537,6 @@ class BuilderRunner:
         benchmark_target_name, iteration)
     build_result.succeeded = self.build_target_local(generated_project,
                                                      benchmark_log_path)
-    # if(build_result.succeeded):
-    #   self.add_timestamp(generated_project, target_path)
-    #   build_result.succeeded = self.build_target_local(generated_project,
-    #                             self.work_dirs.build_logs_target(
-    #                                                     benchmark_target_name, iteration+10))
 
     # Copy err.log into work dir (Ignored for JVM projects)
     if language != 'jvm':
@@ -551,9 +556,11 @@ class BuilderRunner:
 
     run_result = RunResult()
 
+    logger.info(f'\nLOGGER FILE NAME!! : {self.work_dirs.run_logs_target(benchmark_target_name, iteration)}\n\n')
     self.run_target_local(
         generated_project, benchmark_target_name,
         self.work_dirs.run_logs_target(benchmark_target_name, iteration))
+
     run_result.coverage, run_result.coverage_summary = (self.get_coverage_local(
         generated_project, benchmark_target_name))
 

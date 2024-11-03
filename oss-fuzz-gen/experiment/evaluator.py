@@ -390,12 +390,12 @@ class Evaluator:
       gen_succ = build_result.succeeded and run_result and run_result.succeeded
 
       if gen_succ or llm_fix_count >= LLM_FIX_LIMIT:
-        if gen_succ:
-          llm_fix_count += 1
-          self.builder_runner.add_timestamp(generated_oss_fuzz_project, target_path)
-          build_result, run_result = self.builder_runner.build_and_run(
-                generated_oss_fuzz_project, target_path, llm_fix_count,
-                self.benchmark.language)
+        # if gen_succ:
+        #   llm_fix_count += 1
+        #   self.builder_runner.add_timestamp(generated_oss_fuzz_project, target_path, llm_fix_count)
+        #   build_result, run_result = self.builder_runner.build_and_run(
+        #         generated_oss_fuzz_project, target_path, llm_fix_count,
+        #         self.benchmark.language)
           
         # Exit cond 1: successfully generate the fuzz target.
         # Exit cond 2: fix limit is reached.
