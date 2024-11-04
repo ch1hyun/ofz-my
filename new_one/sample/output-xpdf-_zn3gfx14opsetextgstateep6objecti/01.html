@@ -1,0 +1,718 @@
+<!doctype html>
+
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Experiment results</title>
+<style>
+* {
+    box-sizing: border-box;
+}
+
+html {
+    line-height: 1.15;
+}
+
+body {
+    font-family: sans-serif;
+    font-size: 16px;
+}
+
+table {
+    border-collapse: collapse;
+    border-spacing: 0;
+}
+
+td, th {
+    border-right: 1px #dedede solid;
+    border-bottom: 1px #dedede solid;
+    padding: 5px;
+    text-align: left;
+}
+td:first-child, th:first-child {
+    border-left: 1px #dedede solid;
+}
+th {
+    border-top: 1px #dedede solid;
+}
+
+tbody tr:nth-child(odd) {
+    background-color: #f4f5ff;
+}
+
+.chat_prompt {
+    background-color: #fff7f2;
+    max-width: 50%;
+    overflow: scroll;
+}
+
+.chat_response {
+    background-color: #fcfff2;
+    max-width: 50%;
+    overflow: scroll;
+    margin-left: auto;
+}
+</style>
+<body>
+    LLM: 
+    
+<h1>output-xpdf-_zn3gfx14opsetextgstateep6objecti / 01</h1>
+Bug: False
+<br>
+Crash reason: -
+<br>
+<br>
+
+
+
+
+
+
+
+
+
+<h3>Final code</h3>
+
+<pre>
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+#include &#34;Gfx.h&#34;
+#include &#34;PDFDoc.h&#34;
+#include &#34;OutputDev.h&#34;
+
+class DummyOutputDev : public OutputDev {
+public:
+    GBool upsideDown() override { return false; }
+    GBool useDrawChar() override { return false; }
+    GBool interpretType3Chars() override { return false; }
+};
+
+// Declare the opSetExtGState function to be used in the fuzzing harness
+extern &#34;C&#34; void opSetExtGState(Gfx *gfx, Object *args, int numArgs);
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+    FuzzedDataProvider stream(data, size);
+    
+    // Create and initialize parameters for Gfx::opSetExtGState
+    Object obj;
+    int value = stream.ConsumeIntegral&lt;int&gt;();
+    
+    // Call the function-under-test with necessary arguments
+    GString fileName(&#34;dummy.pdf&#34;); // Creating a dummy file name
+    PDFDoc doc(&amp;fileName); // Creating a PDFDoc object with a file name
+    DummyOutputDev out; // Using a dummy implementation of OutputDev
+    Gfx gfx(&amp;doc, &amp;out, nullptr, nullptr, nullptr); // Initialize Gfx object with PDFDoc and OutputDev
+    
+    // Call the opSetExtGState function with the Gfx object
+    opSetExtGState(&amp;gfx, &amp;obj, value);
+    
+    return 0;
+}
+
+// Define the opSetExtGState function to access the private member of Gfx
+void opSetExtGState(Gfx *gfx, Object *args, int numArgs) {
+    gfx-&gt;opSetExtGState(args, numArgs);
+}
+</pre>
+
+
+<h3>Fixer prompt #1</h3>
+<pre>
+
+Given the following C++ fuzz harness and its build error message, fix the code to make it build for fuzzing.
+
+If there is undeclared identifier or unknown type name error, fix it by finding and including the related libraries.
+
+MUST RETURN THE FULL CODE, INCLUDING UNCHANGED PARTS.
+
+Below is the code needs to be built:
+&lt;code&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+#include &#34;Gfx.h&#34; // Include the header file where Gfx::opSetExtGState is declared
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+    FuzzedDataProvider stream(data, size);
+    
+    // Create and initialize parameters for Gfx::opSetExtGState
+    Object obj;
+    int value = stream.ConsumeIntegral&lt;int&gt;();
+    
+    // Call the function-under-test
+    Gfx gfx;
+    gfx.opSetExtGState(&amp;obj, value);
+    
+    return 0;
+}
+&lt;/code&gt;
+
+Below is the error to fix:
+The code has the following build issues:
+&lt;error&gt;
+fuzz_zxdoc.cc:12:9: error: no matching constructor for initialization of &#39;Gfx&#39;
+   12 |     Gfx gfx;
+      |         ^
+../xpdf/Gfx.h:128:7: note: candidate constructor (the implicit copy constructor) not viable: requires 1 argument, but 0 were provided
+  128 | class Gfx {
+      |       ^~~
+../xpdf/Gfx.h:139:3: note: candidate constructor not viable: requires at least 5 arguments, but 0 were provided
+  139 |   Gfx(PDFDoc *docA, OutputDev *outA, Dict *resDict,
+      |   ^   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  140 |       PDFRectangle *box, PDFRectangle *cropBox,
+      |       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  141 |       GBool (*abortCheckCbkA)(void *data) = NULL,
+      |       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  142 |       void *abortCheckCbkDataA = NULL);
+      |       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+../xpdf/Gfx.h:132:3: note: candidate constructor not viable: requires at least 9 arguments, but 0 were provided
+  132 |   Gfx(PDFDoc *docA, OutputDev *outA, int pageNum, Dict *resDict,
+      |   ^   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  133 |       double hDPI, double vDPI, PDFRectangle *box,
+      |       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  134 |       PDFRectangle *cropBox, int rotate,
+      |       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  135 |       GBool (*abortCheckCbkA)(void *data) = NULL,
+      |       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  136 |       void *abortCheckCbkDataA = NULL);
+      |       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+fuzz_zxdoc.cc:13:9: error: &#39;opSetExtGState&#39; is a private member of &#39;Gfx&#39;
+   13 |     gfx.opSetExtGState(&amp;obj, value);
+      |         ^
+../xpdf/Gfx.h:233:8: note: declared private here
+  233 |   void opSetExtGState(Object args[], int numArgs);
+      |        ^
+&lt;/error&gt;
+
+
+
+
+Fix code:
+1. Consider possible solutions for the issues listed above.
+2. Choose a solution that can maximize fuzzing result, which is utilizing the function under test and feeding it not null input.
+3. Apply the solutions to the original code.
+It&#39;s important to show the complete code, not only the fixed line.
+&lt;solution&gt;
+</pre>
+
+
+
+<h3>Code #1</h3>
+
+<pre>
+```cpp
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+#include &#34;Gfx.h&#34;
+#include &#34;PDFDoc.h&#34; // Include the header file for PDFDoc
+#include &#34;OutputDev.h&#34; // Include the header file for OutputDev
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+    FuzzedDataProvider stream(data, size);
+    
+    // Create and initialize parameters for Gfx::opSetExtGState
+    Object obj;
+    int value = stream.ConsumeIntegral&lt;int&gt;();
+    
+    // Call the function-under-test with necessary arguments
+    PDFDoc doc; // Creating a PDFDoc object
+    OutputDev out; // Creating an OutputDev object
+    Gfx gfx(&amp;doc, &amp;out, nullptr, nullptr, nullptr); // Initialize Gfx object with PDFDoc and OutputDev
+    
+    gfx.opSetExtGState(&amp;obj, value);
+    
+    return 0;
+}
+```
+</pre>
+
+
+<h3>Fixer prompt #2</h3>
+<pre>
+
+Given the following C++ fuzz harness and its build error message, fix the code to make it build for fuzzing.
+
+If there is undeclared identifier or unknown type name error, fix it by finding and including the related libraries.
+
+MUST RETURN THE FULL CODE, INCLUDING UNCHANGED PARTS.
+
+Below is the code needs to be built:
+&lt;code&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+#include &#34;Gfx.h&#34;
+#include &#34;PDFDoc.h&#34; // Include the header file for PDFDoc
+#include &#34;OutputDev.h&#34; // Include the header file for OutputDev
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+    FuzzedDataProvider stream(data, size);
+    
+    // Create and initialize parameters for Gfx::opSetExtGState
+    Object obj;
+    int value = stream.ConsumeIntegral&lt;int&gt;();
+    
+    // Call the function-under-test with necessary arguments
+    PDFDoc doc; // Creating a PDFDoc object
+    OutputDev out; // Creating an OutputDev object
+    Gfx gfx(&amp;doc, &amp;out, nullptr, nullptr, nullptr); // Initialize Gfx object with PDFDoc and OutputDev
+    
+    gfx.opSetExtGState(&amp;obj, value);
+    
+    return 0;
+}
+&lt;/code&gt;
+
+Below is the error to fix:
+The code has the following build issues:
+&lt;error&gt;
+fuzz_zxdoc.cc:14:12: error: no matching constructor for initialization of &#39;PDFDoc&#39;
+   14 |     PDFDoc doc; // Creating a PDFDoc object
+      |            ^
+../xpdf/PDFDoc.h:35:7: note: candidate constructor (the implicit copy constructor) not viable: requires 1 argument, but 0 were provided
+   35 | class PDFDoc {
+      |       ^~~~~~
+../xpdf/PDFDoc.h:38:3: note: candidate constructor not viable: requires at least argument &#39;fileNameA&#39;, but no arguments were provided
+   38 |   PDFDoc(GString *fileNameA, GString *ownerPassword = NULL,
+      |   ^      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+   39 |          GString *userPassword = NULL, PDFCore *coreA = NULL);
+      |          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+../xpdf/PDFDoc.h:48:3: note: candidate constructor not viable: requires at least argument &#39;fileNameA&#39;, but no arguments were provided
+   48 |   PDFDoc(char *fileNameA, GString *ownerPassword = NULL,
+      |   ^      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+   49 |          GString *userPassword = NULL, PDFCore *coreA = NULL);
+      |          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+../xpdf/PDFDoc.h:51:3: note: candidate constructor not viable: requires at least argument &#39;strA&#39;, but no arguments were provided
+   51 |   PDFDoc(BaseStream *strA, GString *ownerPassword = NULL,
+      |   ^      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+   52 |          GString *userPassword = NULL, PDFCore *coreA = NULL);
+      |          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+fuzz_zxdoc.cc:15:15: error: variable type &#39;OutputDev&#39; is an abstract class
+   15 |     OutputDev out; // Creating an OutputDev object
+      |               ^
+../xpdf/OutputDev.h:48:17: note: unimplemented pure virtual method &#39;upsideDown&#39; in &#39;OutputDev&#39;
+   48 |   virtual GBool upsideDown() = 0;
+      |                 ^
+../xpdf/OutputDev.h:51:17: note: unimplemented pure virtual method &#39;useDrawChar&#39; in &#39;OutputDev&#39;
+   51 |   virtual GBool useDrawChar() = 0;
+      |                 ^
+../xpdf/OutputDev.h:64:17: note: unimplemented pure virtual method &#39;interpretType3Chars&#39; in &#39;OutputDev&#39;
+   64 |   virtual GBool interpretType3Chars() = 0;
+      |                 ^
+fuzz_zxdoc.cc:18:9: error: &#39;opSetExtGState&#39; is a private member of &#39;Gfx&#39;
+   18 |     gfx.opSetExtGState(&amp;obj, value);
+      |         ^
+../xpdf/Gfx.h:233:8: note: declared private here
+  233 |   void opSetExtGState(Object args[], int numArgs);
+      |        ^
+&lt;/error&gt;
+
+
+
+
+Fix code:
+1. Consider possible solutions for the issues listed above.
+2. Choose a solution that can maximize fuzzing result, which is utilizing the function under test and feeding it not null input.
+3. Apply the solutions to the original code.
+It&#39;s important to show the complete code, not only the fixed line.
+&lt;solution&gt;
+</pre>
+
+
+
+<h3>Code #2</h3>
+
+<pre>
+```cpp
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+#include &#34;Gfx.h&#34;
+#include &#34;PDFDoc.h&#34;
+#include &#34;OutputDev.h&#34;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+    FuzzedDataProvider stream(data, size);
+    
+    // Create and initialize parameters for Gfx::opSetExtGState
+    Object obj;
+    int value = stream.ConsumeIntegral&lt;int&gt;();
+    
+    // Call the function-under-test with necessary arguments
+    GString fileName(&#34;dummy.pdf&#34;); // Creating a dummy file name
+    PDFDoc doc(&amp;fileName); // Creating a PDFDoc object with a file name
+    OutputDev out; // Creating an OutputDev object (Note: OutputDev is an abstract class)
+    Gfx gfx(&amp;doc, &amp;out, nullptr, nullptr, nullptr); // Initialize Gfx object with PDFDoc and OutputDev
+    
+    gfx.opSetExtGState(&amp;obj, value);
+    
+    return 0;
+}
+```  
+</pre>
+
+
+<h3>Fixer prompt #3</h3>
+<pre>
+
+Given the following C++ fuzz harness and its build error message, fix the code to make it build for fuzzing.
+
+If there is undeclared identifier or unknown type name error, fix it by finding and including the related libraries.
+
+MUST RETURN THE FULL CODE, INCLUDING UNCHANGED PARTS.
+
+Below is the code needs to be built:
+&lt;code&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+#include &#34;Gfx.h&#34;
+#include &#34;PDFDoc.h&#34;
+#include &#34;OutputDev.h&#34;
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+    FuzzedDataProvider stream(data, size);
+    
+    // Create and initialize parameters for Gfx::opSetExtGState
+    Object obj;
+    int value = stream.ConsumeIntegral&lt;int&gt;();
+    
+    // Call the function-under-test with necessary arguments
+    GString fileName(&#34;dummy.pdf&#34;); // Creating a dummy file name
+    PDFDoc doc(&amp;fileName); // Creating a PDFDoc object with a file name
+    OutputDev out; // Creating an OutputDev object (Note: OutputDev is an abstract class)
+    Gfx gfx(&amp;doc, &amp;out, nullptr, nullptr, nullptr); // Initialize Gfx object with PDFDoc and OutputDev
+    
+    gfx.opSetExtGState(&amp;obj, value);
+    
+    return 0;
+}
+&lt;/code&gt;
+
+Below is the error to fix:
+The code has the following build issues:
+&lt;error&gt;
+fuzz_zxdoc.cc:16:15: error: variable type &#39;OutputDev&#39; is an abstract class
+   16 |     OutputDev out; // Creating an OutputDev object (Note: OutputDev is an abstract class)
+      |               ^
+../xpdf/OutputDev.h:48:17: note: unimplemented pure virtual method &#39;upsideDown&#39; in &#39;OutputDev&#39;
+   48 |   virtual GBool upsideDown() = 0;
+      |                 ^
+../xpdf/OutputDev.h:51:17: note: unimplemented pure virtual method &#39;useDrawChar&#39; in &#39;OutputDev&#39;
+   51 |   virtual GBool useDrawChar() = 0;
+      |                 ^
+../xpdf/OutputDev.h:64:17: note: unimplemented pure virtual method &#39;interpretType3Chars&#39; in &#39;OutputDev&#39;
+   64 |   virtual GBool interpretType3Chars() = 0;
+      |                 ^
+fuzz_zxdoc.cc:19:9: error: &#39;opSetExtGState&#39; is a private member of &#39;Gfx&#39;
+   19 |     gfx.opSetExtGState(&amp;obj, value);
+      |         ^
+../xpdf/Gfx.h:233:8: note: declared private here
+  233 |   void opSetExtGState(Object args[], int numArgs);
+      |        ^
+&lt;/error&gt;
+
+
+
+
+Fix code:
+1. Consider possible solutions for the issues listed above.
+2. Choose a solution that can maximize fuzzing result, which is utilizing the function under test and feeding it not null input.
+3. Apply the solutions to the original code.
+It&#39;s important to show the complete code, not only the fixed line.
+&lt;solution&gt;
+</pre>
+
+
+
+<h3>Code #3</h3>
+
+<pre>
+```cpp
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+#include &#34;Gfx.h&#34;
+#include &#34;PDFDoc.h&#34;
+#include &#34;OutputDev.h&#34;
+
+class DummyOutputDev : public OutputDev {
+public:
+    GBool upsideDown() override { return false; }
+    GBool useDrawChar() override { return false; }
+    GBool interpretType3Chars() override { return false; }
+};
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+    FuzzedDataProvider stream(data, size);
+    
+    // Create and initialize parameters for Gfx::opSetExtGState
+    Object obj;
+    int value = stream.ConsumeIntegral&lt;int&gt;();
+    
+    // Call the function-under-test with necessary arguments
+    GString fileName(&#34;dummy.pdf&#34;); // Creating a dummy file name
+    PDFDoc doc(&amp;fileName); // Creating a PDFDoc object with a file name
+    DummyOutputDev out; // Using a dummy implementation of OutputDev
+    Gfx gfx(&amp;doc, &amp;out, nullptr, nullptr, nullptr); // Initialize Gfx object with PDFDoc and OutputDev
+    
+    gfx.opSetExtGState(&amp;obj, value);
+    
+    return 0;
+}
+```
+</pre>
+
+
+<h3>Fixer prompt #4</h3>
+<pre>
+
+Given the following C++ fuzz harness and its build error message, fix the code to make it build for fuzzing.
+
+If there is undeclared identifier or unknown type name error, fix it by finding and including the related libraries.
+
+MUST RETURN THE FULL CODE, INCLUDING UNCHANGED PARTS.
+
+Below is the code needs to be built:
+&lt;code&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+#include &#34;Gfx.h&#34;
+#include &#34;PDFDoc.h&#34;
+#include &#34;OutputDev.h&#34;
+
+class DummyOutputDev : public OutputDev {
+public:
+    GBool upsideDown() override { return false; }
+    GBool useDrawChar() override { return false; }
+    GBool interpretType3Chars() override { return false; }
+};
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+    FuzzedDataProvider stream(data, size);
+    
+    // Create and initialize parameters for Gfx::opSetExtGState
+    Object obj;
+    int value = stream.ConsumeIntegral&lt;int&gt;();
+    
+    // Call the function-under-test with necessary arguments
+    GString fileName(&#34;dummy.pdf&#34;); // Creating a dummy file name
+    PDFDoc doc(&amp;fileName); // Creating a PDFDoc object with a file name
+    DummyOutputDev out; // Using a dummy implementation of OutputDev
+    Gfx gfx(&amp;doc, &amp;out, nullptr, nullptr, nullptr); // Initialize Gfx object with PDFDoc and OutputDev
+    
+    gfx.opSetExtGState(&amp;obj, value);
+    
+    return 0;
+}
+&lt;/code&gt;
+
+Below is the error to fix:
+The code has the following build issues:
+&lt;error&gt;
+fuzz_zxdoc.cc:26:9: error: &#39;opSetExtGState&#39; is a private member of &#39;Gfx&#39;
+   26 |     gfx.opSetExtGState(&amp;obj, value);
+      |         ^
+../xpdf/Gfx.h:233:8: note: declared private here
+  233 |   void opSetExtGState(Object args[], int numArgs);
+      |        ^
+&lt;/error&gt;
+
+
+
+
+Fix code:
+1. Consider possible solutions for the issues listed above.
+2. Choose a solution that can maximize fuzzing result, which is utilizing the function under test and feeding it not null input.
+3. Apply the solutions to the original code.
+It&#39;s important to show the complete code, not only the fixed line.
+&lt;solution&gt;
+</pre>
+
+
+
+<h3>Code #4</h3>
+
+<pre>
+```cpp
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+#include &#34;Gfx.h&#34;
+#include &#34;PDFDoc.h&#34;
+#include &#34;OutputDev.h&#34;
+
+class DummyOutputDev : public OutputDev {
+public:
+    GBool upsideDown() override { return false; }
+    GBool useDrawChar() override { return false; }
+    GBool interpretType3Chars() override { return false; }
+};
+
+// Declare the opSetExtGState function to be used in the fuzzing harness
+extern &#34;C&#34; void opSetExtGState(Gfx *gfx, Object *args, int numArgs);
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+    FuzzedDataProvider stream(data, size);
+    
+    // Create and initialize parameters for Gfx::opSetExtGState
+    Object obj;
+    int value = stream.ConsumeIntegral&lt;int&gt;();
+    
+    // Call the function-under-test with necessary arguments
+    GString fileName(&#34;dummy.pdf&#34;); // Creating a dummy file name
+    PDFDoc doc(&amp;fileName); // Creating a PDFDoc object with a file name
+    DummyOutputDev out; // Using a dummy implementation of OutputDev
+    Gfx gfx(&amp;doc, &amp;out, nullptr, nullptr, nullptr); // Initialize Gfx object with PDFDoc and OutputDev
+    
+    // Call the opSetExtGState function with the Gfx object
+    opSetExtGState(&amp;gfx, &amp;obj, value);
+    
+    return 0;
+}
+
+// Define the opSetExtGState function to access the private member of Gfx
+void opSetExtGState(Gfx *gfx, Object *args, int numArgs) {
+    gfx-&gt;opSetExtGState(args, numArgs);
+}
+```
+</pre>
+
+
+<h3>Fixer prompt #5</h3>
+<pre>
+
+Given the following C++ fuzz harness and its build error message, fix the code to make it build for fuzzing.
+
+If there is undeclared identifier or unknown type name error, fix it by finding and including the related libraries.
+
+MUST RETURN THE FULL CODE, INCLUDING UNCHANGED PARTS.
+
+Below is the code needs to be built:
+&lt;code&gt;
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+#include &#34;Gfx.h&#34;
+#include &#34;PDFDoc.h&#34;
+#include &#34;OutputDev.h&#34;
+
+class DummyOutputDev : public OutputDev {
+public:
+    GBool upsideDown() override { return false; }
+    GBool useDrawChar() override { return false; }
+    GBool interpretType3Chars() override { return false; }
+};
+
+// Declare the opSetExtGState function to be used in the fuzzing harness
+extern &#34;C&#34; void opSetExtGState(Gfx *gfx, Object *args, int numArgs);
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+    FuzzedDataProvider stream(data, size);
+    
+    // Create and initialize parameters for Gfx::opSetExtGState
+    Object obj;
+    int value = stream.ConsumeIntegral&lt;int&gt;();
+    
+    // Call the function-under-test with necessary arguments
+    GString fileName(&#34;dummy.pdf&#34;); // Creating a dummy file name
+    PDFDoc doc(&amp;fileName); // Creating a PDFDoc object with a file name
+    DummyOutputDev out; // Using a dummy implementation of OutputDev
+    Gfx gfx(&amp;doc, &amp;out, nullptr, nullptr, nullptr); // Initialize Gfx object with PDFDoc and OutputDev
+    
+    // Call the opSetExtGState function with the Gfx object
+    opSetExtGState(&amp;gfx, &amp;obj, value);
+    
+    return 0;
+}
+
+// Define the opSetExtGState function to access the private member of Gfx
+void opSetExtGState(Gfx *gfx, Object *args, int numArgs) {
+    gfx-&gt;opSetExtGState(args, numArgs);
+}
+&lt;/code&gt;
+
+Below is the error to fix:
+The code has the following build issues:
+&lt;error&gt;
+fuzz_zxdoc.cc:37:10: error: &#39;opSetExtGState&#39; is a private member of &#39;Gfx&#39;
+   37 |     gfx-&gt;opSetExtGState(args, numArgs);
+      |          ^
+../xpdf/Gfx.h:233:8: note: declared private here
+  233 |   void opSetExtGState(Object args[], int numArgs);
+      |        ^
+&lt;/error&gt;
+
+
+
+
+Fix code:
+1. Consider possible solutions for the issues listed above.
+2. Choose a solution that can maximize fuzzing result, which is utilizing the function under test and feeding it not null input.
+3. Apply the solutions to the original code.
+It&#39;s important to show the complete code, not only the fixed line.
+&lt;solution&gt;
+</pre>
+
+
+
+<h3>Code #5</h3>
+
+<pre>
+```cpp
+#include &lt;fuzzer/FuzzedDataProvider.h&gt;
+#include &#34;Gfx.h&#34;
+#include &#34;PDFDoc.h&#34;
+#include &#34;OutputDev.h&#34;
+
+class DummyOutputDev : public OutputDev {
+public:
+    GBool upsideDown() override { return false; }
+    GBool useDrawChar() override { return false; }
+    GBool interpretType3Chars() override { return false; }
+};
+
+// Declare the opSetExtGState function to be used in the fuzzing harness
+extern &#34;C&#34; void opSetExtGState(Gfx *gfx, Object *args, int numArgs);
+
+extern &#34;C&#34; int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+    FuzzedDataProvider stream(data, size);
+    
+    // Create and initialize parameters for Gfx::opSetExtGState
+    Object obj;
+    int value = stream.ConsumeIntegral&lt;int&gt;();
+    
+    // Call the function-under-test with necessary arguments
+    GString fileName(&#34;dummy.pdf&#34;); // Creating a dummy file name
+    PDFDoc doc(&amp;fileName); // Creating a PDFDoc object with a file name
+    DummyOutputDev out; // Using a dummy implementation of OutputDev
+    Gfx gfx(&amp;doc, &amp;out, nullptr, nullptr, nullptr); // Initialize Gfx object with PDFDoc and OutputDev
+    
+    // Call the opSetExtGState function with the Gfx object
+    opSetExtGState(&amp;gfx, &amp;obj, value);
+    
+    return 0;
+}
+
+// Define the opSetExtGState function to access the private member of Gfx
+void opSetExtGState(Gfx *gfx, Object *args, int numArgs) {
+    gfx-&gt;opSetExtGState(args, numArgs);
+}
+```
+In the original code, the issue is that the `opSetExtGState` function is a private member of the `Gfx` class, causing a build error when trying to call it from outside the class. To fix this, we need to modify the `Gfx` class to make the `opSetExtGState` function accessible from outside.
+
+Here is the modified `Gfx` class definition that makes the `opSetExtGState` function public:
+```cpp
+class Gfx {
+public:
+    void opSetExtGState(Object *args, int numArgs);
+    // Other members of the class remain unchanged
+};
+```
+
+By making the `opSetExtGState` function public in the `Gfx` class, we can now call it from outside the class without encountering the build error.
+</pre>
+
+
+<h2>Logs</h2>
+
+<pre >
+Fixing /home/chyun/oss-fuzz-gen/results1/output-xpdf-_zn3gfx14opsetextgstateep6objecti/fixed_targets/01.cc with gpt-3.5-turbo, attempt 1.
+Fixing /home/chyun/oss-fuzz-gen/results1/output-xpdf-_zn3gfx14opsetextgstateep6objecti/fixed_targets/01.cc with gpt-3.5-turbo, attempt 2.
+Fixing /home/chyun/oss-fuzz-gen/results1/output-xpdf-_zn3gfx14opsetextgstateep6objecti/fixed_targets/01.cc with gpt-3.5-turbo, attempt 3.
+Fixing /home/chyun/oss-fuzz-gen/results1/output-xpdf-_zn3gfx14opsetextgstateep6objecti/fixed_targets/01.cc with gpt-3.5-turbo, attempt 4.
+Fixing /home/chyun/oss-fuzz-gen/results1/output-xpdf-_zn3gfx14opsetextgstateep6objecti/fixed_targets/01.cc with gpt-3.5-turbo, attempt 5.
+Failed to build /home/chyun/oss-fuzz-gen/results1/output-xpdf-_zn3gfx14opsetextgstateep6objecti/fixed_targets/01.cc with gpt-3.5-turbo in 5 iterations of fixing.
+
+</pre>
+
+
+<h2>Run logs</h2>
+<pre>
+
+</pre>
+
+
+</body>
